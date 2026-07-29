@@ -131,7 +131,12 @@ def stop(replace: bool = False) -> int:
 def status() -> int:
     pids = mediamtx_pids()
     print(f"Processes: {', '.join(map(str, pids)) if pids else 'none'}")
-    for port, name in ((8554, "RTSP"), (8888, "HLS"), (8889, "WebRTC")):
+    for port, name in (
+        (8554, "RTSP"),
+        (8888, "HLS"),
+        (8889, "WebRTC"),
+        (8090, "Control"),
+    ):
         state = "open" if port_open(port) else "closed"
         print(f"{name:6} 127.0.0.1:{port}: {state}")
     return 0 if port_open(8554) else 1
@@ -143,9 +148,13 @@ def main() -> int:
     subparsers.add_parser("start")
     subparsers.add_parser("status")
     stop_parser = subparsers.add_parser("stop")
-    stop_parser.add_argument("--replace", action="store_true", help="stop every mediamtx.exe process")
+    stop_parser.add_argument(
+        "--replace", action="store_true", help="stop every mediamtx.exe process"
+    )
     restart_parser = subparsers.add_parser("restart")
-    restart_parser.add_argument("--replace", action="store_true", help="replace an existing external instance")
+    restart_parser.add_argument(
+        "--replace", action="store_true", help="replace an existing external instance"
+    )
     args = parser.parse_args()
 
     if args.command == "start":

@@ -3,10 +3,12 @@ import gzip
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mpv_protocol
+import playback
 import stream
 
 
@@ -79,6 +81,44 @@ class MpvProtocolTests(unittest.TestCase):
     def test_bad_payload_is_rejected(self) -> None:
         with self.assertRaises(mpv_protocol.ProtocolError):
             mpv_protocol.parse_ush_uri("ush://MPV?not-base64")
+
+    def test_seek_override_and_status_file_are_forwarded(self) -> None:
+        request = mpv_protocol.MpvRequest("https://example.com/video.mp4", start=2)
+        invocation = mpv_protocol.stream_command(
+            request, start=42.5, status_file=Path("status.json")
+        )
+
+        self.assertEqual(invocation[invocation.index("--start") + 1], "42.5")
+        self.assertEqual(
+            invocation[invocation.index("--status-file") + 1], "status.json"
+        )
+
+    def test_current_and_windowless_protocol_commands_are_owned(self) -> None:
+        self.assertIn(mpv_protocol.registry_command(), mpv_protocol.owned_registry_commands())
+
+    def test_playback_load_request_is_revalidated(self) -> None:
+        request = playback.request_from_json(
+            {
+                "video": "https://example.com/video.mp4",
+                "headers": ["Referer: https://example.com/watch"],
+                "start": 3,
+            }
+        )
+        self.assertEqual(request.start, 3)
+        with self.assertRaises(ValueError):
+            playback.request_from_json(
+                {"video": "https://example.com/video.mp4", "headers": "bad"}
+            )
+
+    def test_seek_near_end_keeps_an_hls_generation_window(self) -> None:
+        session = playback.PlaybackSession()
+        session.request = mpv_protocol.MpvRequest("https://example.com/video.mp4")
+        session.duration = 10
+
+        with patch.object(session, "_restart", return_value={}) as restart:
+            session.seek(9.9)
+
+        restart.assert_called_once_with(7)
 
 
 class StreamInputTests(unittest.TestCase):

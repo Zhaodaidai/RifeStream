@@ -33,6 +33,8 @@ def main() -> int:
     mediamtx = ROOT / "mediamtx.exe"
     mpv_files = (runtime / "mpv.exe", runtime / "mpv.com")
     mpv_protocol = ROOT / "mpv_protocol.py"
+    playback = ROOT / "playback.py"
+    player = ROOT / "player.html"
 
     required = {
         "VSPipe": vspipe,
@@ -44,6 +46,8 @@ def main() -> int:
         "vs-mlrt": vsmlrt,
         "MediaMTX binary": mediamtx,
         "MPV protocol receiver": mpv_protocol,
+        "phone playback control": playback,
+        "phone player page": player,
         "test video": video,
     }
     results = [check(name, path.is_file(), str(path)) for name, path in required.items()]
@@ -98,7 +102,12 @@ def main() -> int:
             else source_probe.stderr.strip()
         )
         results.append(check("BestSource load", source_probe.returncode == 0, detail))
-    for port, name in ((8554, "RTSP"), (8888, "HLS"), (8889, "WebRTC")):
+    for port, name in (
+        (8554, "RTSP"),
+        (8888, "HLS"),
+        (8889, "WebRTC"),
+        (8090, "phone control"),
+    ):
         results.append(check(f"MediaMTX {name}", port_open(port), f"127.0.0.1:{port}"))
     print("\nSetup checks passed." if all(results) else "\nSetup has failures.")
     return 0 if all(results) else 1

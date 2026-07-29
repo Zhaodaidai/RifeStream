@@ -7,3 +7,6 @@ runtime/
 /.mediamtx.pid
 *.mp4
 __pycache__/
+/.hls/
+/.playback_status.json
+/.playback_status.json.tmp

@@ -2,5 +2,13 @@
 # all_others lets the publishing URL choose the path, e.g. /rife.
 moq: false
 
+# Keep a short fMP4 window for stable mobile playback. Full-timeline seeks are
+# handled by playback.py, which restarts RIFE at the requested source position.
+hlsAlwaysRemux: true
+hlsVariant: fmp4
+hlsSegmentDuration: 1s
+hlsSegmentCount: 30
+hlsDirectory: ./.hls
+
 paths:
   all_others:

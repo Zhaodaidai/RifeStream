@@ -49,6 +49,10 @@ published stream. Unknown MPV options are ignored instead of being executed.
 Only `ush://MPV` is accepted; other `ush` targets and local file paths arriving
 from a web protocol request are rejected.
 
+The first MPV request starts one background playback controller on port 8090.
+Later MPV requests replace the current media in that controller, so duplicate
+RIFE and FFmpeg pipelines are not left running.
+
 Network video uses a real-time path:
 
 ```text
@@ -95,13 +99,20 @@ the next stream.
 
 The current PC LAN address is `192.168.10.218`:
 
+- Movie player with full source timeline: `http://192.168.10.218:8090`
+- HLS live page without source seeking: `http://192.168.10.218:8888/rife`
 - WebRTC, lower latency: `http://192.168.10.218:8889/rife`
-- HLS, more reliable: `http://192.168.10.218:8888/rife`
 - VLC / RTSP: `rtsp://192.168.10.218:8554/rife`
 - HLS playlist: `http://192.168.10.218:8888/rife/index.m3u8`
 
 The phone and PC must be connected to the same LAN. Windows Firewall must allow
-`mediamtx.exe` on the private network.
+`mediamtx.exe` and the portable Python runtime on the private network.
+
+Use the port 8090 player for seeking. Its progress bar represents the original
+movie duration instead of MediaMTX's short live window. Releasing the slider
+stops the old process tree and starts RIFE at the selected source time. A new
+position can take several seconds to appear while FFmpeg, TensorRT, and the first
+HLS keyframe are prepared; the complete MP4 does not need to be generated first.
 
 ## Useful commands
 
@@ -111,6 +122,9 @@ runtime\python.exe check_setup.py
 
 rem Check MediaMTX
 runtime\python.exe mediamtx.py status
+
+rem Start the phone control page before the first MPV request (normally automatic)
+runtime\pythonw.exe playback.py
 
 rem Restart MediaMTX from this directory
 runtime\python.exe mediamtx.py restart --replace

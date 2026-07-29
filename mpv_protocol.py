@@ -1,17 +1,16 @@
 import base64
-from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime
 import gzip
 import io
 from pathlib import Path
 import shlex
-import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
 
 ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 STREAM = ROOT / "stream.py"
 LOG_FILE = ROOT / "mpv_protocol.log"
 MAX_URI_LENGTH = 1_000_000
@@ -133,7 +132,12 @@ def parse_ush_uri(uri: str) -> MpvRequest:
     return parse_mpv_command(decode_payload(parsed.query))
 
 
-def stream_command(request: MpvRequest) -> list[str]:
+def stream_command(
+    request: MpvRequest,
+    *,
+    start: float | None = None,
+    status_file: Path | None = None,
+) -> list[str]:
     command = [sys.executable, str(STREAM), request.video]
     for header in request.headers:
         command.extend(["--http-header-field", header])
@@ -143,7 +147,8 @@ def stream_command(request: MpvRequest) -> list[str]:
         "ytdl-proxy": request.ytdl_proxy,
         "ytdl-format": request.ytdl_format,
         "title": request.title,
-        "start": format(request.start, ".12g") if request.start > 0 else None,
+        "start": format(request.start if start is None else start, ".12g"),
+        "status-file": str(status_file) if status_file else None,
     }
     for name, value in options.items():
         if value:
@@ -163,50 +168,30 @@ def show_error(message: str) -> None:
 
 
 def run_stream(request: MpvRequest) -> int:
-    command = stream_command(request)
-    recent_output: deque[str] = deque(maxlen=20)
-    with LOG_FILE.open("w", encoding="utf-8", errors="replace") as log:
-        log.write(f"Started: {datetime.now().isoformat(timespec='seconds')}\n")
-        log.write(f"Video: {request.video}\n")
-        if request.audio:
-            log.write(f"Audio: {request.audio}\n")
-        log.write(f"HTTP headers: {len(request.headers)}\n")
-        log.write(f"yt-dlp: {'yes' if request.ytdl_format else 'no'}\n\n")
-        log.flush()
-        try:
-            process = subprocess.Popen(
-                command,
-                cwd=ROOT,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-            )
-        except OSError as exc:
-            message = f"Could not start the RIFE stream:\n{exc}\n\nLog: {LOG_FILE}"
-            log.write(message + "\n")
-            show_error(message)
-            return 1
-        for line in process.stdout or ():
-            print(line, end="")
-            log.write(line)
-            log.flush()
-            stripped = line.strip()
-            if stripped:
-                recent_output.append(stripped)
-        exit_code = process.wait()
-        log.write(f"\nExit code: {exit_code}\n")
-    if exit_code != 0:
-        summary = "\n".join(recent_output) or "No diagnostic output was produced."
-        show_error(
-            f"RIFE stream exited with code {exit_code}.\n\n{summary}\n\nLog: {LOG_FILE}"
-        )
-    return exit_code
+    from playback import run_or_update
+
+    try:
+        return run_or_update(request)
+    except OSError as exc:
+        show_error(f"Could not start playback control:\n{exc}\n\nLog: {LOG_FILE}")
+        return 1
 
 
 def registry_command() -> str:
-    return f'"{sys.executable}" "{Path(__file__).resolve()}" "%1"'
+    interpreter = Path(sys.executable)
+    pythonw = interpreter.with_name("pythonw.exe")
+    if sys.platform == "win32" and pythonw.is_file():
+        interpreter = pythonw
+    return f'"{interpreter}" "{Path(__file__).resolve()}" "%1"'
+
+
+def owned_registry_commands() -> set[str]:
+    script = Path(__file__).resolve()
+    interpreter = Path(sys.executable)
+    return {
+        f'"{interpreter}" "{script}" "%1"',
+        f'"{interpreter.with_name("pythonw.exe")}" "{script}" "%1"',
+    }
 
 
 def install_protocol(force: bool) -> int:
@@ -224,7 +209,8 @@ def install_protocol(force: bool) -> int:
     except FileNotFoundError:
         pass
     ours = registry_command()
-    if existing and existing != ours and not force:
+    owned = owned_registry_commands()
+    if existing and existing not in owned and not force:
         print("Another ush handler is already registered:", file=sys.stderr)
         print(existing, file=sys.stderr)
         print("Run 'mpv_protocol.py install --force' to replace it.", file=sys.stderr)
@@ -234,7 +220,7 @@ def install_protocol(force: bool) -> int:
         winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:USH MPV Protocol")
         winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
         winreg.SetValueEx(key, "RifeHandler", 0, winreg.REG_DWORD, 1)
-        if existing and existing != ours:
+        if existing and existing not in owned:
             winreg.SetValueEx(key, "RifePreviousCommand", 0, winreg.REG_SZ, existing)
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, command_path) as key:
         winreg.SetValueEx(key, "", 0, winreg.REG_SZ, ours)
@@ -274,7 +260,7 @@ def uninstall_protocol() -> int:
             winreg.KEY_WRITE | winreg.KEY_READ,
         ) as key:
             current = winreg.QueryValueEx(key, "")[0]
-            if current != registry_command():
+            if current not in owned_registry_commands():
                 print("The current ush handler does not belong to this program.", file=sys.stderr)
                 return 2
             previous = None

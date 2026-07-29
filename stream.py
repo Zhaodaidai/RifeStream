@@ -281,12 +281,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--workspace-mib", type=int, default=0)
     parser.add_argument("--source-fps", type=float, default=0.0)
     parser.add_argument("--video-bitrate", type=int, default=10_000_000)
-    parser.add_argument("--gop", type=int, default=120)
+    parser.add_argument(
+        "--gop", type=int, default=0, help="keyframe interval; 0 selects one second"
+    )
     parser.add_argument("--preset", choices=tuple(f"p{i}" for i in range(1, 8)), default="p4")
     parser.add_argument("--audio-codec", choices=("libopus", "aac"), default="libopus")
     parser.add_argument("--no-audio", action="store_true")
     parser.add_argument("--start", type=float, default=0.0, help="start position in seconds")
     parser.add_argument("--duration", type=float, default=0.0, help="stop after this many seconds")
+    parser.add_argument("--status-file", type=Path, help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -388,6 +391,7 @@ def build_decoder_command(
 
 
 def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
+    gop = args.gop or max(1, round(float(source.rate) * args.factor))
     command = [
         *FFMPEG_BASE,
         *option_args(
@@ -409,7 +413,7 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
             ("-c:v", "h264_nvenc"), ("-preset", args.preset), ("-tune", "ull"),
             ("-profile:v", "baseline"), ("-rc", "cbr"),
             ("-b:v", args.video_bitrate), ("-maxrate", args.video_bitrate),
-            ("-bufsize", args.video_bitrate), ("-g", args.gop), ("-bf", 0),
+            ("-bufsize", args.video_bitrate), ("-g", gop), ("-bf", 0),
             ("-rc-lookahead", 0), ("-spatial-aq", 1), ("-temporal-aq", 1),
             ("-zerolatency", 1), ("-forced-idr", 1), ("-pix_fmt", "yuv420p"),
             ("-colorspace", "bt709"), ("-color_primaries", "bt709"),
@@ -492,6 +496,23 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
         return 1
 
 
+def write_status(path: Path | None, source: StreamInput, args: argparse.Namespace) -> None:
+    if path is None:
+        return
+    document = {
+        "duration": source.info.duration,
+        "start": args.start,
+        "title": source.title,
+        "width": source.info.width,
+        "height": source.info.height,
+        "source_fps": float(source.rate),
+        "output_fps": float(source.rate) * args.factor,
+    }
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(json.dumps(document), encoding="utf-8")
+    temporary.replace(path)
+
+
 def main() -> int:
     args = parse_args()
     missing = next(
@@ -501,7 +522,9 @@ def main() -> int:
     if missing:
         print(f"Required file not found: {missing}", file=sys.stderr)
         return 2
-    invalid_range = min(args.max_height, args.workspace_mib, args.start, args.duration) < 0
+    invalid_range = min(
+        args.max_height, args.workspace_mib, args.gop, args.start, args.duration
+    ) < 0
     if invalid_range or args.video_bitrate <= 0:
         print("Height, workspace, start, duration, or bitrate is invalid", file=sys.stderr)
         return 2
@@ -524,6 +547,7 @@ def main() -> int:
     print(f"Output     : {args.publish_url}")
     print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
     print("Stop       : Ctrl+C", flush=True)
+    write_status(args.status_file, source, args)
     return run_pipeline(source, args)
 
 

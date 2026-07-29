@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>RIFE Player</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; background: #080a0b; color: #f5f7f8; }
+    body { overflow: hidden; font-family: system-ui, "Microsoft YaHei", sans-serif; }
+    button, input { font: inherit; }
+    #video { width: 100%; height: 100%; display: block; background: #000; object-fit: contain; }
+    .top, .controls { position: fixed; left: 0; right: 0; z-index: 2; }
+    .top { top: 0; padding: max(14px, env(safe-area-inset-top)) 18px 20px;
+      background: linear-gradient(#080a0bcc, transparent); pointer-events: none; }
+    .title { max-width: 80vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      font-size: 15px; font-weight: 600; }
+    .state { margin-top: 5px; color: #b8c0c5; font-size: 12px; }
+    .controls { bottom: 0; padding: 28px 16px max(14px, env(safe-area-inset-bottom));
+      background: linear-gradient(transparent, #080a0be8 35%); }
+    .timeline { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px;
+      align-items: center; gap: 10px; }
+    .time { color: #d7dcdf; font-size: 12px; font-variant-numeric: tabular-nums; }
+    .time:last-child { text-align: right; }
+    input[type="range"] { width: 100%; height: 28px; margin: 0; accent-color: #28d17c; }
+    .actions { height: 44px; display: flex; align-items: center; justify-content: space-between; }
+    .actions-left { display: flex; align-items: center; gap: 8px; }
+    .icon { width: 44px; height: 44px; padding: 0; border: 0; color: #fff;
+      background: transparent; font-size: 22px; cursor: pointer; }
+    .icon:disabled { color: #667077; cursor: default; }
+    .waiting { position: fixed; inset: 0; display: none; place-items: center; z-index: 1;
+      color: #f5f7f8; font-size: 14px; background: #080a0b66; pointer-events: none; }
+    .waiting.show { display: grid; }
+    @media (hover: hover) { .icon:hover { color: #28d17c; } }
+  </style>
+</head>
+<body>
+  <video id="video" playsinline></video>
+  <header class="top">
+    <div class="title" id="title">RIFE</div>
+    <div class="state" id="state">等待媒体</div>
+  </header>
+  <div class="waiting" id="waiting">正在准备画面...</div>
+  <footer class="controls">
+    <div class="timeline">
+      <span class="time" id="current">00:00</span>
+      <input id="seek" type="range" min="0" max="0" step="0.1" value="0" disabled
+        aria-label="播放进度">
+      <span class="time" id="duration">--:--</span>
+    </div>
+    <div class="actions">
+      <div class="actions-left">
+        <button class="icon" id="play" type="button" title="播放" aria-label="播放">&#9654;</button>
+        <button class="icon" id="stop" type="button" title="停止" aria-label="停止">&#9632;</button>
+        <button class="icon" id="live" type="button" title="跳到当前处理位置"
+          aria-label="跳到当前处理位置">&#8635;</button>
+      </div>
+      <button class="icon" id="fullscreen" type="button" title="全屏"
+        aria-label="全屏">&#9974;</button>
+    </div>
+  </footer>
+  <script>
+    const video = document.querySelector('#video');
+    const seek = document.querySelector('#seek');
+    const current = document.querySelector('#current');
+    const duration = document.querySelector('#duration');
+    const title = document.querySelector('#title');
+    const state = document.querySelector('#state');
+    const waiting = document.querySelector('#waiting');
+    const play = document.querySelector('#play');
+    let hls = null;
+    let generation = -1;
+    let mediaOrigin = 0;
+    let dragging = false;
+    let lastStatus = null;
+    let attachSerial = 0;
+
+    const labels = { idle: '等待媒体', starting: 'RIFE 正在定位', streaming: '正在播放',
+      ended: '播放结束', stopped: '已停止', error: '处理失败' };
+    const fmt = value => {
+      if (!Number.isFinite(value)) return '--:--';
+      value = Math.max(0, Math.floor(value));
+      const h = Math.floor(value / 3600);
+      const m = Math.floor(value % 3600 / 60);
+      const s = String(value % 60).padStart(2, '0');
+      return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+    };
+    const setWaiting = enabled => waiting.classList.toggle('show', enabled);
+    const sourcePosition = () => Math.min(
+      lastStatus && Number.isFinite(lastStatus.duration) ? lastStatus.duration : Infinity,
+      Math.max(0, mediaOrigin + (video.currentTime || 0))
+    );
+
+    async function api(path, body) {
+      const options = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body) } : {};
+      const response = await fetch(path, options);
+      const value = await response.json();
+      if (!response.ok) throw new Error(value.error || `HTTP ${response.status}`);
+      return value;
+    }
+
+    function loadLibrary() {
+      if (window.Hls) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `http://${location.hostname}:8888/rife/hls.min.js`;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+
+    function clearStream() {
+      attachSerial += 1;
+      if (hls) hls.destroy();
+      hls = null;
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
+
+    async function attachStream(status) {
+      clearStream();
+      const serial = attachSerial;
+      setWaiting(true);
+      const url = `http://${location.hostname}:8888/rife/index.m3u8`;
+      const retry = () => setTimeout(() => {
+        if (serial === attachSerial && lastStatus &&
+            lastStatus.generation === status.generation &&
+            lastStatus.state === 'streaming') attachStream(lastStatus);
+      }, 1000);
+      video.addEventListener('error', retry, { once: true });
+      try {
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = url;
+        } else {
+          await loadLibrary();
+          hls = new Hls({ liveSyncDurationCount: 2, maxLiveSyncPlaybackRate: 1.2 });
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (!data.fatal) return;
+            hls.destroy();
+            hls = null;
+            retry();
+          });
+          hls.loadSource(url);
+          hls.attachMedia(video);
+        }
+        video.addEventListener('playing', () => {
+          mediaOrigin = status.offset;
+          setWaiting(false);
+        }, { once: true });
+        await video.play().catch(() => {});
+      } catch (error) {
+        state.textContent = `播放器加载失败: ${error.message}`;
+      }
+    }
+
+    async function updateStatus() {
+      try {
+        const value = await api('/api/status');
+        lastStatus = value;
+        title.textContent = value.title;
+        state.textContent = value.error || labels[value.state] || value.state;
+        setWaiting(value.state === 'starting');
+        if (Number.isFinite(value.duration)) {
+          seek.disabled = false;
+          seek.max = value.duration;
+          duration.textContent = fmt(value.duration);
+        } else {
+          seek.disabled = true;
+          duration.textContent = '--:--';
+        }
+        if (value.state === 'streaming' && value.generation !== generation) {
+          generation = value.generation;
+          mediaOrigin = value.position;
+          await attachStream(value);
+        }
+        if (!dragging) {
+          const position = video.readyState ? sourcePosition() : value.position;
+          seek.value = Math.min(Number(seek.max) || position, position);
+          current.textContent = fmt(position);
+        }
+      } catch (error) {
+        state.textContent = `控制服务不可用: ${error.message}`;
+      }
+    }
+
+    seek.addEventListener('pointerdown', () => { dragging = true; });
+    seek.addEventListener('input', () => { current.textContent = fmt(Number(seek.value)); });
+    seek.addEventListener('change', async () => {
+      dragging = false;
+      clearStream();
+      setWaiting(true);
+      try {
+        const value = await api('/api/seek', { position: Number(seek.value) });
+        generation = value.generation - 1;
+      } catch (error) {
+        state.textContent = `跳转失败: ${error.message}`;
+        setWaiting(false);
+      }
+    });
+    video.addEventListener('timeupdate', () => {
+      if (!dragging) {
+        const position = sourcePosition();
+        seek.value = position;
+        current.textContent = fmt(position);
+      }
+    });
+    video.addEventListener('play', () => { play.innerHTML = '&#10074;&#10074;'; play.title = '暂停'; });
+    video.addEventListener('pause', () => { play.innerHTML = '&#9654;'; play.title = '播放'; });
+    play.addEventListener('click', () => video.paused ? video.play() : video.pause());
+    document.querySelector('#stop').addEventListener('click', async () => {
+      clearStream();
+      await api('/api/stop', {});
+      setWaiting(false);
+    });
+    document.querySelector('#live').addEventListener('click', async () => {
+      if (lastStatus) {
+        if (hls && Number.isFinite(hls.liveSyncPosition)) video.currentTime = hls.liveSyncPosition;
+        await video.play().catch(() => {});
+      }
+    });
+    document.querySelector('#fullscreen').addEventListener('click', () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+    });
+    updateStatus();
+    setInterval(updateStatus, 1000);
+  </script>
+</body>
+</html>
