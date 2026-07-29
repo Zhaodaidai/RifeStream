@@ -1,0 +1,6 @@
+# MediaMTX needs at least one path rule before it accepts RTSP publishers.
+# all_others lets the publishing URL choose the path, e.g. /rife.
+moq: false
+
+paths:
+  all_others:

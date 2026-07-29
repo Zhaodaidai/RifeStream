@@ -1,0 +1,8 @@
+runtime/
+*.log
+/mediamtx.exe
+/auto.crt
+/auto.key
+/.mediamtx.pid
+*.mp4
+__pycache__/
