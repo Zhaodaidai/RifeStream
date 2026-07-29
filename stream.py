@@ -1,11 +1,15 @@
 import argparse
+from dataclasses import dataclass
 from fractions import Fraction
 import json
+import math
 import os
 from pathlib import Path
+import re
 import socket
 import subprocess
 import sys
+from urllib.parse import urlsplit, urlunsplit
 
 
 ROOT = Path(__file__).resolve().parent
@@ -14,6 +18,35 @@ FFMPEG = ROOT / "runtime" / "ffmpeg" / "ffmpeg.exe"
 FFPROBE = ROOT / "runtime" / "ffmpeg" / "ffprobe.exe"
 RIFE_SCRIPT = ROOT / "rife_stream.vpy"
 DEFAULT_INPUT = ROOT / "Smoking.Behind.the.Supermarket.with.You.S01E04.mp4"
+HTTP_SCHEMES = {"http", "https"}
+HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
+DEFAULT_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+)
+FFMPEG_BASE = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "warning"]
+
+
+@dataclass
+class MediaInfo:
+    frame_rate: Fraction
+    width: int
+    height: int
+    duration: float | None
+
+
+@dataclass
+class StreamInput:
+    video: str
+    audio: str | None
+    headers: list[str]
+    title: str | None
+    info: MediaInfo
+    rate: Fraction
+
+    @property
+    def is_network(self) -> bool:
+        return is_http_source(self.video)
 
 
 def port_open(port: int, timeout: float = 0.5) -> bool:
@@ -32,20 +65,57 @@ def ensure_mediamtx() -> None:
         raise RuntimeError("MediaMTX is not available on RTSP port 8554")
 
 
-def probe_video(input_file: Path) -> tuple[float, int, int]:
-    command = [
-        str(FFPROBE),
-        "-v",
-        "error",
-        "-select_streams",
-        "v:0",
-        "-show_entries",
-        "stream=width,height,avg_frame_rate,r_frame_rate",
-        "-of",
-        "json",
-        str(input_file),
-    ]
-    result = subprocess.run(
+def is_http_source(source: str) -> bool:
+    return urlsplit(source).scheme.lower() in HTTP_SCHEMES
+
+
+def normalize_source(source: str, name: str) -> str:
+    if is_http_source(source):
+        parsed = urlsplit(source)
+        if not parsed.netloc or "\r" in source or "\n" in source:
+            raise ValueError(f"{name} is not a valid HTTP URL")
+        return source
+    path = Path(source).expanduser().resolve()
+    if not path.is_file():
+        raise ValueError(f"{name} file not found: {path}")
+    return str(path)
+
+
+def normalize_headers(values: list[str]) -> list[str]:
+    headers: dict[str, tuple[str, str]] = {}
+    for value in values:
+        name, separator, header_value = value.partition(":")
+        name = name.strip()
+        header_value = header_value.strip()
+        if not separator or not HEADER_NAME.fullmatch(name) or not header_value:
+            raise ValueError(f"Invalid HTTP header: {value}")
+        if "\r" in header_value or "\n" in header_value:
+            raise ValueError("HTTP header values cannot contain line breaks")
+        headers[name.lower()] = (name, header_value)
+    return [f"{name}: {value}" for name, value in headers.values()]
+
+
+def merge_headers(*groups: list[str]) -> list[str]:
+    return normalize_headers([header for group in groups for header in group])
+
+
+def network_headers(headers: list[str]) -> list[str]:
+    if any(header.lower().startswith("user-agent:") for header in headers):
+        return headers
+    return merge_headers([f"User-Agent: {DEFAULT_USER_AGENT}"], headers)
+
+
+def ffmpeg_input_options(headers: list[str], proxy: str | None) -> list[str]:
+    options: list[str] = []
+    if headers:
+        options.extend(["-headers", "\r\n".join(headers) + "\r\n"])
+    if proxy:
+        options.extend(["-http_proxy", proxy])
+    return options
+
+
+def capture(command: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
         command,
         cwd=ROOT,
         capture_output=True,
@@ -54,26 +124,154 @@ def probe_video(input_file: Path) -> tuple[float, int, int]:
         errors="replace",
         check=False,
     )
+
+
+def option_args(*pairs: tuple[object, ...]) -> list[str]:
+    return [str(value) for pair in pairs for value in pair]
+
+
+def safe_float(value: object) -> float | None:
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) and result >= 0 else None
+
+
+def probe_video(
+    input_source: str, headers: list[str], proxy: str | None
+) -> MediaInfo:
+    command = [
+        str(FFPROBE),
+        "-v",
+        "error",
+        *ffmpeg_input_options(headers, proxy),
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration",
+        "-of",
+        "json",
+        input_source,
+    ]
+    result = capture(command)
     if result.returncode != 0:
+        detail = result.stderr.strip()
+        if detail:
+            detail = detail.replace(input_source, display_source(input_source))
+            detail = detail.splitlines()[-1]
+            raise RuntimeError(f"ffprobe could not inspect the input video: {detail}")
         raise RuntimeError("ffprobe could not inspect the input video")
     try:
-        stream = json.loads(result.stdout)["streams"][0]
+        document = json.loads(result.stdout)
+        stream = document["streams"][0]
         width = int(stream["width"])
         height = int(stream["height"])
         for key in ("avg_frame_rate", "r_frame_rate"):
             rate = Fraction(stream.get(key, "0/1"))
             if rate > 0:
-                return float(rate), width, height
+                duration = safe_float(stream.get("duration"))
+                if duration is None:
+                    duration = safe_float(document.get("format", {}).get("duration"))
+                return MediaInfo(rate, width, height, duration)
     except (KeyError, IndexError, TypeError, ValueError, ZeroDivisionError) as exc:
         raise RuntimeError("ffprobe returned invalid video metadata") from exc
     raise RuntimeError("Input frame rate is unavailable; pass --source-fps")
+
+
+def headers_from_ytdlp(value: object) -> list[str]:
+    if not isinstance(value, dict):
+        return []
+    return normalize_headers(
+        [
+            f"{name}: {header}"
+            for name, header in value.items()
+            if isinstance(name, str) and isinstance(header, str)
+        ]
+    )
+
+
+def resolve_ytdlp(
+    source: str,
+    format_selector: str,
+    proxy: str | None,
+    headers: list[str],
+) -> tuple[str, str | None, list[str], str | None]:
+    command = [
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "--dump-single-json",
+        "--no-playlist",
+        "--no-warnings",
+        "--format",
+        format_selector,
+    ]
+    if proxy:
+        command.extend(["--proxy", proxy])
+    for header in headers:
+        command.extend(["--add-headers", header])
+    command.append(source)
+    result = capture(command)
+    if result.returncode != 0:
+        detail = result.stderr.strip().splitlines()
+        raise RuntimeError(f"yt-dlp failed: {detail[-1] if detail else 'unknown error'}")
+    try:
+        info = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("yt-dlp returned invalid JSON") from exc
+
+    formats = info.get("requested_formats") or info.get("requested_downloads") or []
+    video_format = next(
+        (item for item in formats if item.get("vcodec") not in (None, "none")), None
+    )
+    audio_format = next(
+        (
+            item
+            for item in formats
+            if item.get("acodec") not in (None, "none")
+            and item.get("vcodec") in (None, "none")
+        ),
+        None,
+    )
+    video_source = (video_format or info).get("url")
+    audio_source = audio_format.get("url") if audio_format else None
+    if not isinstance(video_source, str):
+        raise RuntimeError("yt-dlp did not return a playable video URL")
+    resolved_headers = merge_headers(
+        headers_from_ytdlp(info.get("http_headers")),
+        headers_from_ytdlp((video_format or {}).get("http_headers")),
+        headers_from_ytdlp((audio_format or {}).get("http_headers")),
+        headers,
+    )
+    title = info.get("title") if isinstance(info.get("title"), str) else None
+    return video_source, audio_source, resolved_headers, title
+
+
+def display_source(source: str) -> str:
+    if not is_http_source(source):
+        return source
+    parsed = urlsplit(source)
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="VSPipe RIFE -> standalone FFmpeg NVENC -> MediaMTX"
     )
-    parser.add_argument("input", nargs="?", type=Path, default=DEFAULT_INPUT)
+    parser.add_argument("input", nargs="?", default=str(DEFAULT_INPUT))
+    parser.add_argument("--audio-input", help="separate local file or HTTP audio URL")
+    parser.add_argument(
+        "--http-header-field",
+        action="append",
+        default=[],
+        metavar="NAME:VALUE",
+        help="HTTP input header; may be repeated",
+    )
+    parser.add_argument("--http-proxy", help="HTTP proxy used by FFmpeg inputs")
+    parser.add_argument("--ytdl-proxy", help="proxy used while yt-dlp resolves a page")
+    parser.add_argument("--ytdl-format", help="yt-dlp format selector from MPV")
+    parser.add_argument("--title", help="display title supplied by External Player")
     parser.add_argument("--publish-url", default="rtsp://127.0.0.1:8554/rife")
     parser.add_argument("--factor", type=int, choices=(2, 3, 4), default=2)
     parser.add_argument("--max-height", type=int, default=1080)
@@ -92,6 +290,150 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def prepare_input(args: argparse.Namespace) -> StreamInput:
+    headers = normalize_headers(args.http_header_field)
+    video = normalize_source(args.input, "Input")
+    audio = normalize_source(args.audio_input, "Audio input") if args.audio_input else None
+    title = args.title
+    if args.ytdl_format:
+        video, resolved_audio, headers, resolved_title = resolve_ytdlp(
+            video, args.ytdl_format, args.ytdl_proxy, headers
+        )
+        video = normalize_source(video, "yt-dlp video")
+        audio = audio or (
+            normalize_source(resolved_audio, "yt-dlp audio") if resolved_audio else None
+        )
+        title = title or resolved_title
+    if is_http_source(video):
+        headers = network_headers(headers)
+    info = probe_video(video, headers, args.http_proxy)
+    rate = (
+        Fraction(str(args.source_fps)).limit_denominator(1_000_000)
+        if args.source_fps > 0
+        else info.frame_rate
+    )
+    return StreamInput(video, audio, headers, title, info, rate)
+
+
+def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "RIFE_FACTOR": str(args.factor),
+            "RIFE_MAX_HEIGHT": str(args.max_height),
+            "RIFE_GPU": str(args.gpu),
+            "RIFE_GPU_THREADS": str(args.gpu_threads),
+            "RIFE_SCENE_MODE": str(args.scene_mode),
+            "RIFE_WORKSPACE_MIB": str(args.workspace_mib),
+            "RIFE_SOURCE_FPS": format(float(source.rate), ".12g"),
+            "RIFE_START_SECONDS": format(0 if source.is_network else args.start, ".12g"),
+            "RIFE_DURATION_SECONDS": format(0 if source.is_network else args.duration, ".12g"),
+            "RIFE_PIPE_INPUT": str(int(source.is_network)),
+        }
+    )
+    if source.is_network:
+        duration = args.duration or (
+            max(0.0, source.info.duration - args.start)
+            if source.info.duration is not None
+            else None
+        )
+        frames = (
+            max(1, round(duration * float(source.rate)))
+            if duration is not None
+            else 2_000_000_000
+        )
+        env.update(
+            {
+                "RIFE_PIPE_WIDTH": str(source.info.width // 2 * 2),
+                "RIFE_PIPE_HEIGHT": str(source.info.height // 2 * 2),
+                "RIFE_PIPE_FRAMES": str(frames),
+                "RIFE_PIPE_FPS_NUM": str(source.rate.numerator),
+                "RIFE_PIPE_FPS_DEN": str(source.rate.denominator),
+            }
+        )
+    return env
+
+
+def build_vspipe_command(source: StreamInput) -> list[str]:
+    command = [str(VSPIPE), "--container", "y4m"]
+    command.extend(
+        ["--requests", "1"]
+        if source.is_network
+        else ["--arg", f"input={source.video}"]
+    )
+    return [*command, str(RIFE_SCRIPT), "-"]
+
+
+def build_decoder_command(
+    source: StreamInput, args: argparse.Namespace
+) -> list[str] | None:
+    if not source.is_network:
+        return None
+    command = [*FFMPEG_BASE, *ffmpeg_input_options(source.headers, args.http_proxy)]
+    if args.start > 0:
+        command.extend(["-ss", format(args.start, ".12g")])
+    command.extend(["-i", source.video])
+    if args.duration > 0:
+        command.extend(["-t", format(args.duration, ".12g")])
+    rate = f"{source.rate.numerator}/{source.rate.denominator}"
+    command.extend(
+        option_args(
+            ("-map", "0:v:0"), ("-an",), ("-sn",), ("-dn",),
+            ("-vf", f"fps={rate},scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"),
+            ("-fps_mode", "cfr"), ("-pix_fmt", "yuv420p"),
+            ("-f", "rawvideo"), ("pipe:1",),
+        )
+    )
+    return command
+
+
+def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
+    command = [
+        *FFMPEG_BASE,
+        *option_args(
+            ("-fflags", "+genpts"), ("-thread_queue_size", 16), ("-re",),
+            ("-f", "yuv4mpegpipe"), ("-i", "pipe:0"),
+        ),
+    ]
+    if not args.no_audio:
+        command.extend(["-thread_queue_size", "512", "-re"])
+        if args.start > 0:
+            command.extend(["-ss", format(args.start, ".12g")])
+        command.extend(ffmpeg_input_options(source.headers, args.http_proxy))
+        command.extend(["-i", source.audio or source.video])
+    command.extend(["-map", "0:v:0"])
+    if not args.no_audio:
+        command.extend(["-map", "1:a:0?"])
+    command.extend(
+        option_args(
+            ("-c:v", "h264_nvenc"), ("-preset", args.preset), ("-tune", "ull"),
+            ("-profile:v", "baseline"), ("-rc", "cbr"),
+            ("-b:v", args.video_bitrate), ("-maxrate", args.video_bitrate),
+            ("-bufsize", args.video_bitrate), ("-g", args.gop), ("-bf", 0),
+            ("-rc-lookahead", 0), ("-spatial-aq", 1), ("-temporal-aq", 1),
+            ("-zerolatency", 1), ("-forced-idr", 1), ("-pix_fmt", "yuv420p"),
+            ("-colorspace", "bt709"), ("-color_primaries", "bt709"),
+            ("-color_trc", "bt709"),
+        )
+    )
+    command.extend(
+        ["-an"]
+        if args.no_audio
+        else ["-c:a", args.audio_codec, "-b:a", "160000", "-ar", "48000", "-ac", "2"]
+    )
+    if args.duration > 0:
+        command.extend(["-t", format(args.duration, ".12g")])
+    return [
+        *command,
+        "-shortest",
+        "-f",
+        "rtsp",
+        "-rtsp_transport",
+        "tcp",
+        args.publish_url,
+    ]
+
+
 def stop_process(process: subprocess.Popen[bytes] | None) -> None:
     if process is None or process.poll() is not None:
         return
@@ -102,174 +444,87 @@ def stop_process(process: subprocess.Popen[bytes] | None) -> None:
         process.kill()
 
 
-def main() -> int:
-    args = parse_args()
-    input_file = args.input.expanduser().resolve()
-    if not input_file.is_file():
-        print(f"Input file not found: {input_file}", file=sys.stderr)
-        return 2
-    for required in (VSPIPE, FFMPEG, FFPROBE, RIFE_SCRIPT):
-        if not required.is_file():
-            print(f"Required file not found: {required}", file=sys.stderr)
-            return 2
-    if args.max_height < 0 or args.workspace_mib < 0 or args.video_bitrate <= 0:
-        print("Height, workspace, and bitrate arguments are invalid", file=sys.stderr)
-        return 2
-    if args.start < 0 or args.duration < 0:
-        print("Start and duration cannot be negative", file=sys.stderr)
-        return 2
-
-    try:
-        ensure_mediamtx()
-        detected_fps, width, height = probe_video(input_file)
-        source_fps = args.source_fps if args.source_fps > 0 else detected_fps
-    except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
-    env = os.environ.copy()
-    env.update(
-        {
-            "RIFE_FACTOR": str(args.factor),
-            "RIFE_MAX_HEIGHT": str(args.max_height),
-            "RIFE_GPU": str(args.gpu),
-            "RIFE_GPU_THREADS": str(args.gpu_threads),
-            "RIFE_SCENE_MODE": str(args.scene_mode),
-            "RIFE_WORKSPACE_MIB": str(args.workspace_mib),
-            "RIFE_SOURCE_FPS": format(source_fps, ".12g"),
-            "RIFE_START_SECONDS": format(args.start, ".12g"),
-            "RIFE_DURATION_SECONDS": format(args.duration, ".12g"),
-        }
-    )
-
-    vspipe_command = [
-        str(VSPIPE),
-        "--container",
-        "y4m",
-        "--arg",
-        f"input={input_file}",
-        str(RIFE_SCRIPT),
-        "-",
-    ]
-
-    ffmpeg_command = [
-        str(FFMPEG),
-        "-hide_banner",
-        "-nostdin",
-        "-loglevel",
-        "info",
-        "-fflags",
-        "+genpts",
-        "-thread_queue_size",
-        "16",
-        "-re",
-        "-f",
-        "yuv4mpegpipe",
-        "-i",
-        "pipe:0",
-    ]
-    if not args.no_audio:
-        ffmpeg_command.extend(["-thread_queue_size", "512", "-re"])
-        if args.start > 0:
-            ffmpeg_command.extend(["-ss", format(args.start, ".12g")])
-        ffmpeg_command.extend(["-i", str(input_file)])
-
-    ffmpeg_command.extend(["-map", "0:v:0"])
-    if not args.no_audio:
-        ffmpeg_command.extend(["-map", "1:a:0?"])
-    ffmpeg_command.extend(
-        [
-            "-c:v",
-            "h264_nvenc",
-            "-preset",
-            args.preset,
-            "-tune",
-            "ull",
-            "-profile:v",
-            "baseline",
-            "-rc",
-            "cbr",
-            "-b:v",
-            str(args.video_bitrate),
-            "-maxrate",
-            str(args.video_bitrate),
-            "-bufsize",
-            str(args.video_bitrate),
-            "-g",
-            str(args.gop),
-            "-bf",
-            "0",
-            "-rc-lookahead",
-            "0",
-            "-spatial-aq",
-            "1",
-            "-temporal-aq",
-            "1",
-            "-zerolatency",
-            "1",
-            "-forced-idr",
-            "1",
-            "-pix_fmt",
-            "yuv420p",
-            "-colorspace",
-            "bt709",
-            "-color_primaries",
-            "bt709",
-            "-color_trc",
-            "bt709",
-        ]
-    )
-    if args.no_audio:
-        ffmpeg_command.append("-an")
-    else:
-        ffmpeg_command.extend(
-            ["-c:a", args.audio_codec, "-b:a", "160000", "-ar", "48000", "-ac", "2"]
-        )
-    if args.duration > 0:
-        ffmpeg_command.extend(["-t", format(args.duration, ".12g")])
-    ffmpeg_command.extend(
-        ["-shortest", "-f", "rtsp", "-rtsp_transport", "tcp", args.publish_url]
-    )
-
-    output_height = min(height, args.max_height) if args.max_height > 0 else height
-    print("Pipeline   : VSPipe -> RIFE -> FFmpeg NVENC -> MediaMTX")
-    print("RIFE model : 4.25 Lite (TensorRT)")
-    print(f"Input      : {input_file}")
-    print(f"Resolution : {width}x{height} -> max height {output_height}")
-    print(f"Output     : {args.publish_url}")
-    print(f"Frame rate : {source_fps:.6g} x {args.factor} = {source_fps * args.factor:.3f} fps")
-    print("Stop       : Ctrl+C", flush=True)
-
+def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
+    decoder: subprocess.Popen[bytes] | None = None
     vspipe: subprocess.Popen[bytes] | None = None
-    ffmpeg: subprocess.Popen[bytes] | None = None
+    encoder: subprocess.Popen[bytes] | None = None
     try:
+        decoder_command = build_decoder_command(source, args)
+        if decoder_command:
+            decoder = subprocess.Popen(
+                decoder_command,
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                bufsize=0,
+            )
+            if decoder.stdout is None:
+                raise RuntimeError("Decoder stdout pipe was not created")
         vspipe = subprocess.Popen(
-            vspipe_command,
+            build_vspipe_command(source),
             cwd=ROOT,
-            env=env,
+            env=build_environment(source, args),
+            stdin=decoder.stdout if decoder else None,
             stdout=subprocess.PIPE,
             bufsize=0,
         )
+        if decoder and decoder.stdout:
+            decoder.stdout.close()
         if vspipe.stdout is None:
             raise RuntimeError("VSPipe stdout pipe was not created")
-        ffmpeg = subprocess.Popen(ffmpeg_command, cwd=ROOT, stdin=vspipe.stdout)
+        encoder = subprocess.Popen(
+            build_encoder_command(source, args), cwd=ROOT, stdin=vspipe.stdout
+        )
         vspipe.stdout.close()
-        ffmpeg_exit = ffmpeg.wait()
-        if vspipe.poll() is None and ffmpeg_exit != 0:
+        encoder_exit = encoder.wait()
+        if vspipe.poll() is None and encoder_exit != 0:
             stop_process(vspipe)
         vspipe_exit = vspipe.wait()
-        if ffmpeg_exit != 0:
-            return ffmpeg_exit
-        return vspipe_exit
+        decoder_exit = decoder.wait() if decoder else 0
+        return encoder_exit or vspipe_exit or decoder_exit
     except KeyboardInterrupt:
-        stop_process(ffmpeg)
-        stop_process(vspipe)
+        for process in (encoder, vspipe, decoder):
+            stop_process(process)
         return 130
-    except RuntimeError as exc:
+    except (OSError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
-        stop_process(ffmpeg)
-        stop_process(vspipe)
+        for process in (encoder, vspipe, decoder):
+            stop_process(process)
         return 1
+
+
+def main() -> int:
+    args = parse_args()
+    missing = next(
+        (path for path in (VSPIPE, FFMPEG, FFPROBE, RIFE_SCRIPT) if not path.is_file()),
+        None,
+    )
+    if missing:
+        print(f"Required file not found: {missing}", file=sys.stderr)
+        return 2
+    invalid_range = min(args.max_height, args.workspace_mib, args.start, args.duration) < 0
+    if invalid_range or args.video_bitrate <= 0:
+        print("Height, workspace, start, duration, or bitrate is invalid", file=sys.stderr)
+        return 2
+    try:
+        source = prepare_input(args)
+        ensure_mediamtx()
+    except (RuntimeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    width, height = source.info.width // 2 * 2, source.info.height // 2 * 2
+    output_height = min(height, args.max_height) if args.max_height else height
+    fps = float(source.rate)
+    print("Pipeline   : VSPipe -> RIFE -> FFmpeg NVENC -> MediaMTX")
+    print("RIFE model : 4.25 Lite (TensorRT)")
+    print(f"Input      : {display_source(source.video)}")
+    if source.title:
+        print(f"Title      : {source.title}")
+    print(f"Resolution : {width}x{height} -> max height {output_height}")
+    print(f"Output     : {args.publish_url}")
+    print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
+    print("Stop       : Ctrl+C", flush=True)
+    return run_pipeline(source, args)
 
 
 if __name__ == "__main__":

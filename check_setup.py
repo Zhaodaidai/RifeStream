@@ -32,23 +32,41 @@ def main() -> int:
     video = ROOT / "Smoking.Behind.the.Supermarket.with.You.S01E04.mp4"
     mediamtx = ROOT / "mediamtx.exe"
     mpv_files = (runtime / "mpv.exe", runtime / "mpv.com")
+    mpv_protocol = ROOT / "mpv_protocol.py"
 
-    results = [
-        check("VSPipe", vspipe.is_file(), str(vspipe)),
-        check("FFmpeg", ffmpeg.is_file(), str(ffmpeg)),
-        check("FFprobe", ffprobe.is_file(), str(ffprobe)),
-        check("BestSource", bestsource.is_file(), str(bestsource)),
-        check("RIFE model", model.is_file(), str(model)),
-        check("TensorRT plugin", trt.is_file(), str(trt)),
-        check("vs-mlrt", vsmlrt.is_file(), str(vsmlrt)),
-        check("MediaMTX binary", mediamtx.is_file(), str(mediamtx)),
-        check("test video", video.is_file(), str(video)),
+    required = {
+        "VSPipe": vspipe,
+        "FFmpeg": ffmpeg,
+        "FFprobe": ffprobe,
+        "BestSource": bestsource,
+        "RIFE model": model,
+        "TensorRT plugin": trt,
+        "vs-mlrt": vsmlrt,
+        "MediaMTX binary": mediamtx,
+        "MPV protocol receiver": mpv_protocol,
+        "test video": video,
+    }
+    results = [check(name, path.is_file(), str(path)) for name, path in required.items()]
+    results.append(
         check(
             "mpv removed",
             not any(path.exists() for path in mpv_files),
             "no mpv executable in runtime",
-        ),
-    ]
+        )
+    )
+    ytdlp = subprocess.run(
+        [str(runtime / "python.exe"), "-c", "import yt_dlp; print(yt_dlp.version.__version__)"],
+        capture_output=True,
+        text=True,
+        errors="replace",
+    )
+    results.append(
+        check(
+            "yt-dlp",
+            ytdlp.returncode == 0,
+            ytdlp.stdout.strip() if ytdlp.returncode == 0 else "not installed",
+        )
+    )
     if ffmpeg.is_file():
         encoders = subprocess.run(
             [str(ffmpeg), "-hide_banner", "-encoders"],
@@ -74,7 +92,11 @@ def main() -> int:
             text=True,
             errors="replace",
         )
-        detail = "core.bs.VideoSource" if source_probe.returncode == 0 else source_probe.stderr.strip()
+        detail = (
+            "core.bs.VideoSource"
+            if source_probe.returncode == 0
+            else source_probe.stderr.strip()
+        )
         results.append(check("BestSource load", source_probe.returncode == 0, detail))
     for port, name in ((8554, "RTSP"), (8888, "HLS"), (8889, "WebRTC")):
         results.append(check(f"MediaMTX {name}", port_open(port), f"127.0.0.1:{port}"))
