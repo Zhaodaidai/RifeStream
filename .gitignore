@@ -1,4 +1,5 @@
 runtime/
+.downloads/
 *.log
 /mediamtx.exe
 /auto.crt

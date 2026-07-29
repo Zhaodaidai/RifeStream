@@ -28,6 +28,8 @@ gpu_threads = env_int("RIFE_GPU_THREADS", 2)
 scene_mode = env_int("RIFE_SCENE_MODE", 1)
 workspace = env_int("RIFE_WORKSPACE_MIB", 0)
 source_fps = env_float("RIFE_SOURCE_FPS", 0.0)
+start_seconds = env_float("RIFE_START_SECONDS", 0.0)
+duration_seconds = env_float("RIFE_DURATION_SECONDS", 0.0)
 
 if factor < 2:
     raise vs.Error("RIFE_FACTOR must be at least 2")
@@ -37,10 +39,33 @@ if gpu_threads < 1:
     raise vs.Error("RIFE_GPU_THREADS must be at least 1")
 if scene_mode not in (0, 1, 2):
     raise vs.Error("RIFE_SCENE_MODE must be 0, 1, or 2")
-if source_fps <= 0:
-    raise vs.Error("RIFE_SOURCE_FPS must be greater than zero")
+if start_seconds < 0 or duration_seconds < 0:
+    raise vs.Error("RIFE start and duration values cannot be negative")
 
-clip = video_in
+input_path = globals().get("input")
+if not input_path:
+    raise vs.Error("Pass the input file with vspipe --arg input=<path>")
+if not hasattr(core, "bs"):
+    raise vs.Error("BestSource is not loaded (core.bs.VideoSource is missing)")
+
+clip = core.bs.VideoSource(
+    source=input_path,
+    variableformat=0,
+    cachemode=1,
+    showprogress=False,
+)
+if source_fps <= 0:
+    if clip.fps_den <= 0 or clip.fps_num <= 0:
+        raise vs.Error("The source frame rate is unknown; pass RIFE_SOURCE_FPS")
+    source_fps = clip.fps_num / clip.fps_den
+
+start_frame = round(start_seconds * source_fps)
+end_frame = clip.num_frames
+if duration_seconds > 0:
+    end_frame = min(end_frame, start_frame + round(duration_seconds * source_fps))
+if start_frame >= end_frame:
+    raise vs.Error("The requested start/duration range contains no frames")
+clip = clip[start_frame:end_frame]
 
 # Keep the working resolution practical for real-time inference and force an
 # encoder/browser-compatible 8-bit 4:2:0 output format.

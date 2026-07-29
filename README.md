@@ -3,12 +3,16 @@
 Pipeline:
 
 ```text
-video file -> VapourSynth -> RIFE 4.25 Lite TensorRT
-           -> FFmpeg h264_nvenc + Opus -> MediaMTX -> phone
+video file -> BestSource -> VapourSynth/VSPipe -> RIFE 4.25 Lite TensorRT
+           -> standalone FFmpeg h264_nvenc + Opus -> MediaMTX -> phone
 ```
 
 All entry points are Python programs. The portable Python interpreter is stored
 under `runtime`, so no system Python installation is required.
+
+This pipeline has no mpv dependency. BestSource decodes the source into
+VapourSynth, and VSPipe sends Y4M frames directly to the bundled standalone
+FFmpeg process through a binary pipe.
 
 ## Start streaming
 
