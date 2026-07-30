@@ -24,6 +24,7 @@ DEFAULT_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 )
 FFMPEG_BASE = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "warning"]
+PROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 
 @dataclass
@@ -59,7 +60,11 @@ def port_open(port: int, timeout: float = 0.5) -> bool:
 def ensure_mediamtx() -> None:
     if port_open(8554):
         return
-    result = subprocess.run([sys.executable, str(ROOT / "mediamtx.py"), "start"], cwd=ROOT)
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "mediamtx.py"), "start"],
+        cwd=ROOT,
+        creationflags=PROCESS_FLAGS,
+    )
     if result.returncode != 0 or not port_open(8554):
         raise RuntimeError("MediaMTX is not available on RTSP port 8554")
 
@@ -130,6 +135,7 @@ def capture(command: list[str]) -> subprocess.CompletedProcess[str]:
         encoding="utf-8",
         errors="replace",
         check=False,
+        creationflags=PROCESS_FLAGS,
     )
 
 
@@ -479,6 +485,7 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
                 cwd=ROOT,
                 stdout=subprocess.PIPE,
                 bufsize=0,
+                creationflags=PROCESS_FLAGS,
             )
             if decoder.stdout is None:
                 raise RuntimeError("Decoder stdout pipe was not created")
@@ -489,13 +496,17 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
             stdin=decoder.stdout if decoder else None,
             stdout=subprocess.PIPE,
             bufsize=0,
+            creationflags=PROCESS_FLAGS,
         )
         if decoder and decoder.stdout:
             decoder.stdout.close()
         if vspipe.stdout is None:
             raise RuntimeError("VSPipe stdout pipe was not created")
         encoder = subprocess.Popen(
-            build_encoder_command(source, args), cwd=ROOT, stdin=vspipe.stdout
+            build_encoder_command(source, args),
+            cwd=ROOT,
+            stdin=vspipe.stdout,
+            creationflags=PROCESS_FLAGS,
         )
         vspipe.stdout.close()
         encoder_exit = encoder.wait()

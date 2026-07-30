@@ -14,6 +14,7 @@ BINARY = ROOT / "mediamtx.exe"
 CONFIG = ROOT / "mediamtx.yml"
 PID_FILE = ROOT / ".mediamtx.pid"
 LOG_FILE = ROOT / "mediamtx.log"
+PROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 
 def port_open(port: int, timeout: float = 0.5) -> bool:
@@ -32,6 +33,7 @@ def mediamtx_pids() -> list[int]:
         encoding="utf-8",
         errors="replace",
         check=True,
+        creationflags=PROCESS_FLAGS,
     )
     pids: list[int] = []
     for row in csv.reader(io.StringIO(result.stdout)):
@@ -119,6 +121,7 @@ def stop(replace: bool = False) -> int:
             encoding="utf-8",
             errors="replace",
             check=False,
+            creationflags=PROCESS_FLAGS,
         )
         if result.returncode == 0:
             print(f"Stopped MediaMTX PID {pid}")
