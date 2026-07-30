@@ -2,10 +2,12 @@ import argparse
 import base64
 from fractions import Fraction
 import gzip
+import io
 from pathlib import Path
 import subprocess
 import sys
 import threading
+import time
 import unittest
 from unittest.mock import patch
 from urllib.parse import quote
@@ -150,6 +152,27 @@ class MpvProtocolTests(unittest.TestCase):
 
         restart.assert_called_once_with(session.request, 7)
 
+    def test_stopped_position_is_frozen(self) -> None:
+        session = playback.PlaybackSession()
+        session.offset = 10
+        session.state = "streaming"
+        session.stream_started_at = time.monotonic() - 2
+
+        result = session.stop()
+
+        self.assertEqual(result["state"], "stopped")
+        self.assertGreaterEqual(result["position"], 12)
+        self.assertEqual(result["position"], result["offset"])
+
+    def test_mediamtx_source_id_is_read_from_path_list(self) -> None:
+        response = io.BytesIO(
+            b'{"items":[{"name":"rife","online":true,'
+            b'"source":{"id":"source-1"}}]}'
+        )
+
+        with patch.object(playback, "urlopen", return_value=response):
+            self.assertEqual(playback.source_id(), "source-1")
+
     def test_outdated_playback_server_is_stopped(self) -> None:
         session = playback.PlaybackSession()
         with patch.object(playback, "SERVER_VERSION", "old"):
@@ -206,6 +229,7 @@ class StreamInputTests(unittest.TestCase):
         )
         args = argparse.Namespace(
             max_height=1080,
+            gpu=0,
             http_proxy=None,
             start=0,
             duration=0,
@@ -214,7 +238,37 @@ class StreamInputTests(unittest.TestCase):
         command = stream.build_decoder_command(source, args)
 
         self.assertEqual(stream.video_size(info, 1080), (1920, 1080))
-        self.assertIn("fps=25/1,scale=1920:1080,format=yuv420p", command)
+        self.assertIn("-hwaccel", command)
+        self.assertIn("cuda", command)
+        self.assertIn(
+            "scale_cuda=1920:1080:format=yuv420p:interp_algo=lanczos,"
+            "hwdownload,format=yuv420p,fps=25/1",
+            command,
+        )
+
+    def test_network_frame_count_does_not_overrun_the_decoder(self) -> None:
+        source = stream.StreamInput(
+            "https://example.com/video.mp4",
+            None,
+            [],
+            None,
+            stream.MediaInfo(Fraction(24_000, 1001), 1920, 1080, 98.596),
+            Fraction(24_000, 1001),
+        )
+        args = argparse.Namespace(
+            factor=2,
+            max_height=1080,
+            gpu=0,
+            gpu_threads=2,
+            scene_mode=1,
+            workspace_mib=0,
+            start=0,
+            duration=0,
+        )
+
+        environment = stream.build_environment(source, args)
+
+        self.assertEqual(environment["RIFE_PIPE_FRAMES"], "2362")
 
     def test_encoder_uses_visually_lossless_constant_quality(self) -> None:
         source = stream.StreamInput(
@@ -246,6 +300,10 @@ class StreamInputTests(unittest.TestCase):
             ["-rc", "vbr"],
             ["-cq", "16"],
             ["-multipass", "fullres"],
+            ["-bf", "0"],
+            ["-no-scenecut", "1"],
+            ["-strict_gop", "1"],
+            ["-pkt_size", "1400"],
         ):
             index = command.index(option[0])
             self.assertEqual(command[index : index + 2], option)

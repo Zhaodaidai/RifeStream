@@ -78,7 +78,15 @@ def main() -> int:
         )
         encoder_output = encoders.stdout + encoders.stderr
         results.append(check("NVENC", "h264_nvenc" in encoder_output, "h264_nvenc"))
-        results.append(check("WebRTC audio", "libopus" in encoder_output, "libopus"))
+        results.append(check("Opus audio", "libopus" in encoder_output, "libopus"))
+        filters = subprocess.run(
+            [str(ffmpeg), "-hide_banner", "-filters"],
+            capture_output=True,
+            text=True,
+            errors="replace",
+        )
+        filter_output = filters.stdout + filters.stderr
+        results.append(check("CUDA scaling", "scale_cuda" in filter_output, "scale_cuda"))
     if vspipe.is_file():
         source_probe = subprocess.run(
             [
@@ -101,7 +109,7 @@ def main() -> int:
     for port, name in (
         (8554, "RTSP"),
         (8888, "HLS"),
-        (8889, "WebRTC"),
+        (9997, "API"),
         (8090, "playback control"),
     ):
         results.append(check(f"MediaMTX {name}", port_open(port), f"127.0.0.1:{port}"))

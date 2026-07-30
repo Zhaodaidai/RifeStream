@@ -74,6 +74,7 @@
     let dragging = false;
     let lastStatus = null;
     let attachSerial = 0;
+    let retryTimer = null;
 
     const labels = { idle: '等待媒体', starting: 'RIFE 正在定位', streaming: '正在播放',
       ended: '播放结束', stopped: '已停止', error: '处理失败' };
@@ -113,8 +114,11 @@
 
     function clearStream() {
       attachSerial += 1;
+      clearTimeout(retryTimer);
+      retryTimer = null;
       if (hls) hls.destroy();
       hls = null;
+      video.onerror = null;
       video.pause();
       video.removeAttribute('src');
       video.load();
@@ -125,14 +129,18 @@
       const serial = attachSerial;
       setWaiting(true);
       const url = `http://${location.hostname}:8888/rife/index.m3u8`;
-      const retry = () => setTimeout(() => {
-        if (serial === attachSerial && lastStatus &&
-            lastStatus.generation === status.generation &&
-            lastStatus.state === 'streaming') attachStream(lastStatus);
-      }, 1000);
-      video.addEventListener('error', retry, { once: true });
+      const retry = () => {
+        if (retryTimer) return;
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
+          if (serial === attachSerial && lastStatus &&
+              lastStatus.generation === status.generation &&
+              lastStatus.state === 'streaming') attachStream(lastStatus);
+        }, 1000);
+      };
       try {
         if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.onerror = retry;
           video.src = url;
         } else {
           await loadLibrary();
@@ -153,6 +161,7 @@
         await video.play().catch(() => {});
       } catch (error) {
         state.textContent = `播放器加载失败: ${error.message}`;
+        retry();
       }
     }
 
@@ -230,8 +239,11 @@
         document.documentElement.requestFullscreen().catch(() => {});
       } else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
     });
-    updateStatus();
-    setInterval(updateStatus, 1000);
+    async function pollStatus() {
+      await updateStatus();
+      setTimeout(pollStatus, 1000);
+    }
+    pollStatus();
   </script>
 </body>
 </html>

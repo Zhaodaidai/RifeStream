@@ -44,8 +44,11 @@ def mediamtx_pids() -> list[int]:
 
 def start() -> int:
     if port_open(8554):
-        print("MediaMTX is already listening on 127.0.0.1:8554")
-        return 0
+        if port_open(9997):
+            print("MediaMTX is already running")
+            return 0
+        print("RTSP port 8554 is occupied by an incompatible service", file=sys.stderr)
+        return 1
     if not BINARY.is_file():
         print(f"Missing MediaMTX binary: {BINARY}", file=sys.stderr)
         return 1
@@ -79,7 +82,7 @@ def start() -> int:
             print(f"MediaMTX exited with code {process.returncode}", file=sys.stderr)
             print(f"See log: {LOG_FILE}", file=sys.stderr)
             return 1
-        if port_open(8554):
+        if port_open(8554) and port_open(9997):
             print(f"MediaMTX started: PID {process.pid}")
             return 0
         time.sleep(0.1)
@@ -139,7 +142,7 @@ def status() -> int:
     for port, name in (
         (8554, "RTSP"),
         (8888, "HLS"),
-        (8889, "WebRTC"),
+        (9997, "API"),
         (8090, "Control"),
     ):
         state = "open" if port_open(port) else "closed"

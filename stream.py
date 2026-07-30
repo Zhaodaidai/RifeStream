@@ -58,15 +58,15 @@ def port_open(port: int, timeout: float = 0.5) -> bool:
 
 
 def ensure_mediamtx() -> None:
-    if port_open(8554):
+    if port_open(8554) and port_open(9997):
         return
     result = subprocess.run(
         [sys.executable, str(ROOT / "mediamtx.py"), "start"],
         cwd=ROOT,
         creationflags=PROCESS_FLAGS,
     )
-    if result.returncode != 0 or not port_open(8554):
-        raise RuntimeError("MediaMTX is not available on RTSP port 8554")
+    if result.returncode != 0 or not (port_open(8554) and port_open(9997)):
+        raise RuntimeError("MediaMTX RTSP or control API is not available")
 
 
 def is_http_source(source: str) -> bool:
@@ -361,7 +361,7 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
             else None
         )
         frames = (
-            max(1, round(duration * float(source.rate)))
+            max(1, math.floor(duration * float(source.rate)) - 1)
             if duration is not None
             else 2_000_000_000
         )
@@ -394,6 +394,12 @@ def build_decoder_command(
         return None
     command = [
         *FFMPEG_BASE,
+        "-hwaccel",
+        "cuda",
+        "-hwaccel_device",
+        str(args.gpu),
+        "-hwaccel_output_format",
+        "cuda",
         *ffmpeg_input_options(source.video, source.headers, args.http_proxy),
     ]
     if args.start > 0:
@@ -406,7 +412,11 @@ def build_decoder_command(
     command.extend(
         option_args(
             ("-map", "0:v:0"), ("-an",), ("-sn",), ("-dn",),
-            ("-vf", f"fps={rate},scale={width}:{height},format=yuv420p"),
+            (
+                "-vf",
+                f"scale_cuda={width}:{height}:format=yuv420p:interp_algo=lanczos,"
+                f"hwdownload,format=yuv420p,fps={rate}",
+            ),
             ("-fps_mode", "cfr"), ("-pix_fmt", "yuv420p"),
             ("-f", "rawvideo"), ("pipe:1",),
         )
@@ -437,9 +447,10 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         option_args(
             ("-c:v", "h264_nvenc"), ("-preset", "p7"), ("-tune", "hq"),
             ("-profile:v", "high"), ("-rc", "vbr"), ("-cq", args.quality),
-            ("-b:v", 0), ("-multipass", "fullres"), ("-g", gop), ("-bf", 3),
-            ("-rc-lookahead", 20), ("-spatial-aq", 1), ("-temporal-aq", 1),
-            ("-aq-strength", 8), ("-forced-idr", 1), ("-pix_fmt", "yuv420p"),
+            ("-b:v", 0), ("-multipass", "fullres"), ("-g", gop), ("-bf", 0),
+            ("-rc-lookahead", 20), ("-no-scenecut", 1), ("-strict_gop", 1),
+            ("-spatial-aq", 1), ("-temporal-aq", 1), ("-aq-strength", 8),
+            ("-forced-idr", 1), ("-pix_fmt", "yuv420p"),
             ("-colorspace", "bt709"), ("-color_primaries", "bt709"),
             ("-color_trc", "bt709"),
         )
@@ -458,6 +469,8 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         "rtsp",
         "-rtsp_transport",
         "tcp",
+        "-pkt_size",
+        "1400",
         args.publish_url,
     ]
 
@@ -510,11 +523,10 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
         )
         vspipe.stdout.close()
         encoder_exit = encoder.wait()
-        if vspipe.poll() is None and encoder_exit != 0:
-            stop_process(vspipe)
-        vspipe_exit = vspipe.wait()
-        decoder_exit = decoder.wait() if decoder else 0
-        return encoder_exit or vspipe_exit or decoder_exit
+        vspipe_exit = vspipe.poll()
+        stop_process(vspipe)
+        stop_process(decoder)
+        return encoder_exit or vspipe_exit or 0
     except KeyboardInterrupt:
         for process in (encoder, vspipe, decoder):
             stop_process(process)

@@ -1,12 +1,19 @@
 # MediaMTX 至少需要一条路径规则才能接收 RTSP 发布。
 moq: false
+rtmp: false
+webrtc: false
+srt: false
 
-# 保留短 fMP4 窗口；完整时间轴跳转由 playback.py 重启转码实现。
+api: true
+apiAddress: 127.0.0.1:9997
+
+writeQueueSize: 2048
+
+# HLS 仅保留播放器缓冲所需窗口，完整时间轴跳转由 playback.py 重启转码实现。
 hlsAlwaysRemux: true
 hlsVariant: fmp4
 hlsSegmentDuration: 1s
-hlsSegmentCount: 30
-hlsDirectory: ./.hls
+hlsSegmentCount: 7
 
 paths:
   all_others:

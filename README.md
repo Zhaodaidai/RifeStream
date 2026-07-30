@@ -4,7 +4,7 @@
 
 ```text
 Local file -> BestSource -> VapourSynth/RIFE -> FFmpeg NVENC -> MediaMTX
-HTTP/HLS   -> FFmpeg decode -> VapourSynth/RIFE -> FFmpeg NVENC -> MediaMTX
+HTTP/HLS   -> FFmpeg CUDA decode/scale -> VapourSynth/RIFE -> FFmpeg NVENC -> MediaMTX
 ```
 
 项目使用 `runtime` 下的便携 Python、VapourSynth 和 FFmpeg，不依赖系统 Python
@@ -53,7 +53,7 @@ runtime\python.exe stream.py "D:\video\input.mkv" --max-height 720 --quality 16
 runtime\python.exe stream.py "D:\video\input.mkv" --audio-codec aac
 ```
 
-`stream.py` 会在 RTSP 端口未监听时自动启动 MediaMTX。新分辨率首次运行时，
+`stream.py` 会在 RTSP 和本地控制 API 未监听时自动启动 MediaMTX。新分辨率首次运行时，
 TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife_v2` 缓存。
 
 默认视频编码为 H.264 NVENC CQ 16，使用 p7、HQ、完整分辨率双遍分析和 AQ，
@@ -66,7 +66,6 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 
 - 控制播放器：`http://<PC-LAN-IP>:8090`
 - HLS 页面：`http://<PC-LAN-IP>:8888/rife`
-- WebRTC：`http://<PC-LAN-IP>:8889/rife`
 - RTSP：`rtsp://<PC-LAN-IP>:8554/rife`
 - HLS 清单：`http://<PC-LAN-IP>:8888/rife/index.m3u8`
 

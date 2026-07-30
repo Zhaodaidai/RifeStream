@@ -32,7 +32,7 @@ HOST = "0.0.0.0"
 PORT = 8090
 PLAYER = ROOT / "player.html"
 STATUS_FILE = ROOT / ".playback_status.json"
-HLS_PLAYLIST = "http://127.0.0.1:8888/rife/index.m3u8"
+PATHS_API = "http://127.0.0.1:9997/v3/paths/list"
 MAX_BODY = 256_000
 SERVER_VERSION = hashlib.sha256(
     b"".join(
@@ -117,12 +117,28 @@ def stop_process_tree(process: subprocess.Popen[bytes] | None) -> None:
             process.wait()
 
 
-def playlist_snapshot() -> bytes | None:
+def source_id() -> str | None:
     try:
-        with urlopen(HLS_PLAYLIST, timeout=1) as response:
-            return response.read()
+        with urlopen(PATHS_API, timeout=0.5) as response:
+            value = json.load(response)
     except OSError:
         return None
+    items = value.get("items")
+    if not isinstance(items, list):
+        raise ValueError("MediaMTX returned an invalid path list")
+    path = next(
+        (item for item in items if isinstance(item, dict) and item.get("name") == "rife"),
+        None,
+    )
+    if path is None or path.get("online") is not True:
+        return None
+    source = path.get("source")
+    if not isinstance(source, dict):
+        raise ValueError("MediaMTX returned an invalid source")
+    identifier = source.get("id")
+    if not isinstance(identifier, str):
+        raise ValueError("MediaMTX returned an invalid source ID")
+    return identifier
 
 
 class PlaybackSession:
@@ -164,6 +180,7 @@ class PlaybackSession:
 
     def stop(self) -> dict[str, Any]:
         with self.lock:
+            self._freeze_position()
             self.generation += 1
             stop_process_tree(self.process)
             self.process = None
@@ -173,7 +190,7 @@ class PlaybackSession:
             return self.status()
 
     def _restart(self, request: MpvRequest, position: float) -> dict[str, Any]:
-        old_playlist = playlist_snapshot()
+        old_source_id = source_id()
         stop_process_tree(self.process)
         self.process = None
         STATUS_FILE.unlink(missing_ok=True)
@@ -199,7 +216,7 @@ class PlaybackSession:
             )
         threading.Thread(
             target=self._monitor,
-            args=(self.process, generation, old_playlist),
+            args=(self.process, generation, old_source_id),
             daemon=True,
         ).start()
         return self.status()
@@ -208,26 +225,31 @@ class PlaybackSession:
         self,
         process: subprocess.Popen[bytes],
         generation: int,
-        old_playlist: bytes | None,
+        old_source_id: str | None,
     ) -> None:
-        stable_playlists = 0
         while process.poll() is None:
-            current = playlist_snapshot()
-            if current is not None and current != old_playlist:
-                stable_playlists += 1
-                if stable_playlists >= 2:
-                    with self.lock:
-                        if generation == self.generation and self.state == "starting":
-                            self.state = "streaming"
-                            self.stream_started_at = time.monotonic()
-                    break
-            else:
-                stable_playlists = 0
-            time.sleep(0.5)
+            try:
+                current_source_id = source_id()
+            except ValueError as exc:
+                stop_process_tree(process)
+                with self.lock:
+                    if generation == self.generation:
+                        self.process = None
+                        self.state = "error"
+                        self.error = str(exc)
+                return
+            if current_source_id is not None and current_source_id != old_source_id:
+                with self.lock:
+                    if generation == self.generation and self.state == "starting":
+                        self.state = "streaming"
+                        self.stream_started_at = time.monotonic()
+                break
+            time.sleep(0.25)
         exit_code = process.wait()
         with self.lock:
             if generation != self.generation:
                 return
+            self._freeze_position()
             self.process = None
             if exit_code == 0:
                 self.state = "ended"
@@ -245,6 +267,16 @@ class PlaybackSession:
         if not self.title and isinstance(value.get("title"), str):
             self.title = value["title"]
 
+    def _current_position(self) -> float:
+        position = self.offset
+        if self.stream_started_at:
+            position += max(0.0, time.monotonic() - self.stream_started_at)
+        return min(position, self.duration) if self.duration is not None else position
+
+    def _freeze_position(self) -> None:
+        self.offset = self._current_position()
+        self.stream_started_at = 0.0
+
     @staticmethod
     def _log_tail() -> str | None:
         if not LOG_FILE.is_file():
@@ -261,20 +293,10 @@ class PlaybackSession:
     def status(self) -> dict[str, Any]:
         with self.lock:
             self._refresh_metadata()
-            elapsed = (
-                max(0.0, time.monotonic() - self.stream_started_at)
-                if self.stream_started_at
-                else 0.0
-            )
-            position = self.offset
-            if self.state in {"streaming", "ended"}:
-                position += elapsed
-            if self.duration is not None:
-                position = min(position, self.duration)
             return {
                 "state": self.state,
                 "generation": self.generation,
-                "position": position,
+                "position": self._current_position(),
                 "offset": self.offset,
                 "duration": self.duration,
                 "title": self.title or "RIFE",
