@@ -23,6 +23,10 @@ HEADER_NAMES = {
     "cookie": "Cookie",
     "user-agent": "User-Agent",
 }
+PROTOCOL_NAMES = {
+    "ush": "USH MPV Protocol",
+    "mpv": "MPV URL Protocol",
+}
 
 
 class ProtocolError(ValueError):
@@ -132,6 +136,33 @@ def parse_ush_uri(uri: str) -> MpvRequest:
     return parse_mpv_command(decode_payload(parsed.query))
 
 
+def parse_mpv_uri(uri: str) -> MpvRequest:
+    if len(uri) > MAX_URI_LENGTH:
+        raise ProtocolError("The mpv URI is too large")
+    parsed = urlsplit(uri)
+    if parsed.scheme.lower() != "mpv":
+        raise ProtocolError("Only the mpv protocol is supported")
+    if parsed.query or parsed.fragment:
+        raise ProtocolError("The complete target URL must be percent-encoded")
+    payload = parsed.netloc + parsed.path
+    if not payload:
+        raise ProtocolError("The mpv URI has no target URL")
+    try:
+        target = unquote(payload, errors="strict")
+    except UnicodeDecodeError as exc:
+        raise ProtocolError("The mpv target URL is not valid UTF-8") from exc
+    return MpvRequest(video=validate_url(target, "video"))
+
+
+def parse_uri(uri: str) -> MpvRequest:
+    scheme = urlsplit(uri).scheme.lower()
+    if scheme == "ush":
+        return parse_ush_uri(uri)
+    if scheme == "mpv":
+        return parse_mpv_uri(uri)
+    raise ProtocolError("Only ush://MPV and mpv:// are supported")
+
+
 def stream_command(
     request: MpvRequest,
     *,
@@ -200,31 +231,44 @@ def install_protocol(force: bool) -> int:
         return 2
     import winreg
 
-    protocol_path = r"Software\Classes\ush"
-    command_path = protocol_path + r"\shell\open\command"
-    existing = None
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, command_path) as key:
-            existing = winreg.QueryValueEx(key, "")[0]
-    except FileNotFoundError:
-        pass
     ours = registry_command()
     owned = owned_registry_commands()
-    if existing and existing not in owned and not force:
-        print("Another ush handler is already registered:", file=sys.stderr)
-        print(existing, file=sys.stderr)
-        print("Run 'mpv_protocol.py install --force' to replace it.", file=sys.stderr)
+    existing_commands = {}
+    for scheme in PROTOCOL_NAMES:
+        command_path = rf"Software\Classes\{scheme}\shell\open\command"
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, command_path) as key:
+                existing_commands[scheme] = winreg.QueryValueEx(key, "")[0]
+        except FileNotFoundError:
+            existing_commands[scheme] = None
+
+    conflicts = {
+        scheme: command
+        for scheme, command in existing_commands.items()
+        if command and command not in owned
+    }
+    if conflicts and not force:
+        for scheme, command in conflicts.items():
+            print(f"Another {scheme} handler is already registered:", file=sys.stderr)
+            print(command, file=sys.stderr)
+        print("Run 'mpv_protocol.py install --force' to replace them.", file=sys.stderr)
         return 2
 
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, protocol_path) as key:
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:USH MPV Protocol")
-        winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
-        winreg.SetValueEx(key, "RifeHandler", 0, winreg.REG_DWORD, 1)
-        if existing and existing not in owned:
-            winreg.SetValueEx(key, "RifePreviousCommand", 0, winreg.REG_SZ, existing)
-    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, command_path) as key:
-        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, ours)
-    print("Registered ush://MPV for this Windows user.")
+    for scheme, name in PROTOCOL_NAMES.items():
+        protocol_path = rf"Software\Classes\{scheme}"
+        command_path = protocol_path + r"\shell\open\command"
+        existing = existing_commands[scheme]
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, protocol_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f"URL:{name}")
+            winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+            winreg.SetValueEx(key, "RifeHandler", 0, winreg.REG_DWORD, 1)
+            if existing and existing not in owned:
+                winreg.SetValueEx(
+                    key, "RifePreviousCommand", 0, winreg.REG_SZ, existing
+                )
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, command_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, ours)
+    print("Registered ush://MPV and mpv:// for this Windows user.")
     print(ours)
     return 0
 
@@ -234,9 +278,6 @@ def uninstall_protocol() -> int:
         print("Protocol registration is only available on Windows", file=sys.stderr)
         return 2
     import winreg
-
-    protocol_path = r"Software\Classes\ush"
-    command_path = protocol_path + r"\shell\open\command"
 
     def delete_tree(path: str) -> None:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_READ) as key:
@@ -252,29 +293,46 @@ def uninstall_protocol() -> int:
             delete_tree(path + "\\" + child)
         winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
 
-    try:
-        with winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER,
-            command_path,
-            0,
-            winreg.KEY_WRITE | winreg.KEY_READ,
-        ) as key:
-            current = winreg.QueryValueEx(key, "")[0]
-            if current not in owned_registry_commands():
-                print("The current ush handler does not belong to this program.", file=sys.stderr)
-                return 2
-            previous = None
-            try:
-                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, protocol_path) as root_key:
-                    previous = winreg.QueryValueEx(root_key, "RifePreviousCommand")[0]
-            except FileNotFoundError:
-                pass
-            if previous:
-                winreg.SetValueEx(key, "", 0, winreg.REG_SZ, previous)
+    registered = {}
+    owned = owned_registry_commands()
+    for scheme in PROTOCOL_NAMES:
+        command_path = rf"Software\Classes\{scheme}\shell\open\command"
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, command_path) as key:
+                registered[scheme] = winreg.QueryValueEx(key, "")[0]
+        except FileNotFoundError:
+            registered[scheme] = None
+    foreign = [
+        scheme for scheme, command in registered.items() if command and command not in owned
+    ]
+    if foreign:
+        print(
+            f"The current {', '.join(foreign)} handler does not belong to this program.",
+            file=sys.stderr,
+        )
+        return 2
+
+    changed = False
+    for scheme, current in registered.items():
+        if not current:
+            continue
+        changed = True
+        protocol_path = rf"Software\Classes\{scheme}"
+        command_path = protocol_path + r"\shell\open\command"
+        previous = None
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, protocol_path) as root_key:
+                previous = winreg.QueryValueEx(root_key, "RifePreviousCommand")[0]
+        except FileNotFoundError:
+            pass
         if not previous:
             delete_tree(protocol_path)
-            print("Removed this ush handler.")
-            return 0
+            print(f"Removed this {scheme} handler.")
+            continue
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, command_path, 0, winreg.KEY_SET_VALUE
+        ) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, previous)
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, protocol_path, 0, winreg.KEY_SET_VALUE
         ) as key:
@@ -283,10 +341,9 @@ def uninstall_protocol() -> int:
                     winreg.DeleteValue(key, name)
                 except FileNotFoundError:
                     pass
-    except FileNotFoundError:
-        print("ush://MPV is not registered for this program.")
-        return 0
-    print("Restored the previous ush handler.")
+        print(f"Restored the previous {scheme} handler.")
+    if not changed:
+        print("No protocol handler is registered for this program.")
     return 0
 
 
@@ -306,15 +363,15 @@ def main() -> int:
         uri = arguments[0]
     else:
         print(
-            "Usage: mpv_protocol.py <ush://MPV?...> | decode <URI> | "
+            "Usage: mpv_protocol.py <ush://MPV?... | mpv://...> | decode <URI> | "
             "install [--force] | uninstall",
             file=sys.stderr,
         )
         return 2
     try:
-        request = parse_ush_uri(uri)
+        request = parse_uri(uri)
     except ProtocolError as exc:
-        message = f"Invalid ush://MPV request:\n{exc}\n\nLog: {LOG_FILE}"
+        message = f"Invalid media protocol request:\n{exc}\n\nLog: {LOG_FILE}"
         LOG_FILE.write_text(message + "\n", encoding="utf-8")
         show_error(message)
         return 2

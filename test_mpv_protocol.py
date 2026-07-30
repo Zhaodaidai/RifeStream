@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import unittest
 from unittest.mock import patch
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -66,6 +67,20 @@ class MpvProtocolTests(unittest.TestCase):
             mpv_protocol.parse_ush_uri(uri.replace("ush://", "rife://", 1))
         with self.assertRaises(mpv_protocol.ProtocolError):
             mpv_protocol.parse_ush_uri(ush_uri('"https://example.com/video.mp4"', "PotPlayer"))
+
+    def test_percent_encoded_mpv_url_is_mapped(self) -> None:
+        target = "http://192.168.10.1:5244/d/\u5938\u514b\u7f51\u76d8/video.mkv/"
+        request = mpv_protocol.parse_uri(f"mpv://{quote(target, safe='')}")
+
+        self.assertEqual(request, mpv_protocol.MpvRequest(target))
+
+    def test_mpv_url_requires_an_encoded_http_target(self) -> None:
+        with self.assertRaises(mpv_protocol.ProtocolError):
+            mpv_protocol.parse_uri("mpv://")
+        with self.assertRaises(mpv_protocol.ProtocolError):
+            mpv_protocol.parse_uri("mpv://C%3A%5Cprivate.mkv")
+        with self.assertRaises(mpv_protocol.ProtocolError):
+            mpv_protocol.parse_uri("mpv://https%3A%2F%2Fexample.com%2Fvideo.mkv?raw=query")
 
     def test_non_http_media_and_header_injection_are_rejected(self) -> None:
         with self.assertRaises(mpv_protocol.ProtocolError):
