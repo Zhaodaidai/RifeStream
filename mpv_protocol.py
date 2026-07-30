@@ -11,7 +11,6 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-STREAM = ROOT / "stream.py"
 LOG_FILE = ROOT / "mpv_protocol.log"
 MAX_URI_LENGTH = 1_000_000
 MAX_COMMAND_LENGTH = 256_000
@@ -99,21 +98,19 @@ def parse_mpv_command(command: str) -> MpvRequest:
         name = name.lower()
         if not separator or not value:
             continue
-        if name == "audio-file" and value:
+        if name == "audio-file":
             request.audio = validate_url(value, "audio")
-        elif name == "sub-file" and value:
-            validate_url(value, "subtitle")
-        elif name == "http-header-fields" and value:
+        elif name == "http-header-fields":
             request.headers.append(parse_header(value))
-        elif name == "http-proxy" and value:
+        elif name == "http-proxy":
             request.http_proxy = validate_url(value, "HTTP proxy")
-        elif name == "ytdl-format" and value:
+        elif name == "ytdl-format":
             request.ytdl_format = value
         elif name == "ytdl-raw-options" and value.startswith("proxy=[") and value.endswith("]"):
             request.ytdl_proxy = validate_url(value[7:-1], "yt-dlp proxy", PROXY_SCHEMES)
-        elif name == "force-media-title" and value:
+        elif name == "force-media-title":
             request.title = value
-        elif name == "start" and value:
+        elif name == "start":
             try:
                 request.start = float(value)
             except ValueError as exc:
@@ -123,25 +120,19 @@ def parse_mpv_command(command: str) -> MpvRequest:
     return request
 
 
-def parse_ush_uri(uri: str) -> MpvRequest:
+def parse_uri(uri: str) -> MpvRequest:
     if len(uri) > MAX_URI_LENGTH:
-        raise ProtocolError("The ush URI is too large")
+        raise ProtocolError("The media URI is too large")
     parsed = urlsplit(uri)
-    if parsed.scheme.lower() != "ush":
-        raise ProtocolError("Only the ush protocol is supported")
-    if parsed.netloc.lower() != "mpv":
-        raise ProtocolError("Only ush://MPV is supported")
-    if not parsed.query:
-        raise ProtocolError("The ush://MPV URI has no payload")
-    return parse_mpv_command(decode_payload(parsed.query))
-
-
-def parse_mpv_uri(uri: str) -> MpvRequest:
-    if len(uri) > MAX_URI_LENGTH:
-        raise ProtocolError("The mpv URI is too large")
-    parsed = urlsplit(uri)
-    if parsed.scheme.lower() != "mpv":
-        raise ProtocolError("Only the mpv protocol is supported")
+    scheme = parsed.scheme.lower()
+    if scheme == "ush":
+        if parsed.netloc.lower() != "mpv":
+            raise ProtocolError("Only ush://MPV is supported")
+        if not parsed.query:
+            raise ProtocolError("The ush://MPV URI has no payload")
+        return parse_mpv_command(decode_payload(parsed.query))
+    if scheme != "mpv":
+        raise ProtocolError("Only ush://MPV and mpv:// are supported")
     if parsed.query or parsed.fragment:
         raise ProtocolError("The complete target URL must be percent-encoded")
     payload = parsed.netloc + parsed.path
@@ -154,58 +145,10 @@ def parse_mpv_uri(uri: str) -> MpvRequest:
     return MpvRequest(video=validate_url(target, "video"))
 
 
-def parse_uri(uri: str) -> MpvRequest:
-    scheme = urlsplit(uri).scheme.lower()
-    if scheme == "ush":
-        return parse_ush_uri(uri)
-    if scheme == "mpv":
-        return parse_mpv_uri(uri)
-    raise ProtocolError("Only ush://MPV and mpv:// are supported")
-
-
-def stream_command(
-    request: MpvRequest,
-    *,
-    start: float | None = None,
-    status_file: Path | None = None,
-) -> list[str]:
-    command = [sys.executable, str(STREAM), request.video]
-    for header in request.headers:
-        command.extend(["--http-header-field", header])
-    options = {
-        "audio-input": request.audio,
-        "http-proxy": request.http_proxy,
-        "ytdl-proxy": request.ytdl_proxy,
-        "ytdl-format": request.ytdl_format,
-        "title": request.title,
-        "start": format(request.start if start is None else start, ".12g"),
-        "status-file": str(status_file) if status_file else None,
-    }
-    for name, value in options.items():
-        if value:
-            command.extend([f"--{name}", value])
-    return command
-
-
-def show_error(message: str) -> None:
+def report_error(message: str) -> None:
     print(message, file=sys.stderr)
-    if sys.platform == "win32":
-        try:
-            import ctypes
-
-            ctypes.windll.user32.MessageBoxW(0, message, "RIFE MPV Receiver", 0x10)
-        except OSError:
-            pass
-
-
-def run_stream(request: MpvRequest) -> int:
-    from playback import run_or_update
-
-    try:
-        return run_or_update(request)
-    except OSError as exc:
-        show_error(f"Could not start playback control:\n{exc}\n\nLog: {LOG_FILE}")
-        return 1
+    with LOG_FILE.open("a", encoding="utf-8") as log:
+        log.write(f"\n{message}\n")
 
 
 def registry_command() -> str:
@@ -216,15 +159,6 @@ def registry_command() -> str:
     return f'"{interpreter}" "{Path(__file__).resolve()}" "%1"'
 
 
-def owned_registry_commands() -> set[str]:
-    script = Path(__file__).resolve()
-    interpreter = Path(sys.executable)
-    return {
-        f'"{interpreter}" "{script}" "%1"',
-        f'"{interpreter.with_name("pythonw.exe")}" "{script}" "%1"',
-    }
-
-
 def install_protocol(force: bool) -> int:
     if sys.platform != "win32":
         print("Protocol registration is only available on Windows", file=sys.stderr)
@@ -232,7 +166,6 @@ def install_protocol(force: bool) -> int:
     import winreg
 
     ours = registry_command()
-    owned = owned_registry_commands()
     existing_commands = {}
     for scheme in PROTOCOL_NAMES:
         command_path = rf"Software\Classes\{scheme}\shell\open\command"
@@ -245,7 +178,7 @@ def install_protocol(force: bool) -> int:
     conflicts = {
         scheme: command
         for scheme, command in existing_commands.items()
-        if command and command not in owned
+        if command and command != ours
     }
     if conflicts and not force:
         for scheme, command in conflicts.items():
@@ -261,8 +194,7 @@ def install_protocol(force: bool) -> int:
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, protocol_path) as key:
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, f"URL:{name}")
             winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
-            winreg.SetValueEx(key, "RifeHandler", 0, winreg.REG_DWORD, 1)
-            if existing and existing not in owned:
+            if existing and existing != ours:
                 winreg.SetValueEx(
                     key, "RifePreviousCommand", 0, winreg.REG_SZ, existing
                 )
@@ -294,7 +226,7 @@ def uninstall_protocol() -> int:
         winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
 
     registered = {}
-    owned = owned_registry_commands()
+    ours = registry_command()
     for scheme in PROTOCOL_NAMES:
         command_path = rf"Software\Classes\{scheme}\shell\open\command"
         try:
@@ -303,7 +235,7 @@ def uninstall_protocol() -> int:
         except FileNotFoundError:
             registered[scheme] = None
     foreign = [
-        scheme for scheme, command in registered.items() if command and command not in owned
+        scheme for scheme, command in registered.items() if command and command != ours
     ]
     if foreign:
         print(
@@ -336,11 +268,7 @@ def uninstall_protocol() -> int:
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, protocol_path, 0, winreg.KEY_SET_VALUE
         ) as key:
-            for name in ("RifeHandler", "RifePreviousCommand"):
-                try:
-                    winreg.DeleteValue(key, name)
-                except FileNotFoundError:
-                    pass
+            winreg.DeleteValue(key, "RifePreviousCommand")
         print(f"Restored the previous {scheme} handler.")
     if not changed:
         print("No protocol handler is registered for this program.")
@@ -372,13 +300,18 @@ def main() -> int:
         request = parse_uri(uri)
     except ProtocolError as exc:
         message = f"Invalid media protocol request:\n{exc}\n\nLog: {LOG_FILE}"
-        LOG_FILE.write_text(message + "\n", encoding="utf-8")
-        show_error(message)
+        report_error(message)
         return 2
     if decode_only:
         print(request)
         return 0
-    return run_stream(request)
+    from playback import run_or_update
+
+    try:
+        return run_or_update(request)
+    except OSError as exc:
+        report_error(f"Could not start playback control:\n{exc}\n\nLog: {LOG_FILE}")
+        return 1
 
 
 if __name__ == "__main__":

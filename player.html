@@ -207,7 +207,10 @@
         current.textContent = fmt(position);
       }
     });
-    video.addEventListener('play', () => { play.innerHTML = '&#10074;&#10074;'; play.title = '暂停'; });
+    video.addEventListener('play', () => {
+      play.innerHTML = '&#10074;&#10074;';
+      play.title = '暂停';
+    });
     video.addEventListener('pause', () => { play.innerHTML = '&#9654;'; play.title = '播放'; });
     play.addEventListener('click', () => video.paused ? video.play() : video.pause());
     document.querySelector('#stop').addEventListener('click', async () => {

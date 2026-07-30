@@ -17,7 +17,6 @@ VSPIPE = ROOT / "runtime" / "VSPipe.exe"
 FFMPEG = ROOT / "runtime" / "ffmpeg" / "ffmpeg.exe"
 FFPROBE = ROOT / "runtime" / "ffmpeg" / "ffprobe.exe"
 RIFE_SCRIPT = ROOT / "rife_stream.vpy"
-DEFAULT_INPUT = ROOT / "Smoking.Behind.the.Supermarket.with.You.S01E04.mp4"
 HTTP_SCHEMES = {"http", "https"}
 HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 DEFAULT_USER_AGENT = (
@@ -99,18 +98,26 @@ def merge_headers(*groups: list[str]) -> list[str]:
     return normalize_headers([header for group in groups for header in group])
 
 
-def network_headers(headers: list[str]) -> list[str]:
-    if any(header.lower().startswith("user-agent:") for header in headers):
-        return headers
-    return merge_headers([f"User-Agent: {DEFAULT_USER_AGENT}"], headers)
+def video_size(info: MediaInfo, max_height: int) -> tuple[int, int]:
+    width = info.width // 2 * 2
+    height = info.height // 2 * 2
+    if not max_height or height <= max_height:
+        return width, height
+    output_height = max_height // 2 * 2
+    output_width = max(2, int(width * output_height / height) // 2 * 2)
+    return output_width, output_height
 
 
-def ffmpeg_input_options(headers: list[str], proxy: str | None) -> list[str]:
+def ffmpeg_input_options(
+    source: str, headers: list[str], proxy: str | None
+) -> list[str]:
     options: list[str] = []
     if headers:
         options.extend(["-headers", "\r\n".join(headers) + "\r\n"])
     if proxy:
         options.extend(["-http_proxy", proxy])
+    if urlsplit(source).path.lower().endswith(".m3u8"):
+        options.extend(["-http_persistent", "0"])
     return options
 
 
@@ -145,7 +152,7 @@ def probe_video(
         str(FFPROBE),
         "-v",
         "error",
-        *ffmpeg_input_options(headers, proxy),
+        *ffmpeg_input_options(input_source, headers, proxy),
         "-select_streams",
         "v:0",
         "-show_entries",
@@ -259,7 +266,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="VSPipe RIFE -> standalone FFmpeg NVENC -> MediaMTX"
     )
-    parser.add_argument("input", nargs="?", default=str(DEFAULT_INPUT))
+    parser.add_argument("input", help="local file or HTTP video URL")
     parser.add_argument("--audio-input", help="separate local file or HTTP audio URL")
     parser.add_argument(
         "--http-header-field",
@@ -280,11 +287,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scene-mode", type=int, choices=(0, 1, 2), default=1)
     parser.add_argument("--workspace-mib", type=int, default=0)
     parser.add_argument("--source-fps", type=float, default=0.0)
-    parser.add_argument("--video-bitrate", type=int, default=10_000_000)
+    parser.add_argument(
+        "--quality",
+        type=int,
+        choices=range(1, 31),
+        default=16,
+        help="NVENC constant quality; lower values preserve more detail",
+    )
     parser.add_argument(
         "--gop", type=int, default=0, help="keyframe interval; 0 selects one second"
     )
-    parser.add_argument("--preset", choices=tuple(f"p{i}" for i in range(1, 8)), default="p4")
     parser.add_argument("--audio-codec", choices=("libopus", "aac"), default="libopus")
     parser.add_argument("--no-audio", action="store_true")
     parser.add_argument("--start", type=float, default=0.0, help="start position in seconds")
@@ -308,7 +320,8 @@ def prepare_input(args: argparse.Namespace) -> StreamInput:
         )
         title = title or resolved_title
     if is_http_source(video):
-        headers = network_headers(headers)
+        if not any(header.lower().startswith("user-agent:") for header in headers):
+            headers = merge_headers([f"User-Agent: {DEFAULT_USER_AGENT}"], headers)
     info = probe_video(video, headers, args.http_proxy)
     rate = (
         Fraction(str(args.source_fps)).limit_denominator(1_000_000)
@@ -335,6 +348,7 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
         }
     )
     if source.is_network:
+        width, height = video_size(source.info, args.max_height)
         duration = args.duration or (
             max(0.0, source.info.duration - args.start)
             if source.info.duration is not None
@@ -347,8 +361,8 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
         )
         env.update(
             {
-                "RIFE_PIPE_WIDTH": str(source.info.width // 2 * 2),
-                "RIFE_PIPE_HEIGHT": str(source.info.height // 2 * 2),
+                "RIFE_PIPE_WIDTH": str(width),
+                "RIFE_PIPE_HEIGHT": str(height),
                 "RIFE_PIPE_FRAMES": str(frames),
                 "RIFE_PIPE_FPS_NUM": str(source.rate.numerator),
                 "RIFE_PIPE_FPS_DEN": str(source.rate.denominator),
@@ -372,17 +386,21 @@ def build_decoder_command(
 ) -> list[str] | None:
     if not source.is_network:
         return None
-    command = [*FFMPEG_BASE, *ffmpeg_input_options(source.headers, args.http_proxy)]
+    command = [
+        *FFMPEG_BASE,
+        *ffmpeg_input_options(source.video, source.headers, args.http_proxy),
+    ]
     if args.start > 0:
         command.extend(["-ss", format(args.start, ".12g")])
     command.extend(["-i", source.video])
     if args.duration > 0:
         command.extend(["-t", format(args.duration, ".12g")])
     rate = f"{source.rate.numerator}/{source.rate.denominator}"
+    width, height = video_size(source.info, args.max_height)
     command.extend(
         option_args(
             ("-map", "0:v:0"), ("-an",), ("-sn",), ("-dn",),
-            ("-vf", f"fps={rate},scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"),
+            ("-vf", f"fps={rate},scale={width}:{height},format=yuv420p"),
             ("-fps_mode", "cfr"), ("-pix_fmt", "yuv420p"),
             ("-f", "rawvideo"), ("pipe:1",),
         )
@@ -400,22 +418,22 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         ),
     ]
     if not args.no_audio:
+        audio_source = source.audio or source.video
         command.extend(["-thread_queue_size", "512", "-re"])
         if args.start > 0:
             command.extend(["-ss", format(args.start, ".12g")])
-        command.extend(ffmpeg_input_options(source.headers, args.http_proxy))
-        command.extend(["-i", source.audio or source.video])
+        command.extend(ffmpeg_input_options(audio_source, source.headers, args.http_proxy))
+        command.extend(["-i", audio_source])
     command.extend(["-map", "0:v:0"])
     if not args.no_audio:
         command.extend(["-map", "1:a:0?"])
     command.extend(
         option_args(
-            ("-c:v", "h264_nvenc"), ("-preset", args.preset), ("-tune", "ull"),
-            ("-profile:v", "baseline"), ("-rc", "cbr"),
-            ("-b:v", args.video_bitrate), ("-maxrate", args.video_bitrate),
-            ("-bufsize", args.video_bitrate), ("-g", gop), ("-bf", 0),
-            ("-rc-lookahead", 0), ("-spatial-aq", 1), ("-temporal-aq", 1),
-            ("-zerolatency", 1), ("-forced-idr", 1), ("-pix_fmt", "yuv420p"),
+            ("-c:v", "h264_nvenc"), ("-preset", "p7"), ("-tune", "hq"),
+            ("-profile:v", "high"), ("-rc", "vbr"), ("-cq", args.quality),
+            ("-b:v", 0), ("-multipass", "fullres"), ("-g", gop), ("-bf", 3),
+            ("-rc-lookahead", 20), ("-spatial-aq", 1), ("-temporal-aq", 1),
+            ("-aq-strength", 8), ("-forced-idr", 1), ("-pix_fmt", "yuv420p"),
             ("-colorspace", "bt709"), ("-color_primaries", "bt709"),
             ("-color_trc", "bt709"),
         )
@@ -446,6 +464,7 @@ def stop_process(process: subprocess.Popen[bytes] | None) -> None:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
         process.kill()
+        process.wait()
 
 
 def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
@@ -496,17 +515,12 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
         return 1
 
 
-def write_status(path: Path | None, source: StreamInput, args: argparse.Namespace) -> None:
+def write_status(path: Path | None, source: StreamInput) -> None:
     if path is None:
         return
     document = {
         "duration": source.info.duration,
-        "start": args.start,
         "title": source.title,
-        "width": source.info.width,
-        "height": source.info.height,
-        "source_fps": float(source.rate),
-        "output_fps": float(source.rate) * args.factor,
     }
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(json.dumps(document), encoding="utf-8")
@@ -525,8 +539,8 @@ def main() -> int:
     invalid_range = min(
         args.max_height, args.workspace_mib, args.gop, args.start, args.duration
     ) < 0
-    if invalid_range or args.video_bitrate <= 0:
-        print("Height, workspace, start, duration, or bitrate is invalid", file=sys.stderr)
+    if invalid_range or args.max_height == 1:
+        print("Height, workspace, start, or duration is invalid", file=sys.stderr)
         return 2
     try:
         source = prepare_input(args)
@@ -535,19 +549,20 @@ def main() -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    width, height = source.info.width // 2 * 2, source.info.height // 2 * 2
-    output_height = min(height, args.max_height) if args.max_height else height
+    width, height = video_size(source.info, args.max_height)
     fps = float(source.rate)
     print("Pipeline   : VSPipe -> RIFE -> FFmpeg NVENC -> MediaMTX")
     print("RIFE model : 4.25 Lite (TensorRT)")
     print(f"Input      : {display_source(source.video)}")
     if source.title:
         print(f"Title      : {source.title}")
-    print(f"Resolution : {width}x{height} -> max height {output_height}")
+    print(
+        f"Resolution : {source.info.width}x{source.info.height} -> {width}x{height}"
+    )
     print(f"Output     : {args.publish_url}")
     print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
     print("Stop       : Ctrl+C", flush=True)
-    write_status(args.status_file, source, args)
+    write_status(args.status_file, source)
     return run_pipeline(source, args)
 
 

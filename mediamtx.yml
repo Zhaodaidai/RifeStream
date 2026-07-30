@@ -1,9 +1,7 @@
-# MediaMTX needs at least one path rule before it accepts RTSP publishers.
-# all_others lets the publishing URL choose the path, e.g. /rife.
+# MediaMTX 至少需要一条路径规则才能接收 RTSP 发布。
 moq: false
 
-# Keep a short fMP4 window for stable mobile playback. Full-timeline seeks are
-# handled by playback.py, which restarts RIFE at the requested source position.
+# 保留短 fMP4 窗口；完整时间轴跳转由 playback.py 重启转码实现。
 hlsAlwaysRemux: true
 hlsVariant: fmp4
 hlsSegmentDuration: 1s

@@ -134,8 +134,6 @@ else:
         raise vs.Error("The requested start/duration range contains no frames")
     clip = clip[start_frame:end_frame]
 
-# Keep the working resolution practical for real-time inference and force an
-# encoder/browser-compatible 8-bit 4:2:0 output format.
 clip = k7f.FMT_CTRL(clip, h_max=max_height or clip.height, fmt_pix=1)
 clip = k7f.RIFE_NV(
     clip,

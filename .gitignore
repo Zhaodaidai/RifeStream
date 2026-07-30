@@ -8,5 +8,6 @@ runtime/
 *.mp4
 __pycache__/
 /.hls/
+/.vod/
 /.playback_status.json
 /.playback_status.json.tmp

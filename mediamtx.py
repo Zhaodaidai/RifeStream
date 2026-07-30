@@ -31,15 +31,12 @@ def mediamtx_pids() -> list[int]:
         text=True,
         encoding="utf-8",
         errors="replace",
-        check=False,
+        check=True,
     )
     pids: list[int] = []
     for row in csv.reader(io.StringIO(result.stdout)):
         if len(row) >= 2 and row[0].lower() == "mediamtx.exe":
-            try:
-                pids.append(int(row[1]))
-            except ValueError:
-                pass
+            pids.append(int(row[1]))
     return pids
 
 
@@ -86,6 +83,8 @@ def start() -> int:
         time.sleep(0.1)
 
     print(f"MediaMTX did not open RTSP port 8554; see {LOG_FILE}", file=sys.stderr)
+    process.terminate()
+    process.wait()
     return 1
 
 
@@ -97,7 +96,10 @@ def stop(replace: bool = False) -> int:
         try:
             pids = [int(PID_FILE.read_text(encoding="ascii").strip())]
         except ValueError:
-            pass
+            print(f"Invalid MediaMTX PID file: {PID_FILE}", file=sys.stderr)
+            return 1
+        if pids[0] not in mediamtx_pids():
+            pids = []
 
     if not pids:
         if port_open(8554):
@@ -125,7 +127,7 @@ def stop(replace: bool = False) -> int:
             message = result.stderr.strip() or result.stdout.strip()
             print(f"Could not stop PID {pid}: {message}", file=sys.stderr)
     PID_FILE.unlink(missing_ok=True)
-    return 1 if failed and port_open(8554) else 0
+    return int(failed)
 
 
 def status() -> int:
@@ -167,9 +169,7 @@ def main() -> int:
         result = stop(args.replace)
         if result != 0:
             return result
-        time.sleep(0.3)
         return start()
-    return 2
 
 
 if __name__ == "__main__":

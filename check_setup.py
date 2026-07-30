@@ -29,7 +29,6 @@ def main() -> int:
     model = runtime / "vs-plugins" / "models" / "rife_v2" / "rife_v4.25_lite.onnx"
     trt = runtime / "vs-plugins" / "vstrt.dll"
     vsmlrt = runtime / "vsmlrt.py"
-    video = ROOT / "Smoking.Behind.the.Supermarket.with.You.S01E04.mp4"
     mediamtx = ROOT / "mediamtx.exe"
     mpv_files = (runtime / "mpv.exe", runtime / "mpv.com")
     mpv_protocol = ROOT / "mpv_protocol.py"
@@ -46,9 +45,8 @@ def main() -> int:
         "vs-mlrt": vsmlrt,
         "MediaMTX binary": mediamtx,
         "MPV protocol receiver": mpv_protocol,
-        "phone playback control": playback,
-        "phone player page": player,
-        "test video": video,
+        "playback control": playback,
+        "player page": player,
     }
     results = [check(name, path.is_file(), str(path)) for name, path in required.items()]
     results.append(
@@ -81,14 +79,12 @@ def main() -> int:
         encoder_output = encoders.stdout + encoders.stderr
         results.append(check("NVENC", "h264_nvenc" in encoder_output, "h264_nvenc"))
         results.append(check("WebRTC audio", "libopus" in encoder_output, "libopus"))
-    if vspipe.is_file() and video.is_file():
+    if vspipe.is_file():
         source_probe = subprocess.run(
             [
                 str(vspipe),
                 "--info",
-                "--arg",
-                f"input={video}",
-                str(ROOT / "probe_source.vpy"),
+                str(ROOT / "probe_plugins.vpy"),
                 "-",
             ],
             cwd=ROOT,
@@ -106,7 +102,7 @@ def main() -> int:
         (8554, "RTSP"),
         (8888, "HLS"),
         (8889, "WebRTC"),
-        (8090, "phone control"),
+        (8090, "playback control"),
     ):
         results.append(check(f"MediaMTX {name}", port_open(port), f"127.0.0.1:{port}"))
     print("\nSetup checks passed." if all(results) else "\nSetup has failures.")
