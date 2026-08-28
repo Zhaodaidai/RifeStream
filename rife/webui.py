@@ -12,7 +12,7 @@ import subprocess
 import sys
 import threading
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import unquote, urlsplit
 import uuid
 
 from rife.paths import (
@@ -30,23 +30,7 @@ from rife.paths import (
 from rife.stream import ensure_mediamtx, is_http_source, replace_existing_stream
 
 
-VIDEO_EXTENSIONS = {
-    ".avi",
-    ".flv",
-    ".m2ts",
-    ".m3u8",
-    ".m4v",
-    ".mkv",
-    ".mov",
-    ".mp4",
-    ".mpeg",
-    ".mpg",
-    ".ts",
-    ".webm",
-    ".wmv",
-}
 FILE_SCHEMES = {"file"}
-BROWSE_SKIP = {".git", "node_modules", "runtime", "__pycache__"}
 
 
 @dataclass
@@ -336,72 +320,6 @@ def stop_stream() -> None:
     replace_existing_stream()
 
 
-def browse_path(raw: str | None) -> dict[str, Any]:
-    if not raw:
-        home = Path.home()
-        drives = windows_drives()
-        return {
-            "path": str(home),
-            "parent": str(home.parent) if home.parent != home else None,
-            "drives": drives,
-            "entries": list_entries(home),
-        }
-    path = Path(raw).expanduser()
-    if os.name == "nt" and len(raw) == 2 and raw[1] == ":":
-        path = Path(raw + "\\")
-    path = path.resolve()
-    if not path.exists():
-        raise ValueError(f"Path not found: {path}")
-    if path.is_file():
-        path = path.parent
-    if not path.is_dir():
-        raise ValueError(f"Not a directory: {path}")
-    parent = path.parent
-    return {
-        "path": str(path),
-        "parent": str(parent) if parent != path else None,
-        "drives": windows_drives(),
-        "entries": list_entries(path),
-    }
-
-
-def windows_drives() -> list[str]:
-    if os.name != "nt":
-        return []
-    return [f"{letter}:\\" for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if Path(f"{letter}:\\").exists()]
-
-
-def list_entries(path: Path) -> list[dict[str, Any]]:
-    entries: list[dict[str, Any]] = []
-    try:
-        children = list(path.iterdir())
-    except OSError as exc:
-        raise ValueError(f"Cannot read directory: {exc}") from exc
-    children.sort(key=lambda child: (not child.is_dir(), child.name.lower()))
-    for child in children:
-        name = child.name
-        if name.startswith(".") or name in BROWSE_SKIP:
-            continue
-        try:
-            is_dir = child.is_dir()
-            is_file = child.is_file()
-        except OSError:
-            continue
-        if is_file and child.suffix.lower() not in VIDEO_EXTENSIONS:
-            continue
-        entries.append(
-            {
-                "name": name,
-                "path": str(child),
-                "dir": is_dir,
-                "file": is_file,
-            }
-        )
-        if len(entries) >= 2000:
-            break
-    return entries
-
-
 def read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     length = int(handler.headers.get("Content-Length") or 0)
     if length <= 0:
@@ -444,14 +362,6 @@ class WebHandler(BaseHTTPRequestHandler):
         path = unquote(parsed.path)
         if path == "/api/state":
             self.send_json(self.state_payload())
-            return
-        if path == "/api/browse":
-            query = parse_qs(parsed.query)
-            target = (query.get("path") or [""])[0]
-            try:
-                self.send_json(browse_path(target or None))
-            except ValueError as exc:
-                self.send_json({"error": str(exc)}, 400)
             return
         self.serve_static(path)
 

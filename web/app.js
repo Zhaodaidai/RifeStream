@@ -3,9 +3,6 @@ const streamStatus = document.getElementById("streamStatus");
 const errorBox = document.getElementById("errorBox");
 const sourceInput = document.getElementById("sourceInput");
 const playlistEl = document.getElementById("playlist");
-const browserEl = document.getElementById("browser");
-const crumbsEl = document.getElementById("crumbs");
-const drivesEl = document.getElementById("drives");
 const hlsUrlEl = document.getElementById("hlsUrl");
 const hlsHint = document.getElementById("hlsHint");
 const copyBtn = document.getElementById("copyBtn");
@@ -13,9 +10,6 @@ const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const playBtn = document.getElementById("playBtn");
 const stopBtn = document.getElementById("stopBtn");
-
-let browsePath = "";
-const selectedFiles = new Set();
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -51,7 +45,7 @@ function renderState(state) {
   if (!state.items.length) {
     const empty = document.createElement("li");
     empty.className = "empty";
-    empty.textContent = "列表为空，从下方添加链接或本机文件";
+    empty.textContent = "列表为空，从下方添加链接";
     playlistEl.appendChild(empty);
     return;
   }
@@ -104,81 +98,8 @@ async function play(body) {
   renderState(await api("/api/play", { method: "POST", body: JSON.stringify(body) }));
 }
 
-async function loadBrowse(path = "") {
-  const data = await api(`/api/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`);
-  browsePath = data.path;
-  crumbsEl.innerHTML = "";
-  const crumb = document.createElement("button");
-  crumb.className = "crumb";
-  crumb.textContent = data.path;
-  crumb.addEventListener("click", () => loadBrowse(data.path));
-  crumbsEl.appendChild(crumb);
-  if (data.parent) {
-    const up = document.createElement("button");
-    up.className = "crumb";
-    up.textContent = "上级目录";
-    up.addEventListener("click", () => loadBrowse(data.parent));
-    crumbsEl.appendChild(up);
-  }
-
-  drivesEl.innerHTML = "";
-  (data.drives || []).forEach((drive) => {
-    const button = document.createElement("button");
-    button.className = "drive";
-    button.textContent = drive;
-    button.addEventListener("click", () => loadBrowse(drive));
-    drivesEl.appendChild(button);
-  });
-
-  browserEl.innerHTML = "";
-  data.entries.forEach((entry) => {
-    const row = document.createElement("div");
-    row.className = "entry";
-    if (entry.file) {
-      const box = document.createElement("input");
-      box.type = "checkbox";
-      box.checked = selectedFiles.has(entry.path);
-      box.addEventListener("change", () => {
-        if (box.checked) selectedFiles.add(entry.path);
-        else selectedFiles.delete(entry.path);
-      });
-      row.appendChild(box);
-    }
-    const button = document.createElement("button");
-    button.className = "name";
-    button.type = "button";
-    button.textContent = entry.dir ? `📁 ${entry.name}` : entry.name;
-    button.addEventListener("click", () => {
-      if (entry.dir) loadBrowse(entry.path);
-      else {
-        const box = row.querySelector("input");
-        if (box) {
-          box.checked = !box.checked;
-          box.dispatchEvent(new Event("change"));
-        }
-      }
-    });
-    row.appendChild(button);
-    browserEl.appendChild(row);
-  });
-}
-
-async function addSelected(play) {
-  const sources = Array.from(selectedFiles);
-  if (!sources.length) return;
-  const state = await api("/api/items", {
-    method: "POST",
-    body: JSON.stringify({ sources, play }),
-  });
-  selectedFiles.clear();
-  renderState(state);
-  loadBrowse(browsePath);
-}
-
 document.getElementById("addBtn").addEventListener("click", () => addSources(false));
 document.getElementById("addPlayBtn").addEventListener("click", () => addSources(true));
-document.getElementById("addFilesBtn").addEventListener("click", () => addSelected(false));
-document.getElementById("addFilesPlayBtn").addEventListener("click", () => addSelected(true));
 document.getElementById("clearBtn").addEventListener("click", async () => {
   renderState(await api("/api/clear", { method: "POST", body: "{}" }));
 });
@@ -205,5 +126,4 @@ stopBtn.addEventListener("click", async () => {
 });
 
 refresh();
-loadBrowse();
 setInterval(refresh, 1500);

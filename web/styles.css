@@ -227,7 +227,7 @@ main {
   opacity: 0.8;
 }
 
-.transport, .row, .crumbs, .drives {
+.transport, .row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -239,10 +239,8 @@ main {
   border-top: 1px solid var(--line);
 }
 
-.sources {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+.sources .card {
+  max-width: 720px;
 }
 
 textarea {
@@ -289,44 +287,13 @@ button:disabled {
   margin: 10px 0 0;
 }
 
-.browser {
-  max-height: 240px;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  margin: 8px 0 10px;
-  background: #10151f;
-}
-
-.entry, .crumb, .drive {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--line);
-}
-
-.entry:last-child { border-bottom: 0; }
-
-.entry button, .playlist li button, .crumb, .drive {
+.playlist li button {
   background: transparent;
   border: 0;
   padding: 0;
   color: var(--text);
   text-align: left;
   border-radius: 0;
-}
-
-.entry .name {
-  flex: 1;
-  word-break: break-all;
-}
-
-.crumb, .drive {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 10px;
-  background: var(--panel-2);
 }
 
 @media (max-width: 860px) {
@@ -337,9 +304,5 @@ button:disabled {
 
   .hls, .now {
     max-width: 100%;
-  }
-
-  .sources {
-    grid-template-columns: 1fr;
   }
 }

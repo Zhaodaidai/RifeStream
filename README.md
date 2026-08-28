@@ -74,8 +74,7 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 
 浏览器打开 `http://<PC-LAN-IP>:10000`：
 
-- 批量粘贴 HTTP/HTTPS 链接或本机视频路径
-- 浏览本机目录，勾选多个文件加入列表
+- 批量粘贴 HTTP/HTTPS 链接
 - 列表中点击某一集切换转码；支持上一集 / 下一集
 - 页面显示 HLS 清单地址，用外部播放器打开即可
 
