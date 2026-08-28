@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rife.stream import (
+    HTTP_RECONNECT_OPTIONS,
     MediaInfo,
     StreamInput,
     build_decoder_command,
@@ -27,7 +28,7 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(headers, ["referer: https://last.example"])
         self.assertEqual(
             ffmpeg_input_options("https://example.com/video.mp4", headers, None),
-            ["-headers", "referer: https://last.example\r\n"],
+            [*HTTP_RECONNECT_OPTIONS, "-headers", "referer: https://last.example\r\n"],
         )
 
     def test_hls_input_disables_persistent_http_connections(self) -> None:
@@ -35,7 +36,10 @@ class StreamInputTests(unittest.TestCase):
             "https://example.com/video.m3u8?token=value", [], None
         )
 
-        self.assertEqual(options, ["-http_persistent", "0"])
+        self.assertEqual(options, [*HTTP_RECONNECT_OPTIONS, "-http_persistent", "0"])
+
+    def test_local_input_does_not_enable_http_reconnect(self) -> None:
+        self.assertEqual(ffmpeg_input_options("/tmp/video.mp4", [], None), [])
 
     def test_decoder_seeks_network_input_before_open(self) -> None:
         info = MediaInfo(Fraction(25), 1920, 1080, 600)

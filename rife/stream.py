@@ -104,16 +104,34 @@ def video_size(info: MediaInfo, max_height: int) -> tuple[int, int]:
     return output_width, output_height
 
 
+HTTP_RECONNECT_OPTIONS = [
+    "-reconnect",
+    "1",
+    "-reconnect_streamed",
+    "1",
+    "-reconnect_at_eof",
+    "1",
+    "-reconnect_on_network_error",
+    "1",
+    "-reconnect_delay_max",
+    "2",
+    "-icy",
+    "0",
+]
+
+
 def ffmpeg_input_options(
     source: str, headers: list[str], proxy: str | None
 ) -> list[str]:
     options: list[str] = []
+    if is_http_source(source):
+        options.extend(HTTP_RECONNECT_OPTIONS)
+        if urlsplit(source).path.lower().endswith(".m3u8"):
+            options.extend(["-http_persistent", "0"])
     if headers:
         options.extend(["-headers", "\r\n".join(headers) + "\r\n"])
     if proxy:
         options.extend(["-http_proxy", proxy])
-    if urlsplit(source).path.lower().endswith(".m3u8"):
-        options.extend(["-http_persistent", "0"])
     return options
 
 
