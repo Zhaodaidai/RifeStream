@@ -4,11 +4,7 @@ runtime/
 task_plan.md
 findings.md
 progress.md
-/mediamtx.exe
-/auto.crt
-/auto.key
-/.mediamtx.pid
-/.hls_proxy.pid
+/.hls_server.pid
 /.stream.pid
 /.stream.status.json
 /.playlist.json

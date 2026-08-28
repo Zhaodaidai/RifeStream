@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from rife.mediamtx import main
+from rife.hls_server import main
 
 
 if __name__ == "__main__":

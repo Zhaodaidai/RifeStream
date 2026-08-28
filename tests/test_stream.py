@@ -126,7 +126,7 @@ class StreamInputTests(unittest.TestCase):
             quality=16,
             audio_codec="libopus",
             duration=0,
-            publish_url="rtsp://127.0.0.1:8554/rife",
+            publish_url="/tmp/rife/index.m3u8",
         )
 
         command = build_encoder_command(source, args)
@@ -146,19 +146,23 @@ class StreamInputTests(unittest.TestCase):
             ["-bf", "0"],
             ["-fps_mode", "cfr"],
             ["-avoid_negative_ts", "make_zero"],
-            ["-muxpreload", "0"],
-            ["-muxdelay", "0"],
-            ["-flush_packets", "1"],
-            ["-pkt_size", "1400"],
+            ["-hls_playlist_type", "event"],
+            ["-hls_list_size", "0"],
+            ["-hls_segment_type", "mpegts"],
         ):
             index = command.index(option[0])
             self.assertEqual(command[index : index + 2], option)
+        hls_time = command.index("-hls_time")
+        self.assertEqual(command[hls_time - 2 : hls_time], ["-f", "hls"])
+        self.assertTrue(command[-1].endswith("index.m3u8"))
+        self.assertIn("seg%d.ts", command[command.index("-hls_segment_filename") + 1])
         video_input = command.index("-i")
         self.assertEqual(command[video_input - 2 : video_input + 2],
                          ["-f", "yuv4mpegpipe", "-i", "pipe:0"])
         self.assertNotIn("-re", command)
         self.assertNotIn("fullres", command)
         self.assertNotIn("cbr", command)
+        self.assertNotIn("rtsp", command)
 
     def test_encoder_gop_never_exceeds_two_seconds(self) -> None:
         source = StreamInput(
@@ -178,7 +182,7 @@ class StreamInputTests(unittest.TestCase):
             quality=16,
             audio_codec="libopus",
             duration=0,
-            publish_url="rtsp://127.0.0.1:8554/rife",
+            publish_url="/tmp/rife/index.m3u8",
         )
 
         command = build_encoder_command(source, args)
@@ -207,13 +211,15 @@ class StreamInputTests(unittest.TestCase):
             start=0,
             http_proxy=None,
             quality=16,
-            audio_codec="libopus",
+            audio_codec="aac",
             duration=0,
-            publish_url="rtsp://127.0.0.1:8554/rife",
+            publish_url="/tmp/rife/index.m3u8",
         )
 
         command = build_encoder_command(source, args)
 
+        self.assertEqual(command[command.index("-c:a") + 1], "aac")
+        self.assertEqual(command[command.index("-profile:a") + 1], "aac_low")
         self.assertEqual(
             command[command.index("-af") : command.index("-af") + 2],
             ["-af", "aresample=async=1:first_pts=0"],

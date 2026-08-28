@@ -30,7 +30,7 @@ from rife.paths import (
     WEBUI_LOG_FILE,
     WEBUI_PORT,
 )
-from rife.stream import ensure_mediamtx, is_http_source, replace_existing_stream
+from rife.stream import ensure_hls_server, is_http_source, replace_existing_stream
 
 
 @dataclass
@@ -779,7 +779,7 @@ def maybe_skip_outro() -> None:
 
 
 def ensure_services() -> None:
-    ensure_mediamtx()
+    ensure_hls_server()
 
 
 def parse_args() -> argparse.Namespace:
@@ -797,7 +797,7 @@ def main() -> int:
     try:
         ensure_services()
     except (OSError, RuntimeError) as exc:
-        print(f"Warning: MediaMTX is not available ({exc})", file=sys.stderr)
+        print(f"Warning: HLS server is not available ({exc})", file=sys.stderr)
     server = ThreadingHTTPServer((args.host, args.port), WebHandler)
     lan = lan_ipv4()
     print(f"Web UI : http://127.0.0.1:{args.port}")

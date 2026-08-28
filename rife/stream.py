@@ -10,17 +10,23 @@ import time
 import sys
 from urllib.parse import urlsplit, urlunsplit
 
-from rife.hls import encoder_gop, force_key_frames_expr
-from rife.mediamtx import start as start_mediamtx
+from rife.hls import (
+    HLS_SEGMENT_SECONDS,
+    encoder_gop,
+    force_key_frames_expr,
+    hls_segment_pattern,
+    reset_hls_output,
+)
+from rife.hls_server import start as start_hls_server
 from rife.paths import (
-    API_PORT,
     FFMPEG,
     FFPROBE,
+    HLS_PLAYLIST,
+    HLS_PORT,
     HTTP_SCHEMES,
     PROCESS_FLAGS,
     RIFE_SCRIPT,
     ROOT,
-    RTSP_PORT,
     STREAM_PID_FILE,
     STREAM_STATUS_FILE,
     VSPIPE,
@@ -57,11 +63,9 @@ class StreamInput:
         return is_http_source(self.video)
 
 
-def ensure_mediamtx() -> None:
-    if port_open(RTSP_PORT) and port_open(API_PORT):
-        return
-    if start_mediamtx() != 0 or not (port_open(RTSP_PORT) and port_open(API_PORT)):
-        raise RuntimeError("MediaMTX RTSP or control API is not available")
+def ensure_hls_server() -> None:
+    if start_hls_server() != 0 or not port_open(HLS_PORT):
+        raise RuntimeError("HLS server is not available")
 
 
 def is_http_source(source: str) -> bool:
@@ -280,7 +284,7 @@ def display_source(source: str) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="VSPipe RIFE -> standalone FFmpeg NVENC -> MediaMTX"
+        description="VSPipe RIFE -> standalone FFmpeg NVENC -> HLS"
     )
     parser.add_argument("input", help="local file or HTTP video URL")
     parser.add_argument("--audio-input", help="separate local file or HTTP audio URL")
@@ -295,7 +299,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ytdl-proxy", help="proxy used while yt-dlp resolves a page")
     parser.add_argument("--ytdl-format", help="yt-dlp format selector from MPV")
     parser.add_argument("--title", help="display title supplied by External Player")
-    parser.add_argument("--publish-url", default="rtsp://127.0.0.1:8554/rife")
+    parser.add_argument("--publish-url", default=str(HLS_PLAYLIST), help="HLS playlist path")
     parser.add_argument("--factor", type=int, choices=(2, 3, 4), default=2)
     parser.add_argument("--max-height", type=int, default=1080)
     parser.add_argument("--gpu", type=int, choices=(0, 1, 2), default=0)
@@ -316,7 +320,12 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="keyframe interval in output frames; 0 = floor(output_fps * 2s)",
     )
-    parser.add_argument("--audio-codec", choices=("libopus", "aac"), default="libopus")
+    parser.add_argument(
+        "--audio-codec",
+        choices=("libopus", "aac"),
+        default="aac",
+        help="HLS MPEG-TS carries AAC; libopus may not play in HLS players",
+    )
     parser.add_argument("--no-audio", action="store_true")
     parser.add_argument("--start", type=float, default=0.0, help="start position in seconds")
     parser.add_argument("--duration", type=float, default=0.0, help="stop after this many seconds")
@@ -474,6 +483,7 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         else [
             "-c:a",
             args.audio_codec,
+            *(["-profile:a", "aac_low"] if args.audio_codec == "aac" else []),
             "-b:a",
             "160000",
             "-ar",
@@ -486,24 +496,27 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
     )
     if args.duration > 0:
         command.extend(["-t", format(args.duration, ".12g")])
+    playlist = Path(args.publish_url)
     return [
         *command,
         "-shortest",
         "-avoid_negative_ts",
         "make_zero",
-        "-muxpreload",
-        "0",
-        "-muxdelay",
-        "0",
-        "-flush_packets",
-        "1",
         "-f",
-        "rtsp",
-        "-rtsp_transport",
-        "tcp",
-        "-pkt_size",
-        "1400",
-        args.publish_url,
+        "hls",
+        "-hls_time",
+        str(HLS_SEGMENT_SECONDS),
+        "-hls_list_size",
+        "0",
+        "-hls_playlist_type",
+        "event",
+        "-hls_flags",
+        "independent_segments+temp_file",
+        "-hls_segment_type",
+        "mpegts",
+        "-hls_segment_filename",
+        hls_segment_pattern(playlist),
+        str(playlist),
     ]
 
 
@@ -623,7 +636,8 @@ def main() -> int:
     STREAM_PID_FILE.write_text(str(os.getpid()), encoding="ascii")
     try:
         source = prepare_input(args)
-        ensure_mediamtx()
+        reset_hls_output(Path(args.publish_url))
+        ensure_hls_server()
     except (RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr, flush=True)
         STREAM_PID_FILE.unlink(missing_ok=True)
@@ -633,7 +647,7 @@ def main() -> int:
 
     width, height = video_size(source.info, args.max_height)
     fps = float(source.rate)
-    print("Pipeline   : VSPipe -> RIFE -> FFmpeg NVENC -> MediaMTX")
+    print("Pipeline   : VSPipe -> RIFE -> FFmpeg NVENC -> HLS")
     print("RIFE model : 4.25 Lite (TensorRT)")
     print(f"Input      : {display_source(source.video)}")
     if source.title:
@@ -645,6 +659,12 @@ def main() -> int:
     print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
     gop = encoder_gop(source.rate, args.factor, args.gop)
     print(f"HLS GOP    : {gop} frames (~{gop / (fps * args.factor):.3f}s IDR)")
+    if args.no_audio:
+        print("Audio      : none")
+    else:
+        print(f"Audio      : {args.audio_codec}")
+        if args.audio_codec != "aac":
+            print("Warning    : use AAC for HLS players; this codec may be silent")
     print("Stop       : Ctrl+C", flush=True)
     try:
         return run_pipeline(source, args)

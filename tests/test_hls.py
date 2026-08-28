@@ -1,11 +1,12 @@
 from fractions import Fraction
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from rife.hls import as_event_playlist, encoder_gop, force_key_frames_expr, gop_frames
+from rife.hls import encoder_gop, force_key_frames_expr, gop_frames, reset_hls_output
 
 
 class HlsTimingTests(unittest.TestCase):
@@ -24,35 +25,16 @@ class HlsTimingTests(unittest.TestCase):
         self.assertEqual(encoder_gop(Fraction(25), 2, 48), 48)
         self.assertEqual(force_key_frames_expr(48), "expr:gte(n,n_forced*48)")
 
-    def test_media_playlist_becomes_event_and_starts_at_zero(self) -> None:
-        body = (
-            "#EXTM3U\n"
-            "#EXT-X-VERSION:10\n"
-            "#EXT-X-TARGETDURATION:2\n"
-            "#EXT-X-MEDIA-SEQUENCE:0\n"
-            "#EXTINF:2.000,\n"
-            "seg0.mp4\n"
-        )
-        rewritten = as_event_playlist(body)
-        self.assertIn("#EXT-X-PLAYLIST-TYPE:EVENT", rewritten)
-        self.assertIn("#EXT-X-START:TIME-OFFSET=0", rewritten)
-        self.assertNotIn("#EXT-X-ENDLIST", rewritten)
-
-    def test_ended_media_playlist_becomes_vod(self) -> None:
-        body = (
-            "#EXTM3U\n"
-            "#EXT-X-MEDIA-SEQUENCE:0\n"
-            "#EXTINF:2.000,\n"
-            "seg0.mp4\n"
-            "#EXT-X-ENDLIST\n"
-        )
-        rewritten = as_event_playlist(body)
-        self.assertIn("#EXT-X-PLAYLIST-TYPE:VOD", rewritten)
-        self.assertNotIn("#EXT-X-START:", rewritten)
-
-    def test_master_playlist_is_left_alone(self) -> None:
-        body = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000\nindex.m3u8\n"
-        self.assertEqual(as_event_playlist(body), body)
+    def test_reset_hls_output_clears_old_segments(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            playlist = Path(folder) / "rife" / "index.m3u8"
+            reset_hls_output(playlist)
+            (playlist.parent / "seg0.ts").write_bytes(b"old")
+            playlist.write_text("#EXTM3U\n", encoding="utf-8")
+            reset_hls_output(playlist)
+            self.assertTrue(playlist.parent.is_dir())
+            self.assertFalse(playlist.exists())
+            self.assertFalse((playlist.parent / "seg0.ts").exists())
 
 
 if __name__ == "__main__":

@@ -1,16 +1,14 @@
 import subprocess
 
 from rife.paths import (
-    API_PORT,
     FFMPEG,
     FFPROBE,
     HLS_PORT,
-    MEDIAMTX_BINARY,
+    HLS_SERVER_PID_FILE,
     PROBE_SCRIPT,
     PROTOCOL_CLI,
     PYTHON,
     ROOT,
-    RTSP_PORT,
     RUNTIME,
     VSPIPE,
     port_open,
@@ -38,7 +36,6 @@ def main() -> int:
         "RIFE model": model,
         "TensorRT plugin": trt,
         "vs-mlrt": vsmlrt,
-        "MediaMTX binary": MEDIAMTX_BINARY,
         "MPV protocol receiver": PROTOCOL_CLI,
     }
     results = [check(name, path.is_file(), str(path)) for name, path in required.items()]
@@ -53,6 +50,7 @@ def main() -> int:
         [str(PYTHON), "-c", "import yt_dlp; print(yt_dlp.version.__version__)"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         errors="replace",
     )
     results.append(
@@ -67,15 +65,17 @@ def main() -> int:
             [str(FFMPEG), "-hide_banner", "-encoders"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             errors="replace",
         )
         encoder_output = encoders.stdout + encoders.stderr
         results.append(check("NVENC", "h264_nvenc" in encoder_output, "h264_nvenc"))
-        results.append(check("Opus audio", "libopus" in encoder_output, "libopus"))
+        results.append(check("AAC audio", "aac" in encoder_output.lower(), "aac"))
         filters = subprocess.run(
             [str(FFMPEG), "-hide_banner", "-filters"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
             errors="replace",
         )
         filter_output = filters.stdout + filters.stderr
@@ -86,6 +86,7 @@ def main() -> int:
             cwd=ROOT,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             errors="replace",
         )
         detail = (
@@ -94,12 +95,14 @@ def main() -> int:
             else source_probe.stderr.strip()
         )
         results.append(check("BestSource load", source_probe.returncode == 0, detail))
-    for port, name in (
-        (RTSP_PORT, "RTSP"),
-        (HLS_PORT, "HLS"),
-        (API_PORT, "API"),
-    ):
-        results.append(check(f"MediaMTX {name}", port_open(port), f"127.0.0.1:{port}"))
+    results.append(
+        check(
+            "HLS server",
+            port_open(HLS_PORT),
+            f"127.0.0.1:{HLS_PORT}"
+            + ("" if not HLS_SERVER_PID_FILE.is_file() else f" ({HLS_SERVER_PID_FILE.name})"),
+        )
+    )
     print("\nSetup checks passed." if all(results) else "\nSetup has failures.")
     return 0 if all(results) else 1
 

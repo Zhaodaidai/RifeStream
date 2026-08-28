@@ -1,1 +1,1 @@
-"""RIFE MediaMTX streaming package."""
+"""RIFE HLS streaming package."""
