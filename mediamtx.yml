@@ -1,4 +1,5 @@
-# MediaMTX 至少需要一条路径规则才能接收 RTSP 发布。
+# MediaMTX 用本机 RTSP 接收 FFmpeg 发布，不对局域网提供 RTSP 播放。
+rtspAddress: 127.0.0.1:8554
 moq: false
 rtmp: false
 webrtc: false
@@ -10,6 +11,7 @@ apiAddress: 127.0.0.1:9997
 writeQueueSize: 2048
 
 # HLS 只保留实时观看所需的短窗口。
+hlsAllowOrigin: "*"
 hlsAlwaysRemux: true
 hlsVariant: fmp4
 hlsSegmentDuration: 1s

@@ -13,7 +13,7 @@ HTTP/HLS   -> FFmpeg CUDA decode/scale -> VapourSynth/RIFE -> FFmpeg NVENC -> Me
 布局：
 
 ```text
-stream.py / mpv_protocol.py / mediamtx.py / check_setup.py   CLI 入口
+stream.py / mpv_protocol.py / mediamtx.py / webui.py / check_setup.py   CLI 入口
 rife/        路径、协议、转码、MediaMTX、环境检查
 vs/          VapourSynth 脚本
 tests/       单元测试
@@ -70,12 +70,25 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 目标是 1080p 输出的视觉透明质量。码率不设固定上限，会根据画面复杂度变化；
 `--quality` 越小质量和码率越高。这不是数学无损编码。
 
+## Web UI
+
+浏览器打开 `http://<PC-LAN-IP>:10000`：
+
+- 批量粘贴 HTTP/HTTPS 链接或本机视频路径
+- 浏览本机目录，勾选多个文件加入列表
+- 列表中点击某一集切换转码；支持上一集 / 下一集
+- 页面显示 HLS 清单地址，用外部播放器打开即可
+
+```bat
+runtime\python.exe webui.py
+```
+
+Web UI 会在需要时启动 MediaMTX。切集时会替换当前转码进程，与协议入口相同。
+
 ## 播放地址
 
 将 `<PC-LAN-IP>` 替换为本机局域网地址：
 
-- HLS 页面：`http://<PC-LAN-IP>:8888/rife`
-- RTSP：`rtsp://<PC-LAN-IP>:8554/rife`
 - HLS 清单：`http://<PC-LAN-IP>:8888/rife/index.m3u8`
 
 HLS 是实时短窗口；协议或 `stream.py` 再次启动时会替换当前转码进程。若要从指定位置开始，使用 `--start`。

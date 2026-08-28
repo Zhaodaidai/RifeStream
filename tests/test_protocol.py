@@ -22,6 +22,7 @@ class MpvProtocolTests(unittest.TestCase):
         result = subprocess.run(
             [
                 str(Path(sys.executable)),
+                "-P",
                 str(PROTOCOL_CLI),
                 "decode",
                 "mpv://https%3A%2F%2Fexample.com%2Fvideo.mp4",
@@ -34,6 +35,7 @@ class MpvProtocolTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("No module named 'rife'", result.stderr)
 
     def test_external_player_command_is_mapped(self) -> None:
         command = " ".join(

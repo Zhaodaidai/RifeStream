@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RIFE 播放列表</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>RIFE</h1>
+      <p class="now" id="nowPlaying">未选择媒体</p>
+    </div>
+    <div class="status" id="streamStatus">待机</div>
+  </header>
+
+  <main>
+    <section class="control-pane">
+      <div class="card">
+        <h2>HLS 清单</h2>
+        <p class="hls-url" id="hlsUrl"></p>
+        <div class="row">
+          <button type="button" id="copyBtn" class="primary">复制地址</button>
+        </div>
+      </div>
+      <div class="transport">
+        <button type="button" id="prevBtn">上一集</button>
+        <button type="button" id="playBtn" class="primary">播放当前</button>
+        <button type="button" id="nextBtn">下一集</button>
+        <button type="button" id="stopBtn">停止转码</button>
+      </div>
+      <p class="error" id="errorBox" hidden></p>
+    </section>
+
+    <section class="side">
+      <div class="card">
+        <h2>添加链接或路径</h2>
+        <textarea id="sourceInput" rows="4" placeholder="每行一个 HTTP/HTTPS 链接，或本机视频路径"></textarea>
+        <div class="row">
+          <button type="button" id="addBtn">添加到列表</button>
+          <button type="button" id="addPlayBtn" class="primary">添加并播放</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>选择本机文件</h2>
+        <div class="crumbs" id="crumbs"></div>
+        <div class="drives" id="drives"></div>
+        <div class="browser" id="browser"></div>
+        <div class="row">
+          <button type="button" id="addFilesBtn">添加所选文件</button>
+          <button type="button" id="addFilesPlayBtn" class="primary">添加并播放</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="playlist-head">
+          <h2>播放列表</h2>
+          <button type="button" id="clearBtn">清空</button>
+        </div>
+        <ol class="playlist" id="playlist"></ol>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

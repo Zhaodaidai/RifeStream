@@ -20,12 +20,16 @@ STREAM_PID_FILE = ROOT / ".stream.pid"
 MEDIAMTX_PID_FILE = ROOT / ".mediamtx.pid"
 MEDIAMTX_LOG_FILE = ROOT / "mediamtx.log"
 PROTOCOL_LOG_FILE = ROOT / "mpv_protocol.log"
+PLAYLIST_FILE = ROOT / ".playlist.json"
+WEBUI_DIR = ROOT / "web"
+WEBUI_LOG_FILE = ROOT / "webui.log"
 
 PROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 HTTP_SCHEMES = {"http", "https"}
 RTSP_PORT = 8554
 HLS_PORT = 8888
 API_PORT = 9997
+WEBUI_PORT = 10000
 
 
 def port_open(port: int, timeout: float = 0.5) -> bool:
