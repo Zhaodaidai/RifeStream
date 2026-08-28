@@ -19,7 +19,9 @@ MEDIAMTX_CONFIG = ROOT / "mediamtx.yml"
 STREAM_PID_FILE = ROOT / ".stream.pid"
 STREAM_STATUS_FILE = ROOT / ".stream.status.json"
 MEDIAMTX_PID_FILE = ROOT / ".mediamtx.pid"
+HLS_PROXY_PID_FILE = ROOT / ".hls_proxy.pid"
 MEDIAMTX_LOG_FILE = ROOT / "mediamtx.log"
+HLS_PROXY_LOG_FILE = ROOT / "hls_proxy.log"
 PROTOCOL_LOG_FILE = ROOT / "mpv_protocol.log"
 PLAYLIST_FILE = ROOT / ".playlist.json"
 WEBUI_DIR = ROOT / "web"
@@ -29,6 +31,7 @@ PROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 HTTP_SCHEMES = {"http", "https"}
 RTSP_PORT = 8554
 HLS_PORT = 8888
+HLS_MUXER_PORT = 8889
 API_PORT = 9997
 WEBUI_PORT = 10000
 

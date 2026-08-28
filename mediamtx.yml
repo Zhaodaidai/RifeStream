@@ -14,8 +14,9 @@ readTimeout: 30s
 writeTimeout: 30s
 writeQueueSize: 2048
 
-# HLS 对局域网开放；RTSP 仅本机推流。
-hlsAddress: :8888
+# HLS muxer 只给本机代理用；局域网走 8888 上改写成 EVENT 的清单，
+# 播放器按顺序播，卡顿时等缓冲，不追服务端实时沿。
+hlsAddress: 127.0.0.1:8889
 hlsAllowOrigins: ["*"]
 hlsAlwaysRemux: true
 hlsVariant: fmp4
@@ -23,7 +24,9 @@ hlsVariant: fmp4
 # 编码器 GOP 为 floor(output_fps * 2s)，片长 ≤ 2.000s，TARGETDURATION 保持 2。
 # 若这里写成 2s，略大于 2s 的 IDR 会把片长抬到 3s，客户端就会重拉清单乱跳。
 hlsSegmentDuration: 1s
-hlsSegmentCount: 8
+# ~4 小时（2s GOP）。必须够长，EVENT 清单才能一直从片头追加、不删旧片。
+hlsSegmentCount: 7200
+hlsDirectory: .hls
 hlsMuxerCloseAfter: 60s
 
 paths:
