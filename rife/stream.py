@@ -510,8 +510,6 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         str(HLS_SEGMENT_SECONDS),
         "-hls_list_size",
         "0",
-        "-hls_playlist_type",
-        "event",
         "-hls_flags",
         hls_muxer_flags(),
         "-hls_segment_type",

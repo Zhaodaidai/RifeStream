@@ -5,6 +5,7 @@ task_plan.md
 findings.md
 progress.md
 /.hls_server.pid
+/.hls_server.dir
 /.stream.pid
 /.stream.status.json
 /.playlist.json

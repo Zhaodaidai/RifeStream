@@ -17,9 +17,11 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from rife.hls import HLS_SEGMENT_SECONDS, STUB_PLAYLIST
 from rife.paths import (
     HLS_DIR,
     HLS_PORT,
+    HLS_SERVER_DIR_FILE,
     HLS_SERVER_LOG_FILE,
     HLS_SERVER_PID_FILE,
     PROCESS_FLAGS,
@@ -32,7 +34,6 @@ WIN_LOCK_VIOLATION = 33
 WIN_ACCESS_DENIED = 5
 WIN_FILE_NOT_FOUND = 2
 WIN_PATH_NOT_FOUND = 3
-_PLAYLIST_CACHE: dict[str, bytes] = {}
 
 
 def retryable_os_error(exc: OSError) -> bool:
@@ -49,10 +50,6 @@ def missing_os_error(exc: OSError) -> bool:
     if winerror in {WIN_FILE_NOT_FOUND, WIN_PATH_NOT_FOUND}:
         return True
     return exc.errno in {errno.ENOENT}
-
-
-def playlist_is_usable(data: bytes) -> bool:
-    return data.startswith(b"#EXTM3U") and data.endswith(b"\n")
 
 
 def read_shared(path: str) -> bytes:
@@ -117,25 +114,25 @@ def read_hls_bytes(path: str, attempts: int = 10) -> bytes:
     raise OSError("failed to read HLS file")
 
 
-def load_playlist(path: str) -> bytes:
-    data: bytes | None = None
-    try:
-        data = read_hls_bytes(path)
-    except OSError:
-        data = None
-    if data and playlist_is_usable(data):
-        _PLAYLIST_CACHE[path] = data
-        return data
-    cached = _PLAYLIST_CACHE.get(path)
-    if cached:
-        return cached
-    if data:
-        return data
-    raise FileNotFoundError(path)
+def wait_hls_bytes(path: str, timeout: float) -> bytes:
+    deadline = time.monotonic() + timeout
+    last_error: OSError | None = None
+    while True:
+        try:
+            return read_hls_bytes(path, attempts=4)
+        except OSError as exc:
+            last_error = exc
+            if not missing_os_error(exc) and not retryable_os_error(exc):
+                raise
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.1)
+    raise last_error or FileNotFoundError(path)
 
 
 class HlsHandler(SimpleHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    timeout = 30
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(HLS_DIR), **kwargs)
@@ -145,22 +142,15 @@ class HlsHandler(SimpleHTTPRequestHandler):
         lowered = path.lower()
         if lowered.endswith(".m3u8"):
             try:
-                data = load_playlist(path)
+                data = wait_hls_bytes(path, timeout=HLS_SEGMENT_SECONDS * 6)
             except OSError:
-                self.send_error(404, "File not found")
-                return None
+                data = STUB_PLAYLIST
             return self._send_bytes(path, data)
         if lowered.endswith(".ts"):
             try:
-                data = read_hls_bytes(path)
-            except OSError as exc:
-                if missing_os_error(exc):
-                    self.send_error(404, "File not found")
-                    return None
-                self.send_response(503)
-                self.send_header("Retry-After", "1")
-                self.send_header("Content-Length", "0")
-                self.end_headers()
+                data = wait_hls_bytes(path, timeout=HLS_SEGMENT_SECONDS * 6)
+            except OSError:
+                self.send_error(404, "File not found")
                 return None
             return self._send_bytes(path, data)
         return super().send_head()
@@ -175,7 +165,9 @@ class HlsHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         if urlsplit(self.path).path.endswith(".m3u8"):
-            self.send_header("Cache-Control", "no-store, max-age=0")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
         super().end_headers()
 
     def guess_type(self, path: str) -> str:
@@ -241,19 +233,34 @@ def _stop_pid(pid: int) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def _served_dir() -> str | None:
+    if not HLS_SERVER_DIR_FILE.is_file():
+        return None
+    text = HLS_SERVER_DIR_FILE.read_text(encoding="utf-8").strip()
+    return text or None
+
+
 def serve() -> int:
     HLS_DIR.mkdir(parents=True, exist_ok=True)
+    HLS_SERVER_DIR_FILE.write_text(str(HLS_DIR.resolve()), encoding="utf-8")
+    sys.stderr.write(f"Serving HLS from {HLS_DIR.resolve()}\n")
     server = ThreadingHTTPServer(("0.0.0.0", HLS_PORT), HlsHandler)
     server.serve_forever()
     return 0
 
 
 def start() -> int:
+    expected = str(HLS_DIR.resolve())
     pid = _read_pid(HLS_SERVER_PID_FILE)
     if pid is not None and port_open(HLS_PORT):
-        print("HLS server is already running")
-        return 0
-    if port_open(HLS_PORT):
+        served = _served_dir()
+        if served == expected:
+            print(f"HLS server is already running ({expected})")
+            return 0
+        print(f"HLS server directory changed ({served or 'unknown'} -> {expected}); restarting")
+        if stop() != 0:
+            return 1
+    elif port_open(HLS_PORT):
         print(f"Port {HLS_PORT} is occupied by another process", file=sys.stderr)
         return 1
 
@@ -278,7 +285,7 @@ def start() -> int:
             HLS_SERVER_PID_FILE.unlink(missing_ok=True)
             return 1
         if port_open(HLS_PORT):
-            print(f"HLS server started: PID {process.pid}")
+            print(f"HLS server started: PID {process.pid} ({expected})")
             return 0
         time.sleep(0.1)
 
@@ -297,9 +304,11 @@ def stop() -> int:
             return 1
         print("HLS server is not running")
         HLS_SERVER_PID_FILE.unlink(missing_ok=True)
+        HLS_SERVER_DIR_FILE.unlink(missing_ok=True)
         return 0
     ok, message = _stop_pid(pid)
     HLS_SERVER_PID_FILE.unlink(missing_ok=True)
+    HLS_SERVER_DIR_FILE.unlink(missing_ok=True)
     if ok:
         print(f"Stopped HLS server PID {pid}")
         return 0

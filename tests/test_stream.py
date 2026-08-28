@@ -151,7 +151,6 @@ class StreamInputTests(unittest.TestCase):
             ["-bf", "0"],
             ["-fps_mode", "cfr"],
             ["-avoid_negative_ts", "make_zero"],
-            ["-hls_playlist_type", "event"],
             ["-hls_list_size", "0"],
             ["-hls_segment_type", "mpegts"],
             ["-hls_flags", "independent_segments+temp_file"],
@@ -165,6 +164,7 @@ class StreamInputTests(unittest.TestCase):
         video_input = command.index("-i")
         self.assertEqual(command[video_input - 2 : video_input + 2],
                          ["-f", "yuv4mpegpipe", "-i", "pipe:0"])
+        self.assertNotIn("-hls_playlist_type", command)
         self.assertNotIn("-re", command)
         self.assertNotIn("fullres", command)
         self.assertNotIn("cbr", command)

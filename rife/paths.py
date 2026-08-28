@@ -18,28 +18,21 @@ PROTOCOL_CLI = ROOT / "mpv_protocol.py"
 STREAM_PID_FILE = ROOT / ".stream.pid"
 STREAM_STATUS_FILE = ROOT / ".stream.status.json"
 HLS_SERVER_PID_FILE = ROOT / ".hls_server.pid"
+HLS_SERVER_DIR_FILE = ROOT / ".hls_server.dir"
 HLS_SERVER_LOG_FILE = ROOT / "hls_server.log"
 
 
-def is_remote_path(path: Path) -> bool:
-    text = os.fspath(path)
-    if text.startswith("\\\\") or text.startswith("//"):
-        return True
-    if os.name != "nt" or len(text) < 2 or text[1] != ":":
-        return False
-    try:
-        import ctypes
-
-        return ctypes.windll.kernel32.GetDriveTypeW(text[:2] + "\\") == 4
-    except Exception:
-        return False
+def windows_hls_dir() -> Path:
+    base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
+    return Path(base) / "rife" / "hls"
 
 
-def default_hls_dir(root: Path = ROOT) -> Path:
-    if is_remote_path(root):
-        base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-        return Path(base) / "rife" / "hls"
-    return root / ".hls"
+def default_hls_dir(_root: Path = ROOT) -> Path:
+    # Always local NTFS on Windows. Z: and UNC cannot rename HLS playlists,
+    # and a server started from the share would keep serving stale .ts names.
+    if os.name == "nt":
+        return windows_hls_dir()
+    return _root / ".hls"
 
 
 HLS_DIR = default_hls_dir()

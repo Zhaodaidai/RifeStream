@@ -1,9 +1,13 @@
 from fractions import Fraction
 import errno
+import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -14,8 +18,8 @@ from rife.hls import (
     hls_muxer_flags,
     reset_hls_output,
 )
-from rife.hls_server import load_playlist, playlist_is_usable, retryable_os_error
-from rife.paths import default_hls_dir, is_remote_path
+from rife.hls_server import retryable_os_error, wait_hls_bytes
+from rife.paths import windows_hls_dir
 
 
 class HlsTimingTests(unittest.TestCase):
@@ -41,17 +45,25 @@ class HlsTimingTests(unittest.TestCase):
             (playlist.parent / "seg0.ts").write_bytes(b"old")
             playlist.write_text("#EXTM3U\n", encoding="utf-8")
             reset_hls_output(playlist)
+            text = playlist.read_bytes()
             self.assertTrue(playlist.parent.is_dir())
-            self.assertFalse(playlist.exists())
+            self.assertTrue(text.startswith(b"#EXTM3U"))
+            self.assertNotIn(b"#EXT-X-ENDLIST", text)
             self.assertFalse((playlist.parent / "seg0.ts").exists())
+
+    def test_wait_hls_bytes_blocks_until_the_next_segment_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder) / "seg1.ts")
+
+            def writer() -> None:
+                time.sleep(0.2)
+                Path(path).write_bytes(b"tsdata")
+
+            threading.Thread(target=writer, daemon=True).start()
+            self.assertEqual(wait_hls_bytes(path, timeout=2.0), b"tsdata")
 
     def test_hls_flags_write_complete_files_before_publish(self) -> None:
         self.assertEqual(hls_muxer_flags(), "independent_segments+temp_file")
-
-    def test_truncated_playlist_is_not_usable(self) -> None:
-        complete = b"#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2.000,\nseg0.ts\n"
-        self.assertTrue(playlist_is_usable(complete))
-        self.assertFalse(playlist_is_usable(complete.rstrip()[:-2]))
 
     def test_sharing_violation_is_retried_instead_of_missing(self) -> None:
         busy = OSError(errno.EACCES, "busy")
@@ -59,22 +71,9 @@ class HlsTimingTests(unittest.TestCase):
         self.assertTrue(retryable_os_error(busy))
         self.assertFalse(retryable_os_error(FileNotFoundError("index.m3u8")))
 
-    def test_playlist_loader_keeps_last_complete_copy(self) -> None:
-        with tempfile.TemporaryDirectory() as folder:
-            path = str(Path(folder) / "index.m3u8")
-            complete = b"#EXTM3U\n#EXTINF:2.000,\nseg0.ts\n"
-            Path(path).write_bytes(complete)
-            self.assertEqual(load_playlist(path), complete)
-            Path(path).write_bytes(b"#EXTM3U\n#EXTINF:2.000,\nseg1")
-            self.assertEqual(load_playlist(path), complete)
-
-    def test_unc_project_writes_hls_to_local_disk(self) -> None:
-        self.assertTrue(is_remote_path(Path(r"\\192.168.10.100\game\rife")))
-        self.assertTrue(is_remote_path(Path("//192.168.10.100/game/rife")))
-        self.assertFalse(is_remote_path(Path("/mnt/game/rife")))
-        local = default_hls_dir(Path("//192.168.10.100/game/rife"))
-        self.assertNotEqual(local, Path("//192.168.10.100/game/rife") / ".hls")
-        self.assertTrue(str(local).endswith(str(Path("rife") / "hls")))
+    def test_windows_hls_dir_uses_localappdata(self) -> None:
+        with patch.dict(os.environ, {"LOCALAPPDATA": "/tmp/appdata"}):
+            self.assertEqual(windows_hls_dir(), Path("/tmp/appdata") / "rife" / "hls")
 
 
 if __name__ == "__main__":
