@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import posixpath
+import socket
 import subprocess
 import sys
 import threading
@@ -118,7 +119,7 @@ class Playlist:
                 "play_generation": self.state.play_generation,
                 "streaming": stream_running(),
                 "last_error": self.state.last_error,
-                "hls_url": hls_playlist_url("127.0.0.1"),
+                "hls_url": hls_playlist_url(None),
             }
 
     def current(self) -> PlaylistItem | None:
@@ -222,17 +223,45 @@ def source_kind(source: str) -> str:
 
 
 def request_hostname(host_header: str | None) -> str:
-    host = (host_header or "127.0.0.1").strip()
+    host = (host_header or "").strip()
     if host.startswith("["):
         end = host.find("]")
-        return host[1:end] if end != -1 else "127.0.0.1"
+        return host[1:end] if end != -1 else ""
     if host.count(":") == 1:
         return host.rsplit(":", 1)[0]
-    return host or "127.0.0.1"
+    return host
+
+
+def is_loopback_host(host: str) -> bool:
+    value = host.strip("[]").lower()
+    return (
+        not value
+        or value in {"localhost", "0.0.0.0", "::", "::1"}
+        or value.startswith("127.")
+    )
+
+
+def lan_ipv4() -> str:
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(("8.8.8.8", 80))
+        ip = sock.getsockname()[0]
+    except OSError:
+        ip = "127.0.0.1"
+    finally:
+        sock.close()
+    return ip if ip and not is_loopback_host(ip) else "127.0.0.1"
+
+
+def hls_playlist_host(host_header: str | None) -> str:
+    host = request_hostname(host_header)
+    if host and not is_loopback_host(host):
+        return host
+    return lan_ipv4()
 
 
 def hls_playlist_url(host_header: str | None) -> str:
-    host = request_hostname(host_header)
+    host = hls_playlist_host(host_header)
     if ":" in host:
         host = f"[{host}]"
     return f"http://{host}:{HLS_PORT}/rife/index.m3u8"
@@ -565,8 +594,10 @@ def main() -> int:
     except (OSError, RuntimeError) as exc:
         print(f"Warning: MediaMTX is not available ({exc})", file=sys.stderr)
     server = ThreadingHTTPServer((args.host, args.port), WebHandler)
+    lan = lan_ipv4()
     print(f"Web UI : http://127.0.0.1:{args.port}")
-    print(f"LAN    : http://<PC-LAN-IP>:{args.port}")
+    print(f"LAN    : http://{lan}:{args.port}")
+    print(f"HLS    : http://{lan}:{HLS_PORT}/rife/index.m3u8")
     print("Stop   : Ctrl+C", flush=True)
     try:
         server.serve_forever()

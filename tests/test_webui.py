@@ -3,6 +3,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rife.webui import (
@@ -74,6 +76,21 @@ class HlsUrlTests(unittest.TestCase):
         self.assertEqual(
             hls_playlist_url("[fe80::1]:10000"),
             "http://[fe80::1]:8888/rife/index.m3u8",
+        )
+
+    @patch("rife.webui.lan_ipv4", return_value="192.168.1.8")
+    def test_hls_url_replaces_loopback_with_lan_ip(self, _lan_ipv4) -> None:
+        self.assertEqual(
+            hls_playlist_url("127.0.0.1:10000"),
+            "http://192.168.1.8:8888/rife/index.m3u8",
+        )
+        self.assertEqual(
+            hls_playlist_url("localhost:10000"),
+            "http://192.168.1.8:8888/rife/index.m3u8",
+        )
+        self.assertEqual(
+            hls_playlist_url(None),
+            "http://192.168.1.8:8888/rife/index.m3u8",
         )
 
 
