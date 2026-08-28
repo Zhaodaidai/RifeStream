@@ -33,7 +33,7 @@ runtime\python.exe mpv_protocol.py install --force
 runtime\python.exe mpv_protocol.py uninstall
 ```
 
-首次请求会启动 8090 播放控制服务；后续请求替换当前媒体，不会保留重复转码进程。
+首次请求会启动转码并发布到 MediaMTX；后续请求会替换当前媒体，不会保留重复转码进程。
 
 ## 直接运行
 
@@ -64,12 +64,11 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 
 将 `<PC-LAN-IP>` 替换为本机局域网地址：
 
-- 控制播放器：`http://<PC-LAN-IP>:8090`
 - HLS 页面：`http://<PC-LAN-IP>:8888/rife`
 - RTSP：`rtsp://<PC-LAN-IP>:8554/rife`
 - HLS 清单：`http://<PC-LAN-IP>:8888/rife/index.m3u8`
 
-8090 播放器提供完整源时间轴。拖动后会终止旧转码进程，并从目标位置重新启动。
+HLS 是实时短窗口；协议或 `stream.py` 再次启动时会替换当前转码进程。若要从指定位置开始，使用 `--start`。
 
 ## 管理命令
 
@@ -77,5 +76,4 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 runtime\python.exe check_setup.py
 runtime\python.exe mediamtx.py status
 runtime\python.exe mediamtx.py restart --replace
-runtime\pythonw.exe playback.py
 ```

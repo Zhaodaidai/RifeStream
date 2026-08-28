@@ -9,7 +9,7 @@ apiAddress: 127.0.0.1:9997
 
 writeQueueSize: 2048
 
-# HLS 仅保留播放器缓冲所需窗口，完整时间轴跳转由 playback.py 重启转码实现。
+# HLS 只保留实时观看所需的短窗口。
 hlsAlwaysRemux: true
 hlsVariant: fmp4
 hlsSegmentDuration: 1s

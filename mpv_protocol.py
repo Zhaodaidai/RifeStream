@@ -2,8 +2,10 @@ import base64
 from dataclasses import dataclass, field
 import gzip
 import io
+import os
 from pathlib import Path
 import shlex
+import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
@@ -12,6 +14,7 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 LOG_FILE = ROOT / "mpv_protocol.log"
+STREAM = ROOT / "stream.py"
 MAX_URI_LENGTH = 1_000_000
 MAX_COMMAND_LENGTH = 256_000
 HTTP_SCHEMES = {"http", "https"}
@@ -143,6 +146,52 @@ def parse_uri(uri: str) -> MpvRequest:
     except UnicodeDecodeError as exc:
         raise ProtocolError("The mpv target URL is not valid UTF-8") from exc
     return MpvRequest(video=validate_url(target, "video"))
+
+
+def build_stream_command(request: MpvRequest) -> list[str]:
+    command = [sys.executable, str(STREAM), request.video]
+    for header in request.headers:
+        command.extend(["--http-header-field", header])
+    options = {
+        "audio-input": request.audio,
+        "http-proxy": request.http_proxy,
+        "ytdl-proxy": request.ytdl_proxy,
+        "ytdl-format": request.ytdl_format,
+        "title": request.title,
+        "start": format(request.start, ".12g") if request.start else None,
+    }
+    for name, option in options.items():
+        if option:
+            command.extend([f"--{name}", option])
+    return command
+
+
+def start_stream(request: MpvRequest) -> int:
+    interpreter = Path(sys.executable)
+    pythonw = interpreter.with_name("pythonw.exe")
+    if sys.platform == "win32" and pythonw.is_file():
+        interpreter = pythonw
+    command = build_stream_command(request)
+    command[0] = str(interpreter)
+    flags = 0
+    if os.name == "nt":
+        flags = (
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            | subprocess.DETACHED_PROCESS
+            | subprocess.CREATE_NO_WINDOW
+        )
+    with LOG_FILE.open("ab", buffering=0) as log:
+        log.write(f"\nStart: {request.video}\n".encode())
+        subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            creationflags=flags,
+            close_fds=True,
+        )
+    return 0
 
 
 def report_error(message: str) -> None:
@@ -305,12 +354,10 @@ def main() -> int:
     if decode_only:
         print(request)
         return 0
-    from playback import run_or_update
-
     try:
-        return run_or_update(request)
+        return start_stream(request)
     except OSError as exc:
-        report_error(f"Could not start playback control:\n{exc}\n\nLog: {LOG_FILE}")
+        report_error(f"Could not start stream:\n{exc}\n\nLog: {LOG_FILE}")
         return 1
 
 

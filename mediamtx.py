@@ -143,7 +143,6 @@ def status() -> int:
         (8554, "RTSP"),
         (8888, "HLS"),
         (9997, "API"),
-        (8090, "Control"),
     ):
         state = "open" if port_open(port) else "closed"
         print(f"{name:6} 127.0.0.1:{port}: {state}")

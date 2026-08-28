@@ -2,20 +2,15 @@ import argparse
 import base64
 from fractions import Fraction
 import gzip
-import io
 from pathlib import Path
 import subprocess
 import sys
-import threading
-import time
 import unittest
-from unittest.mock import patch
 from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import mpv_protocol
-import playback
 import stream
 
 
@@ -77,7 +72,7 @@ class MpvProtocolTests(unittest.TestCase):
         self.assertEqual(request.title, "Example title")
         self.assertEqual(request.start, 12.5)
 
-        invocation = playback.build_stream_command(request, request.start, Path("status.json"))
+        invocation = mpv_protocol.build_stream_command(request)
         self.assertEqual(Path(invocation[1]).name, "stream.py")
         self.assertIn("--audio-input", invocation)
         self.assertEqual(invocation.count("--http-header-field"), 3)
@@ -119,85 +114,11 @@ class MpvProtocolTests(unittest.TestCase):
         with self.assertRaises(mpv_protocol.ProtocolError):
             mpv_protocol.parse_uri("ush://MPV?not-base64")
 
-    def test_seek_override_and_status_file_are_forwarded(self) -> None:
-        request = mpv_protocol.MpvRequest("https://example.com/video.mp4", start=2)
-        invocation = playback.build_stream_command(request, 42.5, Path("status.json"))
+    def test_start_is_forwarded_to_stream(self) -> None:
+        request = mpv_protocol.MpvRequest("https://example.com/video.mp4", start=42.5)
+        invocation = mpv_protocol.build_stream_command(request)
 
         self.assertEqual(invocation[invocation.index("--start") + 1], "42.5")
-        self.assertEqual(
-            invocation[invocation.index("--status-file") + 1], "status.json"
-        )
-
-    def test_playback_load_request_is_revalidated(self) -> None:
-        request = playback.request_from_json(
-            {
-                "video": "https://example.com/video.mp4",
-                "headers": ["Referer: https://example.com/watch"],
-                "start": 3,
-            }
-        )
-        self.assertEqual(request.start, 3)
-        with self.assertRaises(ValueError):
-            playback.request_from_json(
-                {"video": "https://example.com/video.mp4", "headers": "bad"}
-            )
-
-    def test_seek_near_end_keeps_an_hls_generation_window(self) -> None:
-        session = playback.PlaybackSession()
-        session.request = mpv_protocol.MpvRequest("https://example.com/video.mp4")
-        session.duration = 10
-
-        with patch.object(session, "_restart", return_value={}) as restart:
-            session.seek(9.9)
-
-        restart.assert_called_once_with(session.request, 7)
-
-    def test_stopped_position_is_frozen(self) -> None:
-        session = playback.PlaybackSession()
-        session.offset = 10
-        session.state = "streaming"
-        session.stream_started_at = time.monotonic() - 2
-
-        result = session.stop()
-
-        self.assertEqual(result["state"], "stopped")
-        self.assertGreaterEqual(result["position"], 12)
-        self.assertEqual(result["position"], result["offset"])
-
-    def test_mediamtx_source_id_is_read_from_path_list(self) -> None:
-        response = io.BytesIO(
-            b'{"items":[{"name":"rife","online":true,'
-            b'"source":{"id":"source-1"}}]}'
-        )
-
-        with patch.object(playback, "urlopen", return_value=response):
-            self.assertEqual(playback.source_id(), "source-1")
-
-    def test_outdated_playback_server_is_stopped(self) -> None:
-        session = playback.PlaybackSession()
-        with patch.object(playback, "SERVER_VERSION", "old"):
-            server = playback.PlaybackServer(("127.0.0.1", 0), session)
-
-        def serve() -> None:
-            try:
-                server.serve_forever()
-            finally:
-                server.server_close()
-
-        thread = threading.Thread(target=serve)
-        thread.start()
-
-        with (
-            patch.object(playback, "PORT", server.server_port),
-            patch.object(playback, "SERVER_VERSION", "new"),
-        ):
-            accepted = playback.submit_to_existing(
-                mpv_protocol.MpvRequest("https://example.com/video.mp4")
-            )
-
-        thread.join(timeout=2)
-        self.assertFalse(accepted)
-        self.assertFalse(thread.is_alive())
 
 
 class StreamInputTests(unittest.TestCase):

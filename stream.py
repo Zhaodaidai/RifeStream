@@ -17,6 +17,7 @@ VSPIPE = ROOT / "runtime" / "VSPipe.exe"
 FFMPEG = ROOT / "runtime" / "ffmpeg" / "ffmpeg.exe"
 FFPROBE = ROOT / "runtime" / "ffmpeg" / "ffprobe.exe"
 RIFE_SCRIPT = ROOT / "rife_stream.vpy"
+PID_FILE = ROOT / ".stream.pid"
 HTTP_SCHEMES = {"http", "https"}
 HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 DEFAULT_USER_AGENT = (
@@ -307,7 +308,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-audio", action="store_true")
     parser.add_argument("--start", type=float, default=0.0, help="start position in seconds")
     parser.add_argument("--duration", type=float, default=0.0, help="stop after this many seconds")
-    parser.add_argument("--status-file", type=Path, help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -486,6 +486,35 @@ def stop_process(process: subprocess.Popen[bytes] | None) -> None:
         process.wait()
 
 
+def stop_process_tree(pid: int) -> None:
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            creationflags=PROCESS_FLAGS,
+        )
+        return
+    try:
+        os.kill(pid, 15)
+    except ProcessLookupError:
+        return
+
+
+def replace_existing_stream() -> None:
+    if not PID_FILE.is_file():
+        return
+    try:
+        pid = int(PID_FILE.read_text(encoding="ascii").strip())
+    except ValueError:
+        PID_FILE.unlink(missing_ok=True)
+        return
+    if pid != os.getpid():
+        stop_process_tree(pid)
+    PID_FILE.unlink(missing_ok=True)
+
+
 def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
     decoder: subprocess.Popen[bytes] | None = None
     vspipe: subprocess.Popen[bytes] | None = None
@@ -538,18 +567,6 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
         return 1
 
 
-def write_status(path: Path | None, source: StreamInput) -> None:
-    if path is None:
-        return
-    document = {
-        "duration": source.info.duration,
-        "title": source.title,
-    }
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(document), encoding="utf-8")
-    temporary.replace(path)
-
-
 def main() -> int:
     args = parse_args()
     missing = next(
@@ -565,11 +582,14 @@ def main() -> int:
     if invalid_range or args.max_height == 1:
         print("Height, workspace, start, or duration is invalid", file=sys.stderr)
         return 2
+    replace_existing_stream()
+    PID_FILE.write_text(str(os.getpid()), encoding="ascii")
     try:
         source = prepare_input(args)
         ensure_mediamtx()
     except (RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
+        PID_FILE.unlink(missing_ok=True)
         return 1
 
     width, height = video_size(source.info, args.max_height)
@@ -585,8 +605,10 @@ def main() -> int:
     print(f"Output     : {args.publish_url}")
     print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
     print("Stop       : Ctrl+C", flush=True)
-    write_status(args.status_file, source)
-    return run_pipeline(source, args)
+    try:
+        return run_pipeline(source, args)
+    finally:
+        PID_FILE.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

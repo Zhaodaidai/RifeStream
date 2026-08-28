@@ -5,9 +5,8 @@ runtime/
 /auto.crt
 /auto.key
 /.mediamtx.pid
+/.stream.pid
 *.mp4
 __pycache__/
 /.hls/
 /.vod/
-/.playback_status.json
-/.playback_status.json.tmp
