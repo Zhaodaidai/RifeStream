@@ -10,7 +10,7 @@
   --danger: #ff7a8a;
   --now: #6ee7a8;
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
-  --radius: 14px;
+  --radius: 16px;
 }
 
 * { box-sizing: border-box; }
@@ -40,9 +40,9 @@ html, body {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 14px 18px;
+  padding: 14px 20px;
 }
 
 .brand-row {
@@ -59,11 +59,12 @@ h1 {
 }
 
 h2 {
-  margin: 0 0 12px;
+  margin: 0;
   font-size: 13px;
   color: var(--muted);
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .now {
@@ -96,7 +97,7 @@ h2 {
   align-items: center;
   gap: 8px;
   max-width: min(640px, 100%);
-  padding: 6px 8px 6px 6px;
+  padding: 6px 10px 6px 6px;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -137,16 +138,21 @@ h2 {
   color: var(--muted);
 }
 
-main {
-  display: flex;
-  flex-direction: column;
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: stretch;
   gap: 16px;
-  max-width: 1120px;
+  width: 100%;
+  max-width: 1280px;
   margin: 0 auto;
-  padding: 18px 18px 32px;
+  padding: 18px 20px 32px;
 }
 
 .card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -154,25 +160,21 @@ main {
   box-shadow: var(--shadow);
 }
 
-.player {
-  padding: 16px 16px 14px;
-}
-
-.playlist-head {
+.panel-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 12px;
 }
-
-.playlist-head h2 { margin: 0; }
 
 .playlist {
   list-style: none;
   margin: 0;
   padding: 0;
-  min-height: 180px;
-  max-height: min(48vh, 460px);
+  flex: 1;
+  min-height: 280px;
+  max-height: min(62vh, 560px);
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -183,11 +185,15 @@ main {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 11px 12px;
   border-bottom: 1px solid var(--line);
 }
 
 .playlist li:last-child { border-bottom: 0; }
+
+.playlist li:hover:not(.empty) {
+  background: #182033;
+}
 
 .playlist li.current {
   background: linear-gradient(90deg, #243652, #1b2436);
@@ -196,7 +202,7 @@ main {
 .playlist li.empty {
   display: grid;
   place-items: center;
-  min-height: 180px;
+  min-height: 280px;
   color: var(--muted);
   border: 0;
 }
@@ -239,20 +245,32 @@ main {
   border-top: 1px solid var(--line);
 }
 
-.sources .card {
-  max-width: 720px;
+.sources textarea {
+  flex: 1;
+  min-height: 180px;
+  margin-bottom: 0;
+}
+
+.hint {
+  margin: 10px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 textarea {
   width: 100%;
-  min-height: 112px;
   resize: vertical;
   background: #10151f;
   color: var(--text);
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--accent-2);
 }
 
 button {
@@ -282,6 +300,10 @@ button:disabled {
   cursor: default;
 }
 
+.row button {
+  flex: 1;
+}
+
 .error {
   color: var(--danger);
   margin: 10px 0 0;
@@ -304,5 +326,18 @@ button:disabled {
 
   .hls, .now {
     max-width: 100%;
+  }
+
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .playlist,
+  .playlist li.empty {
+    min-height: 200px;
+  }
+
+  .sources textarea {
+    min-height: 120px;
   }
 }

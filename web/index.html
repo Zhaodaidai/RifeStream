@@ -23,9 +23,9 @@
     </div>
   </header>
 
-  <main>
+  <main class="workspace">
     <section class="player card">
-      <div class="playlist-head">
+      <div class="panel-head">
         <h2>播放列表</h2>
         <button type="button" id="clearBtn" class="ghost">清空</button>
       </div>
@@ -39,14 +39,15 @@
       <p class="error" id="errorBox" hidden></p>
     </section>
 
-    <section class="sources">
-      <div class="card">
+    <section class="sources card">
+      <div class="panel-head">
         <h2>添加链接</h2>
-        <textarea id="sourceInput" rows="4" placeholder="每行一个 HTTP/HTTPS 链接"></textarea>
-        <div class="row">
-          <button type="button" id="addBtn">添加到列表</button>
-          <button type="button" id="addPlayBtn" class="primary">添加并播放</button>
-        </div>
+      </div>
+      <textarea id="sourceInput" rows="6" placeholder="每行一个 HTTP/HTTPS 链接"></textarea>
+      <p class="hint">支持直链与本地路径，粘贴后可先加入列表或立刻开播。</p>
+      <div class="row">
+        <button type="button" id="addBtn">添加到列表</button>
+        <button type="button" id="addPlayBtn" class="primary">添加并播放</button>
       </div>
     </section>
   </main>

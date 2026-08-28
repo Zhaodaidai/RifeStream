@@ -45,7 +45,7 @@ function renderState(state) {
   if (!state.items.length) {
     const empty = document.createElement("li");
     empty.className = "empty";
-    empty.textContent = "列表为空，从下方添加链接";
+    empty.textContent = "列表为空，从右侧添加链接";
     playlistEl.appendChild(empty);
     return;
   }
