@@ -560,7 +560,7 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
             stop_process(process)
         return 130
     except (OSError, RuntimeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr, flush=True)
         for process in (encoder, vspipe, decoder):
             stop_process(process)
         return 1
@@ -573,7 +573,7 @@ def main() -> int:
         None,
     )
     if missing:
-        print(f"Required file not found: {missing}", file=sys.stderr)
+        print(f"Required file not found: {missing}", file=sys.stderr, flush=True)
         return 2
     replace_existing_stream()
     STREAM_PID_FILE.write_text(str(os.getpid()), encoding="ascii")
@@ -581,7 +581,7 @@ def main() -> int:
         source = prepare_input(args)
         ensure_mediamtx()
     except (RuntimeError, ValueError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr, flush=True)
         STREAM_PID_FILE.unlink(missing_ok=True)
         STREAM_STATUS_FILE.unlink(missing_ok=True)
         return 1

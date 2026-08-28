@@ -482,13 +482,16 @@ def playback_snapshot(
     }
 
 
+PLAYBACK_ERROR_PREFIXES = ("Error:", "Required file not found:")
+
+
 def stream_command(
     source: str,
     title: str | None,
     start: float = 0.0,
     duration: float = 0.0,
 ) -> list[str]:
-    command = [sys.executable, str(STREAM_CLI), source]
+    command = [sys.executable, "-u", str(STREAM_CLI), source]
     if title:
         command.extend(["--title", title])
     if start > 0:
@@ -496,6 +499,30 @@ def stream_command(
     if duration > 0:
         command.extend(["--duration", format(duration, ".12g")])
     return command
+
+
+def relay_stream_output(pipe: Any, header: str) -> None:
+    WEBUI_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with WEBUI_LOG_FILE.open("a", encoding="utf-8", errors="replace") as log:
+        log.write(header)
+        log.flush()
+        sys.stderr.write(header)
+        sys.stderr.flush()
+        if pipe is None:
+            return
+        while True:
+            line = pipe.readline()
+            if line == "":
+                break
+            if not line.endswith("\n"):
+                line += "\n"
+            log.write(line)
+            log.flush()
+            sys.stderr.write(line)
+            sys.stderr.flush()
+            stripped = line.strip()
+            if stripped.startswith(PLAYBACK_ERROR_PREFIXES):
+                PLAYLIST.set_error(stripped)
 
 
 def spawn_stream(
@@ -515,19 +542,26 @@ def spawn_stream(
         )
     else:
         extra["start_new_session"] = True
-    WEBUI_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with WEBUI_LOG_FILE.open("ab", buffering=0) as log:
-        log.write(f"\nPlay: {source} start={start}\n".encode())
-        subprocess.Popen(
-            command,
-            cwd=ROOT,
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            creationflags=flags,
-            close_fds=True,
-            **extra,
-        )
+    process = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        creationflags=flags,
+        close_fds=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+        **extra,
+    )
+    threading.Thread(
+        target=relay_stream_output,
+        args=(process.stdout, f"\nPlay: {source} start={start}\n"),
+        daemon=True,
+        name="rife-stream-log",
+    ).start()
 
 
 def stop_stream() -> None:
@@ -673,6 +707,12 @@ class WebHandler(BaseHTTPRequestHandler):
         return payload
 
     def send_json(self, payload: dict[str, Any], status: int = 200) -> None:
+        if status >= 400:
+            path = unquote(urlsplit(self.path).path)
+            message = str(payload.get("error") or payload)
+            if path.startswith("/api/"):
+                print(message, file=sys.stderr, flush=True)
+                PLAYLIST.set_error(message)
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")

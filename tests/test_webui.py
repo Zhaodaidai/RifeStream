@@ -1,3 +1,4 @@
+import io
 import json
 import sys
 import tempfile
@@ -22,6 +23,7 @@ from rife.webui import (
     parse_settings,
     parse_sources,
     playback_snapshot,
+    relay_stream_output,
     reset_playback,
     source_kind,
     stream_command,
@@ -137,6 +139,7 @@ class PlaybackTests(unittest.TestCase):
     def test_stream_command_includes_start(self) -> None:
         command = stream_command("https://example.com/v.mp4", "Title", 42.5)
         self.assertEqual(command[command.index("--start") + 1], "42.5")
+        self.assertEqual(command[:3], [sys.executable, "-u", command[2]])
         self.assertNotIn("--start", stream_command("https://example.com/v.mp4", None, 0))
         timed = stream_command("https://example.com/v.mp4", None, 10, 500)
         self.assertEqual(timed[timed.index("--duration") + 1], "500")
@@ -170,6 +173,26 @@ class PlaybackTests(unittest.TestCase):
         payload = playback_snapshot(False, True, now=0)
         self.assertFalse(payload["seekable"])
         self.assertIsNone(payload["duration"])
+
+    def test_relay_prints_stream_errors_to_stderr(self) -> None:
+        pipe = io.StringIO(
+            "Pipeline   : VSPipe\nError: ffprobe could not inspect the input video\n"
+        )
+        stderr = io.StringIO()
+        with tempfile.TemporaryDirectory() as folder:
+            log = Path(folder) / "webui.log"
+            playlist = Playlist(Path(folder) / "playlist.json")
+            with patch("rife.webui.WEBUI_LOG_FILE", log), patch(
+                "rife.webui.sys.stderr", stderr
+            ), patch("rife.webui.PLAYLIST", playlist):
+                relay_stream_output(pipe, "\nPlay: https://example.com/v.mp4 start=0\n")
+            self.assertIn("Error: ffprobe could not inspect the input video", log.read_text(encoding="utf-8"))
+        self.assertIn("Play: https://example.com/v.mp4", stderr.getvalue())
+        self.assertIn("Error: ffprobe could not inspect the input video", stderr.getvalue())
+        self.assertEqual(
+            playlist.snapshot()["last_error"],
+            "Error: ffprobe could not inspect the input video",
+        )
 
 
 class HlsUrlTests(unittest.TestCase):
