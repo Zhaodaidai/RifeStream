@@ -14,6 +14,7 @@ from rife.hls import (
     HLS_SEGMENT_SECONDS,
     encoder_gop,
     force_key_frames_expr,
+    hls_muxer_flags,
     hls_segment_pattern,
     reset_hls_output,
 )
@@ -131,6 +132,7 @@ def ffmpeg_input_options(
     options: list[str] = []
     if is_http_source(source):
         options.extend(HTTP_RECONNECT_OPTIONS)
+        # HLS demuxer only. The HTTP protocol used for .mp4 rejects this option.
         if urlsplit(source).path.lower().endswith(".m3u8"):
             options.extend(["-http_persistent", "0"])
     if headers:
@@ -511,7 +513,7 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         "-hls_playlist_type",
         "event",
         "-hls_flags",
-        "independent_segments+temp_file",
+        hls_muxer_flags(),
         "-hls_segment_type",
         "mpegts",
         "-hls_segment_filename",

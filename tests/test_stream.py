@@ -31,6 +31,11 @@ class StreamInputTests(unittest.TestCase):
             [*HTTP_RECONNECT_OPTIONS, "-headers", "referer: https://last.example\r\n"],
         )
 
+    def test_mp4_http_input_does_not_pass_hls_only_options(self) -> None:
+        options = ffmpeg_input_options("https://example.com/video.mp4", [], None)
+        self.assertEqual(options, list(HTTP_RECONNECT_OPTIONS))
+        self.assertNotIn("-http_persistent", options)
+
     def test_hls_input_disables_persistent_http_connections(self) -> None:
         options = ffmpeg_input_options(
             "https://example.com/video.m3u8?token=value", [], None
@@ -149,6 +154,7 @@ class StreamInputTests(unittest.TestCase):
             ["-hls_playlist_type", "event"],
             ["-hls_list_size", "0"],
             ["-hls_segment_type", "mpegts"],
+            ["-hls_flags", "independent_segments+temp_file"],
         ):
             index = command.index(option[0])
             self.assertEqual(command[index : index + 2], option)

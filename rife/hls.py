@@ -42,6 +42,13 @@ def hls_segment_pattern(playlist: Path) -> str:
     return str(playlist.with_name("seg%d.ts"))
 
 
+def hls_muxer_flags() -> str:
+    # temp_file writes the playlist/segment to *.tmp and renames when complete.
+    # HLS output is on local disk, so rename is reliable; in-place writes let
+    # players snapshot a truncated playlist and then never request the next .ts.
+    return "independent_segments+temp_file"
+
+
 def reset_hls_output(playlist: Path) -> None:
     folder = playlist.parent
     folder.mkdir(parents=True, exist_ok=True)

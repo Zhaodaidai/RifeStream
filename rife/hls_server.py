@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import errno
+from io import BytesIO
 import os
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -25,6 +27,111 @@ from rife.paths import (
 )
 
 HLS_SERVER_SCRIPT = ROOT / "rife" / "hls_server.py"
+WIN_SHARING_VIOLATION = 32
+WIN_LOCK_VIOLATION = 33
+WIN_ACCESS_DENIED = 5
+WIN_FILE_NOT_FOUND = 2
+WIN_PATH_NOT_FOUND = 3
+_PLAYLIST_CACHE: dict[str, bytes] = {}
+
+
+def retryable_os_error(exc: OSError) -> bool:
+    winerror = getattr(exc, "winerror", None)
+    if winerror is None and len(exc.args) > 3 and isinstance(exc.args[3], int):
+        winerror = exc.args[3]
+    if winerror in {WIN_SHARING_VIOLATION, WIN_LOCK_VIOLATION, WIN_ACCESS_DENIED}:
+        return True
+    return exc.errno in {errno.EACCES, errno.EAGAIN, errno.EBUSY}
+
+
+def missing_os_error(exc: OSError) -> bool:
+    winerror = getattr(exc, "winerror", None)
+    if winerror in {WIN_FILE_NOT_FOUND, WIN_PATH_NOT_FOUND}:
+        return True
+    return exc.errno in {errno.ENOENT}
+
+
+def playlist_is_usable(data: bytes) -> bool:
+    return data.startswith(b"#EXTM3U") and data.endswith(b"\n")
+
+
+def read_shared(path: str) -> bytes:
+    if os.name != "nt":
+        with open(path, "rb") as handle:
+            return handle.read()
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    handle = kernel32.CreateFileW(
+        path,
+        0x80000000,
+        0x00000007,
+        None,
+        3,
+        0x80,
+        None,
+    )
+    if handle in (wintypes.HANDLE(-1).value, 0):
+        last_error = ctypes.get_last_error()
+        raise OSError(0, "CreateFileW failed", path, last_error)
+    try:
+        fd = msvcrt.open_osfhandle(int(handle), os.O_RDONLY)
+    except OSError:
+        kernel32.CloseHandle(handle)
+        raise
+    with os.fdopen(fd, "rb") as file:
+        return file.read()
+
+
+def read_hls_bytes(path: str, attempts: int = 10) -> bytes:
+    last_error: OSError | None = None
+    for _ in range(attempts):
+        try:
+            data = read_shared(path)
+            if path.lower().endswith(".ts") and len(data) != os.path.getsize(path):
+                time.sleep(0.05)
+                continue
+            return data
+        except OSError as exc:
+            last_error = exc
+            if missing_os_error(exc):
+                raise
+            if retryable_os_error(exc):
+                time.sleep(0.05)
+                continue
+            raise
+    if last_error is not None:
+        raise last_error
+    raise OSError("failed to read HLS file")
+
+
+def load_playlist(path: str) -> bytes:
+    data: bytes | None = None
+    try:
+        data = read_hls_bytes(path)
+    except OSError:
+        data = None
+    if data and playlist_is_usable(data):
+        _PLAYLIST_CACHE[path] = data
+        return data
+    cached = _PLAYLIST_CACHE.get(path)
+    if cached:
+        return cached
+    if data:
+        return data
+    raise FileNotFoundError(path)
 
 
 class HlsHandler(SimpleHTTPRequestHandler):
@@ -33,10 +140,42 @@ class HlsHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(HLS_DIR), **kwargs)
 
+    def send_head(self):
+        path = self.translate_path(self.path)
+        lowered = path.lower()
+        if lowered.endswith(".m3u8"):
+            try:
+                data = load_playlist(path)
+            except OSError:
+                self.send_error(404, "File not found")
+                return None
+            return self._send_bytes(path, data)
+        if lowered.endswith(".ts"):
+            try:
+                data = read_hls_bytes(path)
+            except OSError as exc:
+                if missing_os_error(exc):
+                    self.send_error(404, "File not found")
+                    return None
+                self.send_response(503)
+                self.send_header("Retry-After", "1")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return None
+            return self._send_bytes(path, data)
+        return super().send_head()
+
+    def _send_bytes(self, path: str, data: bytes) -> BytesIO:
+        self.send_response(200)
+        self.send_header("Content-type", self.guess_type(path))
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        return BytesIO(data)
+
     def end_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         if urlsplit(self.path).path.endswith(".m3u8"):
-            self.send_header("Cache-Control", "no-store")
+            self.send_header("Cache-Control", "no-store, max-age=0")
         super().end_headers()
 
     def guess_type(self, path: str) -> str:
