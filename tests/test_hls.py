@@ -1,5 +1,4 @@
 from fractions import Fraction
-import errno
 import os
 import sys
 import tempfile
@@ -18,7 +17,7 @@ from rife.hls import (
     hls_muxer_flags,
     reset_hls_output,
 )
-from rife.hls_server import retryable_os_error, wait_hls_bytes
+from rife.hls_server import wait_hls_bytes
 from rife.paths import windows_hls_dir
 
 
@@ -65,11 +64,11 @@ class HlsTimingTests(unittest.TestCase):
     def test_hls_flags_write_complete_files_before_publish(self) -> None:
         self.assertEqual(hls_muxer_flags(), "independent_segments+temp_file")
 
-    def test_sharing_violation_is_retried_instead_of_missing(self) -> None:
-        busy = OSError(errno.EACCES, "busy")
-        busy.winerror = 32
-        self.assertTrue(retryable_os_error(busy))
-        self.assertFalse(retryable_os_error(FileNotFoundError("index.m3u8")))
+    def test_wait_hls_bytes_times_out_when_the_file_never_appears(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder) / "missing.ts")
+            with self.assertRaises(FileNotFoundError):
+                wait_hls_bytes(path, timeout=0.15)
 
     def test_windows_hls_dir_uses_localappdata(self) -> None:
         with patch.dict(os.environ, {"LOCALAPPDATA": "/tmp/appdata"}):

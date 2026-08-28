@@ -2,14 +2,13 @@ import base64
 from dataclasses import dataclass, field
 import gzip
 import io
-import os
 from pathlib import Path
 import shlex
 import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
-from rife.paths import HTTP_SCHEMES, PROTOCOL_LOG_FILE, ROOT, STREAM_CLI
+from rife.paths import DETACHED_FLAGS, HTTP_SCHEMES, PROTOCOL_LOG_FILE, ROOT, STREAM_CLI
 
 
 PROXY_SCHEMES = HTTP_SCHEMES | {"socks4", "socks4a", "socks5", "socks5h"}
@@ -157,13 +156,6 @@ def start_stream(request: MpvRequest) -> int:
         interpreter = pythonw
     command = build_stream_command(request)
     command[0] = str(interpreter)
-    flags = 0
-    if os.name == "nt":
-        flags = (
-            subprocess.CREATE_NEW_PROCESS_GROUP
-            | subprocess.DETACHED_PROCESS
-            | subprocess.CREATE_NO_WINDOW
-        )
     with PROTOCOL_LOG_FILE.open("ab", buffering=0) as log:
         log.write(f"\nStart: {request.video}\n".encode())
         subprocess.Popen(
@@ -172,7 +164,7 @@ def start_stream(request: MpvRequest) -> int:
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            creationflags=flags,
+            creationflags=DETACHED_FLAGS,
             close_fds=True,
         )
     return 0

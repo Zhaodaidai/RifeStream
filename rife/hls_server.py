@@ -1,4 +1,9 @@
-"""Serve FFmpeg HLS files on the LAN."""
+"""Serve FFmpeg HLS files on the LAN.
+
+The muxer publishes complete files via ``temp_file``. Requests for a
+segment that is not on disk yet wait until it appears, matching how a
+live HLS origin holds the next GET instead of answering 404.
+"""
 
 from __future__ import annotations
 
@@ -17,8 +22,9 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from rife.hls import HLS_SEGMENT_SECONDS, STUB_PLAYLIST
+from rife.hls import HLS_SEGMENT_SECONDS
 from rife.paths import (
+    DETACHED_FLAGS,
     HLS_DIR,
     HLS_PORT,
     HLS_SERVER_DIR_FILE,
@@ -29,105 +35,19 @@ from rife.paths import (
 )
 
 HLS_SERVER_SCRIPT = ROOT / "rife" / "hls_server.py"
-WIN_SHARING_VIOLATION = 32
-WIN_LOCK_VIOLATION = 33
-WIN_ACCESS_DENIED = 5
-WIN_FILE_NOT_FOUND = 2
-WIN_PATH_NOT_FOUND = 3
-
-
-def retryable_os_error(exc: OSError) -> bool:
-    winerror = getattr(exc, "winerror", None)
-    if winerror is None and len(exc.args) > 3 and isinstance(exc.args[3], int):
-        winerror = exc.args[3]
-    if winerror in {WIN_SHARING_VIOLATION, WIN_LOCK_VIOLATION, WIN_ACCESS_DENIED}:
-        return True
-    return exc.errno in {errno.EACCES, errno.EAGAIN, errno.EBUSY}
-
-
-def missing_os_error(exc: OSError) -> bool:
-    winerror = getattr(exc, "winerror", None)
-    if winerror in {WIN_FILE_NOT_FOUND, WIN_PATH_NOT_FOUND}:
-        return True
-    return exc.errno in {errno.ENOENT}
-
-
-def read_shared(path: str) -> bytes:
-    if os.name != "nt":
-        with open(path, "rb") as handle:
-            return handle.read()
-    import ctypes
-    import msvcrt
-    from ctypes import wintypes
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.CreateFileW.restype = wintypes.HANDLE
-    kernel32.CreateFileW.argtypes = [
-        wintypes.LPCWSTR,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.LPVOID,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.HANDLE,
-    ]
-    handle = kernel32.CreateFileW(
-        path,
-        0x80000000,
-        0x00000007,
-        None,
-        3,
-        0x80,
-        None,
-    )
-    if handle in (wintypes.HANDLE(-1).value, 0):
-        last_error = ctypes.get_last_error()
-        raise OSError(0, "CreateFileW failed", path, last_error)
-    try:
-        fd = msvcrt.open_osfhandle(int(handle), os.O_RDONLY)
-    except OSError:
-        kernel32.CloseHandle(handle)
-        raise
-    with os.fdopen(fd, "rb") as file:
-        return file.read()
-
-
-def read_hls_bytes(path: str, attempts: int = 10) -> bytes:
-    last_error: OSError | None = None
-    for _ in range(attempts):
-        try:
-            data = read_shared(path)
-            if path.lower().endswith(".ts") and len(data) != os.path.getsize(path):
-                time.sleep(0.05)
-                continue
-            return data
-        except OSError as exc:
-            last_error = exc
-            if missing_os_error(exc):
-                raise
-            if retryable_os_error(exc):
-                time.sleep(0.05)
-                continue
-            raise
-    if last_error is not None:
-        raise last_error
-    raise OSError("failed to read HLS file")
+WAIT_INTERVAL = 0.05
+TRANSIENT_ERRNO = {errno.ENOENT, errno.EACCES, errno.EAGAIN, errno.EBUSY}
 
 
 def wait_hls_bytes(path: str, timeout: float) -> bytes:
     deadline = time.monotonic() + timeout
-    last_error: OSError | None = None
     while True:
         try:
-            return read_hls_bytes(path, attempts=4)
+            return Path(path).read_bytes()
         except OSError as exc:
-            last_error = exc
-            if not missing_os_error(exc) and not retryable_os_error(exc):
+            if exc.errno not in TRANSIENT_ERRNO or time.monotonic() >= deadline:
                 raise
-            if time.monotonic() >= deadline:
-                raise
-            time.sleep(0.1)
-    raise last_error or FileNotFoundError(path)
+            time.sleep(WAIT_INTERVAL)
 
 
 class HlsHandler(SimpleHTTPRequestHandler):
@@ -139,14 +59,7 @@ class HlsHandler(SimpleHTTPRequestHandler):
 
     def send_head(self):
         path = self.translate_path(self.path)
-        lowered = path.lower()
-        if lowered.endswith(".m3u8"):
-            try:
-                data = wait_hls_bytes(path, timeout=HLS_SEGMENT_SECONDS * 6)
-            except OSError:
-                data = STUB_PLAYLIST
-            return self._send_bytes(path, data)
-        if lowered.endswith(".ts"):
+        if path.lower().endswith((".m3u8", ".ts")):
             try:
                 data = wait_hls_bytes(path, timeout=HLS_SEGMENT_SECONDS * 6)
             except OSError:
@@ -165,9 +78,7 @@ class HlsHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         if urlsplit(self.path).path.endswith(".m3u8"):
-            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
+            self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def guess_type(self, path: str) -> str:
@@ -188,16 +99,6 @@ class HlsHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:
         sys.stderr.write("%s - %s\n" % (self.address_string(), format % args))
-
-
-def _creation_flags() -> int:
-    if os.name != "nt":
-        return 0
-    return (
-        subprocess.CREATE_NEW_PROCESS_GROUP
-        | subprocess.DETACHED_PROCESS
-        | subprocess.CREATE_NO_WINDOW
-    )
 
 
 def _read_pid(path: Path) -> int | None:
@@ -240,6 +141,11 @@ def _served_dir() -> str | None:
     return text or None
 
 
+def _clear_server_state() -> None:
+    HLS_SERVER_PID_FILE.unlink(missing_ok=True)
+    HLS_SERVER_DIR_FILE.unlink(missing_ok=True)
+
+
 def serve() -> int:
     HLS_DIR.mkdir(parents=True, exist_ok=True)
     HLS_SERVER_DIR_FILE.write_text(str(HLS_DIR.resolve()), encoding="utf-8")
@@ -253,11 +159,10 @@ def start() -> int:
     expected = str(HLS_DIR.resolve())
     pid = _read_pid(HLS_SERVER_PID_FILE)
     if pid is not None and port_open(HLS_PORT):
-        served = _served_dir()
-        if served == expected:
+        if _served_dir() == expected:
             print(f"HLS server is already running ({expected})")
             return 0
-        print(f"HLS server directory changed ({served or 'unknown'} -> {expected}); restarting")
+        print(f"HLS server directory changed ({_served_dir() or 'unknown'} -> {expected}); restarting")
         if stop() != 0:
             return 1
     elif port_open(HLS_PORT):
@@ -271,7 +176,7 @@ def start() -> int:
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            creationflags=_creation_flags(),
+            creationflags=DETACHED_FLAGS,
             close_fds=True,
             start_new_session=os.name != "nt",
         )
@@ -303,12 +208,10 @@ def stop() -> int:
             print(f"HLS port {HLS_PORT} is occupied by an unmanaged process", file=sys.stderr)
             return 1
         print("HLS server is not running")
-        HLS_SERVER_PID_FILE.unlink(missing_ok=True)
-        HLS_SERVER_DIR_FILE.unlink(missing_ok=True)
+        _clear_server_state()
         return 0
     ok, message = _stop_pid(pid)
-    HLS_SERVER_PID_FILE.unlink(missing_ok=True)
-    HLS_SERVER_DIR_FILE.unlink(missing_ok=True)
+    _clear_server_state()
     if ok:
         print(f"Stopped HLS server PID {pid}")
         return 0

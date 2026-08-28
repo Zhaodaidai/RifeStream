@@ -18,6 +18,7 @@ import uuid
 import time
 
 from rife.paths import (
+    DETACHED_FLAGS,
     HLS_PORT,
     HTTP_SCHEMES,
     PLAYLIST_FILE,
@@ -534,15 +535,8 @@ def spawn_stream(
     duration: float = 0.0,
 ) -> None:
     command = stream_command(source, title, start, duration)
-    flags = 0
     extra: dict[str, Any] = {}
-    if os.name == "nt":
-        flags = (
-            subprocess.CREATE_NEW_PROCESS_GROUP
-            | subprocess.DETACHED_PROCESS
-            | subprocess.CREATE_NO_WINDOW
-        )
-    else:
+    if os.name != "nt":
         extra["start_new_session"] = True
     process = subprocess.Popen(
         command,
@@ -550,7 +544,7 @@ def spawn_stream(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        creationflags=flags,
+        creationflags=DETACHED_FLAGS,
         close_fds=True,
         text=True,
         encoding="utf-8",
