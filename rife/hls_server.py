@@ -18,9 +18,9 @@ import sys
 import time
 from urllib.parse import urlsplit
 
-ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+_BOOTSTRAP = Path(__file__).resolve().parent.parent
+if str(_BOOTSTRAP) not in sys.path:
+    sys.path.insert(0, str(_BOOTSTRAP))
 
 from rife.hls import HLS_SEGMENT_SECONDS
 from rife.paths import (
@@ -30,11 +30,13 @@ from rife.paths import (
     HLS_SERVER_DIR_FILE,
     HLS_SERVER_LOG_FILE,
     HLS_SERVER_PID_FILE,
-    PROCESS_FLAGS,
+    ROOT,
     port_open,
+    read_pid,
+    stop_pid_tree,
 )
 
-HLS_SERVER_SCRIPT = ROOT / "rife" / "hls_server.py"
+HLS_SERVER_SCRIPT = Path(__file__).resolve()
 WAIT_INTERVAL = 0.05
 TRANSIENT_ERRNO = {errno.ENOENT, errno.EACCES, errno.EAGAIN, errno.EBUSY}
 
@@ -101,39 +103,6 @@ class HlsHandler(SimpleHTTPRequestHandler):
         sys.stderr.write("%s - %s\n" % (self.address_string(), format % args))
 
 
-def _read_pid(path: Path) -> int | None:
-    if not path.is_file():
-        return None
-    try:
-        return int(path.read_text(encoding="ascii").strip())
-    except ValueError:
-        path.unlink(missing_ok=True)
-        return None
-
-
-def _stop_pid(pid: int) -> tuple[bool, str]:
-    if os.name == "nt":
-        result = subprocess.run(
-            ["taskkill", "/PID", str(pid), "/T", "/F"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-            creationflags=PROCESS_FLAGS,
-        )
-        if result.returncode == 0:
-            return True, ""
-        return False, result.stderr.strip() or result.stdout.strip()
-    try:
-        os.kill(pid, 15)
-        return True, ""
-    except ProcessLookupError:
-        return True, ""
-    except OSError as exc:
-        return False, str(exc)
-
-
 def _served_dir() -> str | None:
     if not HLS_SERVER_DIR_FILE.is_file():
         return None
@@ -155,17 +124,24 @@ def serve() -> int:
     return 0
 
 
+def ensure() -> None:
+    if start() != 0 or not port_open(HLS_PORT):
+        raise RuntimeError("HLS server is not available")
+
+
 def start() -> int:
     expected = str(HLS_DIR.resolve())
-    pid = _read_pid(HLS_SERVER_PID_FILE)
-    if pid is not None and port_open(HLS_PORT):
-        if _served_dir() == expected:
+    pid = read_pid(HLS_SERVER_PID_FILE, unlink_invalid=True)
+    listening = port_open(HLS_PORT)
+    if pid is not None and listening:
+        served = _served_dir()
+        if served == expected:
             print(f"HLS server is already running ({expected})")
             return 0
-        print(f"HLS server directory changed ({_served_dir() or 'unknown'} -> {expected}); restarting")
+        print(f"HLS server directory changed ({served or 'unknown'} -> {expected}); restarting")
         if stop() != 0:
             return 1
-    elif port_open(HLS_PORT):
+    elif listening:
         print(f"Port {HLS_PORT} is occupied by another process", file=sys.stderr)
         return 1
 
@@ -202,7 +178,7 @@ def start() -> int:
 
 
 def stop() -> int:
-    pid = _read_pid(HLS_SERVER_PID_FILE)
+    pid = read_pid(HLS_SERVER_PID_FILE, unlink_invalid=True)
     if pid is None:
         if port_open(HLS_PORT):
             print(f"HLS port {HLS_PORT} is occupied by an unmanaged process", file=sys.stderr)
@@ -210,7 +186,7 @@ def stop() -> int:
         print("HLS server is not running")
         _clear_server_state()
         return 0
-    ok, message = _stop_pid(pid)
+    ok, message = stop_pid_tree(pid)
     _clear_server_state()
     if ok:
         print(f"Stopped HLS server PID {pid}")
@@ -220,9 +196,9 @@ def stop() -> int:
 
 
 def status() -> int:
-    state = "open" if port_open(HLS_PORT) else "closed"
-    print(f"HLS  127.0.0.1:{HLS_PORT}: {state}")
-    return 0 if port_open(HLS_PORT) else 1
+    listening = port_open(HLS_PORT)
+    print(f"HLS  127.0.0.1:{HLS_PORT}: {'open' if listening else 'closed'}")
+    return 0 if listening else 1
 
 
 def main() -> int:

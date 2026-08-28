@@ -17,12 +17,12 @@ from urllib.parse import unquote, urlsplit
 import uuid
 import time
 
+from rife.hls_server import ensure as ensure_hls_server
 from rife.paths import (
     DETACHED_FLAGS,
     HLS_PORT,
     HTTP_SCHEMES,
     PLAYLIST_FILE,
-    PROCESS_FLAGS,
     ROOT,
     STREAM_CLI,
     STREAM_PID_FILE,
@@ -30,8 +30,11 @@ from rife.paths import (
     WEBUI_DIR,
     WEBUI_LOG_FILE,
     WEBUI_PORT,
+    is_http_source,
+    pid_is_running,
+    read_pid,
+    replace_existing_stream,
 )
-from rife.stream import ensure_hls_server, is_http_source, replace_existing_stream
 
 
 @dataclass
@@ -116,28 +119,43 @@ class Playlist:
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
-    def snapshot(self) -> dict[str, Any]:
+    def snapshot(
+        self,
+        *,
+        streaming: bool | None = None,
+        playback: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         with self._lock:
-            current = self.current()
-            index = self.index_of(self.state.current_id)
-            return {
-                "items": [asdict(item) for item in self.state.items],
-                "current_id": self.state.current_id,
-                "current": asdict(current) if current else None,
-                "index": index,
-                "total": len(self.state.items),
-                "has_prev": index is not None and index > 0,
-                "has_next": index is not None and index < len(self.state.items) - 1,
-                "play_generation": self.state.play_generation,
-                "streaming": stream_running(),
-                "last_error": self.state.last_error,
-                "hls_url": hls_playlist_url(),
-                "settings": asdict(self.state.settings),
-                **playback_snapshot(stream_running(), current is not None),
-            }
+            current, index = self._current_and_index()
+            items = [asdict(item) for item in self.state.items]
+            current_id = self.state.current_id
+            total = len(self.state.items)
+            play_generation = self.state.play_generation
+            last_error = self.state.last_error
+            settings = asdict(self.state.settings)
+        if streaming is None:
+            streaming = stream_running()
+        if playback is None:
+            playback = playback_snapshot(streaming, current is not None)
+        return {
+            "items": items,
+            "current_id": current_id,
+            "current": asdict(current) if current else None,
+            "index": index,
+            "total": total,
+            "has_prev": index is not None and index > 0,
+            "has_next": index is not None and index < total - 1,
+            "play_generation": play_generation,
+            "streaming": streaming,
+            "last_error": last_error,
+            "hls_url": hls_playlist_url(),
+            "settings": settings,
+            **playback,
+        }
 
     def current(self) -> PlaylistItem | None:
-        return self.item(self.state.current_id)
+        item, _ = self._current_and_index()
+        return item
 
     def item(self, item_id: str | None) -> PlaylistItem | None:
         if not item_id:
@@ -151,6 +169,15 @@ class Playlist:
             if item.id == item_id:
                 return index
         return None
+
+    def _current_and_index(self) -> tuple[PlaylistItem | None, int | None]:
+        current_id = self.state.current_id
+        if not current_id:
+            return None, None
+        for index, item in enumerate(self.state.items):
+            if item.id == current_id:
+                return item, index
+        return None, None
 
     def add_sources(self, sources: list[str]) -> list[PlaylistItem]:
         added: list[PlaylistItem] = []
@@ -304,28 +331,8 @@ def normalize_playlist_source(source: str) -> str:
 
 
 def stream_running() -> bool:
-    if not STREAM_PID_FILE.is_file():
-        return False
-    try:
-        pid = int(STREAM_PID_FILE.read_text(encoding="ascii").strip())
-    except ValueError:
-        return False
-    if os.name == "nt":
-        result = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            check=False,
-            creationflags=PROCESS_FLAGS,
-        )
-        return str(pid) in result.stdout
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
+    pid = read_pid(STREAM_PID_FILE)
+    return pid is not None and pid_is_running(pid)
 
 
 def read_stream_status() -> dict[str, Any] | None:
@@ -448,16 +455,21 @@ def reset_playback() -> None:
     PLAYBACK.duration = None
 
 
+_STATUS_UNSET = object()
+
+
 def playback_snapshot(
     streaming: bool,
     has_current: bool = True,
     now: float | None = None,
+    status: Any = _STATUS_UNSET,
 ) -> dict[str, Any]:
     now = time.time() if now is None else now
     start = PLAYBACK.start
     spawned_at = PLAYBACK.spawned_at
     duration = PLAYBACK.duration
-    status = read_stream_status()
+    if status is _STATUS_UNSET:
+        status = read_stream_status()
     if status:
         status_started = finite_seconds(status.get("started_at"))
         if (
@@ -697,10 +709,23 @@ class WebHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def state_payload(self) -> dict[str, Any]:
-        maybe_skip_outro()
-        payload = PLAYLIST.snapshot()
-        payload["hls_url"] = hls_playlist_url()
-        return payload
+        settings = PLAYLIST.settings()
+        current = PLAYLIST.current()
+        running = stream_running()
+        playback = playback_snapshot(running, current is not None)
+        if (
+            settings.skip_outro
+            and settings.outro > 0
+            and running
+            and current is not None
+            and outro_reached(playback["position"], playback["duration"], settings)
+        ):
+            try:
+                start_item(None, offset=1)
+            except ValueError:
+                stop_stream()
+            return PLAYLIST.snapshot()
+        return PLAYLIST.snapshot(streaming=running, playback=playback)
 
     def send_json(self, payload: dict[str, Any], status: int = 200) -> None:
         if status >= 400:
@@ -738,13 +763,13 @@ def seek_to(seconds: float) -> PlaylistItem:
     if item is None:
         raise ValueError("No media selected")
     settings = PLAYLIST.settings()
+    running = stream_running()
+    status = read_stream_status()
     duration = PLAYBACK.duration
-    if duration is None:
-        status = read_stream_status()
-        if status:
-            duration = finite_seconds(status.get("duration"))
+    if duration is None and status:
+        duration = finite_seconds(status.get("duration"))
     seconds = clamp_seek(seconds, duration)
-    current_position = playback_snapshot(stream_running(), True)["position"]
+    current_position = playback_snapshot(running, True, status=status)["position"]
     if abs(seconds - current_position) < 2.0:
         return item
     remember_playback(item.id, seconds)
@@ -755,25 +780,6 @@ def seek_to(seconds: float) -> PlaylistItem:
         encode_duration(seconds, duration, settings),
     )
     return item
-
-
-def maybe_skip_outro() -> None:
-    settings = PLAYLIST.settings()
-    if not settings.skip_outro or settings.outro <= 0:
-        return
-    if not stream_running() or PLAYLIST.current() is None:
-        return
-    snapshot = playback_snapshot(True, True)
-    if not outro_reached(snapshot["position"], snapshot["duration"], settings):
-        return
-    try:
-        start_item(None, offset=1)
-    except ValueError:
-        stop_stream()
-
-
-def ensure_services() -> None:
-    ensure_hls_server()
 
 
 def parse_args() -> argparse.Namespace:
@@ -789,7 +795,7 @@ def main() -> int:
         print(f"Missing web files: {WEBUI_DIR}", file=sys.stderr)
         return 2
     try:
-        ensure_services()
+        ensure_hls_server()
     except (OSError, RuntimeError) as exc:
         print(f"Warning: HLS server is not available ({exc})", file=sys.stderr)
     server = ThreadingHTTPServer((args.host, args.port), WebHandler)

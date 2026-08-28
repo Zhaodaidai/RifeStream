@@ -21,16 +21,12 @@ STUB_PLAYLIST = (
 ).encode("ascii")
 
 
-def output_fps(source_rate: Fraction, factor: int) -> Fraction:
-    return source_rate * factor
-
-
 def gop_frames(
     source_rate: Fraction,
     factor: int,
     segment_seconds: int = HLS_SEGMENT_SECONDS,
 ) -> int:
-    return max(1, int(output_fps(source_rate, factor) * segment_seconds))
+    return max(1, int(source_rate * factor * segment_seconds))
 
 
 def force_key_frames_expr(gop: int) -> str:
@@ -47,8 +43,11 @@ def hls_segment_pattern(playlist: Path) -> str:
     return str(playlist.with_name("seg%d.ts"))
 
 
+HLS_MUXER_FLAGS = "independent_segments+temp_file"
+
+
 def hls_muxer_flags() -> str:
-    return "independent_segments+temp_file"
+    return HLS_MUXER_FLAGS
 
 
 def reset_hls_output(playlist: Path) -> None:

@@ -40,6 +40,14 @@ class MpvRequest:
     ytdl_format: str | None = None
 
 
+def gui_python() -> Path:
+    interpreter = Path(sys.executable)
+    pythonw = interpreter.with_name("pythonw.exe")
+    if sys.platform == "win32" and pythonw.is_file():
+        return pythonw
+    return interpreter
+
+
 def decode_payload(payload: str) -> str:
     try:
         compressed = base64.b64decode(unquote(payload), validate=True)
@@ -150,12 +158,8 @@ def build_stream_command(request: MpvRequest) -> list[str]:
 
 
 def start_stream(request: MpvRequest) -> int:
-    interpreter = Path(sys.executable)
-    pythonw = interpreter.with_name("pythonw.exe")
-    if sys.platform == "win32" and pythonw.is_file():
-        interpreter = pythonw
     command = build_stream_command(request)
-    command[0] = str(interpreter)
+    command[0] = str(gui_python())
     with PROTOCOL_LOG_FILE.open("ab", buffering=0) as log:
         log.write(f"\nStart: {request.video}\n".encode())
         subprocess.Popen(
@@ -177,11 +181,7 @@ def report_error(message: str) -> None:
 
 
 def registry_command() -> str:
-    interpreter = Path(sys.executable)
-    pythonw = interpreter.with_name("pythonw.exe")
-    if sys.platform == "win32" and pythonw.is_file():
-        interpreter = pythonw
-    return f'"{interpreter}" "{ROOT / "mpv_protocol.py"}" "%1"'
+    return f'"{gui_python()}" "{ROOT / "mpv_protocol.py"}" "%1"'
 
 
 def install_protocol(force: bool) -> int:

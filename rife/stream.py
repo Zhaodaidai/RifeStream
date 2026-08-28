@@ -11,19 +11,18 @@ import sys
 from urllib.parse import urlsplit, urlunsplit
 
 from rife.hls import (
+    HLS_MUXER_FLAGS,
     HLS_SEGMENT_SECONDS,
     encoder_gop,
     force_key_frames_expr,
-    hls_muxer_flags,
     hls_segment_pattern,
     reset_hls_output,
 )
-from rife.hls_server import start as start_hls_server
+from rife.hls_server import ensure as ensure_hls_server
 from rife.paths import (
     FFMPEG,
     FFPROBE,
     HLS_PLAYLIST,
-    HLS_PORT,
     HTTP_SCHEMES,
     PROCESS_FLAGS,
     RIFE_SCRIPT,
@@ -31,7 +30,9 @@ from rife.paths import (
     STREAM_PID_FILE,
     STREAM_STATUS_FILE,
     VSPIPE,
-    port_open,
+    capture,
+    is_http_source,
+    replace_existing_stream,
 )
 
 
@@ -64,18 +65,10 @@ class StreamInput:
         return is_http_source(self.video)
 
 
-def ensure_hls_server() -> None:
-    if start_hls_server() != 0 or not port_open(HLS_PORT):
-        raise RuntimeError("HLS server is not available")
-
-
-def is_http_source(source: str) -> bool:
-    return urlsplit(source).scheme.lower() in HTTP_SCHEMES
-
-
 def normalize_source(source: str, name: str) -> str:
-    if is_http_source(source):
-        if not urlsplit(source).netloc:
+    parsed = urlsplit(source)
+    if parsed.scheme.lower() in HTTP_SCHEMES:
+        if not parsed.netloc:
             raise ValueError(f"{name} is not a valid HTTP URL")
         return source
     path = Path(source).expanduser().resolve()
@@ -130,29 +123,17 @@ def ffmpeg_input_options(
     source: str, headers: list[str], proxy: str | None
 ) -> list[str]:
     options: list[str] = []
-    if is_http_source(source):
+    parsed = urlsplit(source)
+    if parsed.scheme.lower() in HTTP_SCHEMES:
         options.extend(HTTP_RECONNECT_OPTIONS)
         # HLS demuxer only. The HTTP protocol used for .mp4 rejects this option.
-        if urlsplit(source).path.lower().endswith(".m3u8"):
+        if parsed.path.lower().endswith(".m3u8"):
             options.extend(["-http_persistent", "0"])
     if headers:
         options.extend(["-headers", "\r\n".join(headers) + "\r\n"])
     if proxy:
         options.extend(["-http_proxy", proxy])
     return options
-
-
-def capture(command: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        command,
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-        creationflags=PROCESS_FLAGS,
-    )
 
 
 def option_args(*pairs: tuple[object, ...]) -> list[str]:
@@ -348,9 +329,10 @@ def prepare_input(args: argparse.Namespace) -> StreamInput:
             normalize_source(resolved_audio, "yt-dlp audio") if resolved_audio else None
         )
         title = title or resolved_title
-    if is_http_source(video):
-        if not any(header.lower().startswith("user-agent:") for header in headers):
-            headers = merge_headers([f"User-Agent: {DEFAULT_USER_AGENT}"], headers)
+    if is_http_source(video) and not any(
+        header.lower().startswith("user-agent:") for header in headers
+    ):
+        headers = [f"User-Agent: {DEFAULT_USER_AGENT}", *headers]
     info = probe_video(video, headers, args.http_proxy)
     rate = (
         Fraction(str(args.source_fps)).limit_denominator(1_000_000)
@@ -499,25 +481,27 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
     if args.duration > 0:
         command.extend(["-t", format(args.duration, ".12g")])
     playlist = Path(args.publish_url)
-    return [
-        *command,
-        "-shortest",
-        "-avoid_negative_ts",
-        "make_zero",
-        "-f",
-        "hls",
-        "-hls_time",
-        str(HLS_SEGMENT_SECONDS),
-        "-hls_list_size",
-        "0",
-        "-hls_flags",
-        hls_muxer_flags(),
-        "-hls_segment_type",
-        "mpegts",
-        "-hls_segment_filename",
-        hls_segment_pattern(playlist),
-        str(playlist),
-    ]
+    command.extend(
+        [
+            "-shortest",
+            "-avoid_negative_ts",
+            "make_zero",
+            "-f",
+            "hls",
+            "-hls_time",
+            str(HLS_SEGMENT_SECONDS),
+            "-hls_list_size",
+            "0",
+            "-hls_flags",
+            HLS_MUXER_FLAGS,
+            "-hls_segment_type",
+            "mpegts",
+            "-hls_segment_filename",
+            hls_segment_pattern(playlist),
+            str(playlist),
+        ]
+    )
+    return command
 
 
 def stop_process(process: subprocess.Popen[bytes] | None) -> None:
@@ -529,37 +513,6 @@ def stop_process(process: subprocess.Popen[bytes] | None) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait()
-
-
-def stop_process_tree(pid: int) -> None:
-    if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/PID", str(pid), "/T", "/F"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            creationflags=PROCESS_FLAGS,
-        )
-        return
-    try:
-        os.kill(pid, 15)
-    except ProcessLookupError:
-        return
-
-
-def replace_existing_stream() -> None:
-    if not STREAM_PID_FILE.is_file():
-        return
-    try:
-        pid = int(STREAM_PID_FILE.read_text(encoding="ascii").strip())
-    except ValueError:
-        STREAM_PID_FILE.unlink(missing_ok=True)
-        STREAM_STATUS_FILE.unlink(missing_ok=True)
-        return
-    if pid != os.getpid():
-        stop_process_tree(pid)
-    STREAM_PID_FILE.unlink(missing_ok=True)
-    STREAM_STATUS_FILE.unlink(missing_ok=True)
 
 
 def write_stream_status(source: StreamInput, start: float) -> None:
