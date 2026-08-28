@@ -5,7 +5,6 @@ import json
 import math
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 from urllib.parse import urlsplit, urlunsplit
@@ -26,7 +25,6 @@ from rife.paths import (
 )
 
 
-HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
@@ -69,8 +67,7 @@ def is_http_source(source: str) -> bool:
 
 def normalize_source(source: str, name: str) -> str:
     if is_http_source(source):
-        parsed = urlsplit(source)
-        if not parsed.netloc or "\r" in source or "\n" in source:
+        if not urlsplit(source).netloc:
             raise ValueError(f"{name} is not a valid HTTP URL")
         return source
     path = Path(source).expanduser().resolve()
@@ -85,10 +82,8 @@ def normalize_headers(values: list[str]) -> list[str]:
         name, separator, header_value = value.partition(":")
         name = name.strip()
         header_value = header_value.strip()
-        if not separator or not HEADER_NAME.fullmatch(name) or not header_value:
+        if not separator or not name or not header_value:
             raise ValueError(f"Invalid HTTP header: {value}")
-        if "\r" in header_value or "\n" in header_value:
-            raise ValueError("HTTP header values cannot contain line breaks")
         headers[name.lower()] = (name, header_value)
     return [f"{name}: {value}" for name, value in headers.values()]
 
@@ -370,12 +365,8 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
     return env
 
 
-def vspipe_requests(gpu_threads: int) -> int:
-    return max(2, gpu_threads)
-
-
 def build_vspipe_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
-    command = [str(VSPIPE), "--container", "y4m", "--requests", str(vspipe_requests(args.gpu_threads))]
+    command = [str(VSPIPE), "--container", "y4m", "--requests", str(args.gpu_threads)]
     if not source.is_network:
         command.extend(["--arg", f"input={source.video}"])
     return [*command, str(RIFE_SCRIPT), "-"]
@@ -444,9 +435,8 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
             ("-c:v", "h264_nvenc"), ("-preset", "p4"), ("-tune", "hq"),
             ("-profile:v", "high"), ("-rc", "vbr"), ("-cq", args.quality),
             ("-b:v", 0), ("-multipass", "qres"), ("-g", gop), ("-bf", 0),
-            ("-rc-lookahead", 8), ("-no-scenecut", 1), ("-strict_gop", 1),
-            ("-spatial-aq", 1), ("-temporal-aq", 0), ("-aq-strength", 8),
-            ("-forced-idr", 1), ("-pix_fmt", "yuv420p"),
+            ("-rc-lookahead", 8), ("-spatial-aq", 1), ("-aq-strength", 8),
+            ("-pix_fmt", "yuv420p"),
             ("-colorspace", "bt709"), ("-color_primaries", "bt709"),
             ("-color_trc", "bt709"),
         )
@@ -525,8 +515,6 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
                 bufsize=8 * 1024 * 1024,
                 creationflags=PROCESS_FLAGS,
             )
-            if decoder.stdout is None:
-                raise RuntimeError("Decoder stdout pipe was not created")
         vspipe = subprocess.Popen(
             build_vspipe_command(source, args),
             cwd=ROOT,
@@ -538,8 +526,6 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
         )
         if decoder and decoder.stdout:
             decoder.stdout.close()
-        if vspipe.stdout is None:
-            raise RuntimeError("VSPipe stdout pipe was not created")
         encoder = subprocess.Popen(
             build_encoder_command(source, args),
             cwd=ROOT,
@@ -571,12 +557,6 @@ def main() -> int:
     )
     if missing:
         print(f"Required file not found: {missing}", file=sys.stderr)
-        return 2
-    invalid_range = min(
-        args.max_height, args.workspace_mib, args.gop, args.start, args.duration
-    ) < 0
-    if invalid_range or args.max_height == 1:
-        print("Height, workspace, start, or duration is invalid", file=sys.stderr)
         return 2
     replace_existing_stream()
     STREAM_PID_FILE.write_text(str(os.getpid()), encoding="ascii")

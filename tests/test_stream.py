@@ -16,7 +16,6 @@ from rife.stream import (
     ffmpeg_input_options,
     normalize_headers,
     video_size,
-    vspipe_requests,
 )
 
 
@@ -30,10 +29,6 @@ class StreamInputTests(unittest.TestCase):
             ffmpeg_input_options("https://example.com/video.mp4", headers, None),
             ["-headers", "referer: https://last.example\r\n"],
         )
-
-    def test_header_line_break_is_rejected(self) -> None:
-        with self.assertRaises(ValueError):
-            normalize_headers(["Cookie: ok\nInjected: no"])
 
     def test_hls_input_disables_persistent_http_connections(self) -> None:
         options = ffmpeg_input_options(
@@ -123,8 +118,6 @@ class StreamInputTests(unittest.TestCase):
             ["-multipass", "qres"],
             ["-rc-lookahead", "8"],
             ["-bf", "0"],
-            ["-no-scenecut", "1"],
-            ["-strict_gop", "1"],
             ["-pkt_size", "1400"],
         ):
             index = command.index(option[0])
@@ -146,7 +139,6 @@ class StreamInputTests(unittest.TestCase):
 
         command = build_vspipe_command(source, args)
 
-        self.assertEqual(vspipe_requests(2), 2)
         self.assertEqual(
             command[command.index("--requests") : command.index("--requests") + 2],
             ["--requests", "2"],

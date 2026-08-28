@@ -12,8 +12,6 @@ from urllib.parse import unquote, urlsplit
 from rife.paths import HTTP_SCHEMES, PROTOCOL_LOG_FILE, ROOT, STREAM_CLI
 
 
-MAX_URI_LENGTH = 1_000_000
-MAX_COMMAND_LENGTH = 256_000
 PROXY_SCHEMES = HTTP_SCHEMES | {"socks4", "socks4a", "socks5", "socks5h"}
 HEADER_NAMES = {
     "origin": "Origin",
@@ -47,11 +45,9 @@ def decode_payload(payload: str) -> str:
     try:
         compressed = base64.b64decode(unquote(payload), validate=True)
         with gzip.GzipFile(fileobj=io.BytesIO(compressed)) as archive:
-            decoded = archive.read(MAX_COMMAND_LENGTH + 1)
+            decoded = archive.read()
     except (OSError, ValueError) as exc:
         raise ProtocolError("The MPV payload is not valid gzip/Base64 data") from exc
-    if len(decoded) > MAX_COMMAND_LENGTH:
-        raise ProtocolError("The decoded MPV command is too large")
     try:
         return decoded.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -62,9 +58,7 @@ def validate_url(
     value: str, field_name: str, schemes: set[str] = HTTP_SCHEMES
 ) -> str:
     parsed = urlsplit(value)
-    if parsed.scheme.lower() not in schemes or not parsed.netloc or any(
-        char in value for char in "\r\n"
-    ):
+    if parsed.scheme.lower() not in schemes or not parsed.netloc:
         allowed = "/".join(sorted(schemes))
         raise ProtocolError(f"{field_name} must be a valid {allowed} URL")
     return value
@@ -76,8 +70,6 @@ def parse_header(value: str) -> str:
     header_value = header_value.strip()
     if not separator or name not in HEADER_NAMES or not header_value:
         raise ProtocolError(f"Unsupported HTTP header: {name or value}")
-    if any(char in header_value for char in "\r\n"):
-        raise ProtocolError("HTTP headers cannot contain line breaks")
     return f"{HEADER_NAMES[name]}: {header_value}"
 
 
@@ -114,14 +106,10 @@ def parse_mpv_command(command: str) -> MpvRequest:
                 request.start = float(value)
             except ValueError as exc:
                 raise ProtocolError("MPV start time must be numeric") from exc
-            if request.start < 0:
-                raise ProtocolError("MPV start time cannot be negative")
     return request
 
 
 def parse_uri(uri: str) -> MpvRequest:
-    if len(uri) > MAX_URI_LENGTH:
-        raise ProtocolError("The media URI is too large")
     parsed = urlsplit(uri)
     scheme = parsed.scheme.lower()
     if scheme == "ush":

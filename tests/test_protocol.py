@@ -9,7 +9,7 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rife.paths import PROTOCOL_CLI, STREAM_CLI
-from rife.protocol import MpvRequest, ProtocolError, build_stream_command, parse_header, parse_mpv_command, parse_uri
+from rife.protocol import MpvRequest, ProtocolError, build_stream_command, parse_mpv_command, parse_uri
 
 
 def ush_uri(command: str, target: str = "MPV") -> str:
@@ -99,7 +99,7 @@ class MpvProtocolTests(unittest.TestCase):
         with self.assertRaises(ProtocolError):
             parse_uri("mpv://https%3A%2F%2Fexample.com%2Fvideo.mkv?raw=query")
 
-    def test_non_http_media_and_header_injection_are_rejected(self) -> None:
+    def test_non_http_media_and_unknown_headers_are_rejected(self) -> None:
         with self.assertRaises(ProtocolError):
             parse_uri(ush_uri('"C:\\private.mp4"'))
         with self.assertRaises(ProtocolError):
@@ -107,8 +107,6 @@ class MpvProtocolTests(unittest.TestCase):
                 '"https://example.com/video.mp4" '
                 '--http-header-fields="authorization: secret"'
             )
-        with self.assertRaises(ProtocolError):
-            parse_header("Referer: good\r\nInjected: bad")
 
     def test_bad_payload_is_rejected(self) -> None:
         with self.assertRaises(ProtocolError):

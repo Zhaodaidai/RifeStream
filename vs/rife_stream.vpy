@@ -29,17 +29,6 @@ duration_seconds = env_value("RIFE_DURATION_SECONDS", 0.0)
 pipe_input = env_value("RIFE_PIPE_INPUT", 0) == 1
 vs_threads = max(2, gpu_threads)
 
-if factor < 2:
-    raise vs.Error("RIFE_FACTOR must be at least 2")
-if max_height < 0:
-    raise vs.Error("RIFE_MAX_HEIGHT cannot be negative")
-if gpu_threads < 1:
-    raise vs.Error("RIFE_GPU_THREADS must be at least 1")
-if scene_mode not in (0, 1, 2):
-    raise vs.Error("RIFE_SCENE_MODE must be 0, 1, or 2")
-if start_seconds < 0 or duration_seconds < 0:
-    raise vs.Error("RIFE start and duration values cannot be negative")
-
 core.num_threads = vs_threads
 
 

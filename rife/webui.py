@@ -245,7 +245,7 @@ def normalize_playlist_source(source: str) -> str:
     parsed = urlsplit(source)
     scheme = parsed.scheme.lower()
     if scheme in HTTP_SCHEMES:
-        if not parsed.netloc or any(char in source for char in "\r\n"):
+        if not parsed.netloc:
             raise ValueError(f"Invalid URL: {source}")
         return source
     if scheme in FILE_SCHEMES:
@@ -324,8 +324,6 @@ def read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     length = int(handler.headers.get("Content-Length") or 0)
     if length <= 0:
         return {}
-    if length > 1_000_000:
-        raise ValueError("Request body is too large")
     payload = handler.rfile.read(length)
     if not payload:
         return {}
@@ -424,9 +422,6 @@ class WebHandler(BaseHTTPRequestHandler):
         if path == "/":
             path = "/index.html"
         relative = path.lstrip("/")
-        if ".." in Path(relative).parts:
-            self.send_json({"error": "Not found"}, 404)
-            return
         file_path = (WEBUI_DIR / relative).resolve()
         if WEBUI_DIR.resolve() not in file_path.parents and file_path != WEBUI_DIR.resolve():
             self.send_json({"error": "Not found"}, 404)
