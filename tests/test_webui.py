@@ -13,7 +13,6 @@ from rife.webui import (
     hls_playlist_url,
     normalize_playlist_source,
     parse_sources,
-    request_hostname,
     source_kind,
 )
 
@@ -67,31 +66,13 @@ class PlaylistHelperTests(unittest.TestCase):
 
 
 class HlsUrlTests(unittest.TestCase):
-    def test_hls_url_uses_request_host_without_webui_port(self) -> None:
-        self.assertEqual(request_hostname("192.168.1.8:10000"), "192.168.1.8")
-        self.assertEqual(
-            hls_playlist_url("192.168.1.8:10000"),
-            "http://192.168.1.8:8888/rife/index.m3u8",
-        )
-        self.assertEqual(
-            hls_playlist_url("[fe80::1]:10000"),
-            "http://[fe80::1]:8888/rife/index.m3u8",
-        )
-
     @patch("rife.webui.lan_ipv4", return_value="192.168.1.8")
-    def test_hls_url_replaces_loopback_with_lan_ip(self, _lan_ipv4) -> None:
-        self.assertEqual(
-            hls_playlist_url("127.0.0.1:10000"),
-            "http://192.168.1.8:8888/rife/index.m3u8",
-        )
-        self.assertEqual(
-            hls_playlist_url("localhost:10000"),
-            "http://192.168.1.8:8888/rife/index.m3u8",
-        )
-        self.assertEqual(
-            hls_playlist_url(None),
-            "http://192.168.1.8:8888/rife/index.m3u8",
-        )
+    def test_hls_url_always_uses_lan_ip(self, _lan_ipv4) -> None:
+        expected = "http://192.168.1.8:8888/rife/index.m3u8"
+        self.assertEqual(hls_playlist_url("127.0.0.1:10000"), expected)
+        self.assertEqual(hls_playlist_url("localhost:10000"), expected)
+        self.assertEqual(hls_playlist_url("example.local:10000"), expected)
+        self.assertEqual(hls_playlist_url(None), expected)
 
 
 if __name__ == "__main__":

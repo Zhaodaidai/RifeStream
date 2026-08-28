@@ -10,7 +10,8 @@ apiAddress: 127.0.0.1:9997
 
 writeQueueSize: 2048
 
-# HLS 只保留实时观看所需的短窗口。
+# HLS 对局域网开放；RTSP 仅本机推流。
+hlsAddress: :8888
 hlsAllowOrigin: "*"
 hlsAlwaysRemux: true
 hlsVariant: fmp4

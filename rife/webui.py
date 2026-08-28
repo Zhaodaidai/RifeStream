@@ -119,7 +119,7 @@ class Playlist:
                 "play_generation": self.state.play_generation,
                 "streaming": stream_running(),
                 "last_error": self.state.last_error,
-                "hls_url": hls_playlist_url(None),
+                "hls_url": hls_playlist_url(),
             }
 
     def current(self) -> PlaylistItem | None:
@@ -222,16 +222,6 @@ def source_kind(source: str) -> str:
     return "url" if is_http_source(source) else "file"
 
 
-def request_hostname(host_header: str | None) -> str:
-    host = (host_header or "").strip()
-    if host.startswith("["):
-        end = host.find("]")
-        return host[1:end] if end != -1 else ""
-    if host.count(":") == 1:
-        return host.rsplit(":", 1)[0]
-    return host
-
-
 def is_loopback_host(host: str) -> bool:
     value = host.strip("[]").lower()
     return (
@@ -253,18 +243,8 @@ def lan_ipv4() -> str:
     return ip if ip and not is_loopback_host(ip) else "127.0.0.1"
 
 
-def hls_playlist_host(host_header: str | None) -> str:
-    host = request_hostname(host_header)
-    if host and not is_loopback_host(host):
-        return host
-    return lan_ipv4()
-
-
-def hls_playlist_url(host_header: str | None) -> str:
-    host = hls_playlist_host(host_header)
-    if ":" in host:
-        host = f"[{host}]"
-    return f"http://{host}:{HLS_PORT}/rife/index.m3u8"
+def hls_playlist_url(_host_header: str | None = None) -> str:
+    return f"http://{lan_ipv4()}:{HLS_PORT}/rife/index.m3u8"
 
 
 def parse_sources(text: str) -> list[str]:
@@ -400,7 +380,7 @@ def list_entries(path: Path) -> list[dict[str, Any]]:
     children.sort(key=lambda child: (not child.is_dir(), child.name.lower()))
     for child in children:
         name = child.name
-        if name in BROWSE_SKIP:
+        if name.startswith(".") or name in BROWSE_SKIP:
             continue
         try:
             is_dir = child.is_dir()
@@ -554,7 +534,7 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def state_payload(self) -> dict[str, Any]:
         payload = PLAYLIST.snapshot()
-        payload["hls_url"] = hls_playlist_url(self.headers.get("Host"))
+        payload["hls_url"] = hls_playlist_url()
         return payload
 
     def send_json(self, payload: dict[str, Any], status: int = 200) -> None:

@@ -7,6 +7,8 @@ const browserEl = document.getElementById("browser");
 const crumbsEl = document.getElementById("crumbs");
 const drivesEl = document.getElementById("drives");
 const hlsUrlEl = document.getElementById("hlsUrl");
+const hlsHint = document.getElementById("hlsHint");
+const copyBtn = document.getElementById("copyBtn");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const playBtn = document.getElementById("playBtn");
@@ -46,11 +48,19 @@ function renderState(state) {
   showError(state.last_error);
 
   playlistEl.innerHTML = "";
+  if (!state.items.length) {
+    const empty = document.createElement("li");
+    empty.className = "empty";
+    empty.textContent = "列表为空，从下方添加链接或本机文件";
+    playlistEl.appendChild(empty);
+    return;
+  }
   state.items.forEach((item, index) => {
     const li = document.createElement("li");
     if (item.id === state.current_id) li.classList.add("current");
     li.innerHTML = `
-      <button type="button" class="name">${index + 1}. ${escapeHtml(item.title)}</button>
+      <span class="index">${index + 1}</span>
+      <button type="button" class="name">${escapeHtml(item.title)}</button>
       <span class="kind">${item.kind === "url" ? "链接" : "文件"}</span>
       <button type="button" class="remove">删除</button>
     `;
@@ -172,11 +182,17 @@ document.getElementById("addFilesPlayBtn").addEventListener("click", () => addSe
 document.getElementById("clearBtn").addEventListener("click", async () => {
   renderState(await api("/api/clear", { method: "POST", body: "{}" }));
 });
-document.getElementById("copyBtn").addEventListener("click", async () => {
+copyBtn.addEventListener("click", async () => {
   const url = hlsUrlEl.textContent;
   if (!url) return;
   try {
     await navigator.clipboard.writeText(url);
+    copyBtn.classList.add("copied");
+    hlsHint.textContent = "已复制";
+    setTimeout(() => {
+      copyBtn.classList.remove("copied");
+      hlsHint.textContent = "HLS";
+    }, 1200);
   } catch {
     showError("无法复制，请手动选择地址");
   }
