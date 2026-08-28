@@ -1,6 +1,9 @@
 runtime/
 .downloads/
 *.log
+task_plan.md
+findings.md
+progress.md
 /mediamtx.exe
 /auto.crt
 /auto.key

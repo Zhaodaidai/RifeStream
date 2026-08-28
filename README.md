@@ -10,6 +10,16 @@ HTTP/HLS   -> FFmpeg CUDA decode/scale -> VapourSynth/RIFE -> FFmpeg NVENC -> Me
 项目使用 `runtime` 下的便携 Python、VapourSynth 和 FFmpeg，不依赖系统 Python
 或 MPV。
 
+布局：
+
+```text
+stream.py / mpv_protocol.py / mediamtx.py / check_setup.py   CLI 入口
+rife/        路径、协议、转码、MediaMTX、环境检查
+vs/          VapourSynth 脚本
+tests/       单元测试
+runtime/     便携 Python、VSPipe、FFmpeg、插件
+```
+
 ## URL 协议
 
 协议接收器支持：
@@ -76,4 +86,5 @@ HLS 是实时短窗口；协议或 `stream.py` 再次启动时会替换当前转
 runtime\python.exe check_setup.py
 runtime\python.exe mediamtx.py status
 runtime\python.exe mediamtx.py restart --replace
+runtime\python.exe -m unittest discover -s tests
 ```
