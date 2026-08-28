@@ -30,11 +30,6 @@
         <button type="button" id="clearBtn" class="ghost">清空</button>
       </div>
       <ol class="playlist" id="playlist"></ol>
-      <div class="progress">
-        <span id="timeNow">0:00</span>
-        <input type="range" id="seekBar" min="0" max="0" step="0.1" value="0" disabled>
-        <span id="timeTotal">0:00</span>
-      </div>
       <div class="transport">
         <button type="button" id="prevBtn">上一集</button>
         <button type="button" id="playBtn" class="primary">播放</button>
@@ -43,20 +38,17 @@
       </div>
       <div class="skip-settings">
         <label class="field">
+          <span id="jumpLabel">跳转到</span>
+          <input type="text" id="jumpTo" placeholder="秒或 1:30" autocomplete="off">
+        </label>
+        <button type="button" id="jumpBtn" disabled>跳转</button>
+        <label class="field">
           <span>片头设置</span>
-          <input type="number" id="introSeconds" min="0" step="1" value="0" placeholder="秒">
+          <input type="text" id="introSeconds" value="0:00" placeholder="1:30" autocomplete="off">
         </label>
         <label class="switch">
           <input type="checkbox" id="skipIntro">
           <span>跳过片头</span>
-        </label>
-        <label class="field">
-          <span>片尾设置</span>
-          <input type="number" id="outroSeconds" min="0" step="1" value="0" placeholder="秒">
-        </label>
-        <label class="switch">
-          <input type="checkbox" id="skipOutro">
-          <span>跳过片尾</span>
         </label>
       </div>
       <p class="error" id="errorBox" hidden></p>

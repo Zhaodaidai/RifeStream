@@ -138,15 +138,94 @@ class StreamInputTests(unittest.TestCase):
             ["-rc", "vbr"],
             ["-cq", "16"],
             ["-multipass", "qres"],
+            ["-g", "100"],
+            ["-forced-idr", "1"],
+            ["-force_key_frames", "expr:gte(n,n_forced*100)"],
+            ["-strict_gop", "1"],
             ["-rc-lookahead", "8"],
             ["-bf", "0"],
+            ["-fps_mode", "cfr"],
+            ["-avoid_negative_ts", "make_zero"],
+            ["-muxpreload", "0"],
+            ["-muxdelay", "0"],
+            ["-flush_packets", "1"],
             ["-pkt_size", "1400"],
         ):
             index = command.index(option[0])
             self.assertEqual(command[index : index + 2], option)
+        video_input = command.index("-i")
+        self.assertEqual(command[video_input - 2 : video_input + 2],
+                         ["-f", "yuv4mpegpipe", "-i", "pipe:0"])
         self.assertNotIn("-re", command)
         self.assertNotIn("fullres", command)
         self.assertNotIn("cbr", command)
+
+    def test_encoder_gop_never_exceeds_two_seconds(self) -> None:
+        source = StreamInput(
+            "https://example.com/video.mp4",
+            None,
+            [],
+            None,
+            MediaInfo(Fraction(24_000, 1001), 1920, 1080, 60),
+            Fraction(24_000, 1001),
+        )
+        args = argparse.Namespace(
+            gop=0,
+            factor=2,
+            no_audio=True,
+            start=0,
+            http_proxy=None,
+            quality=16,
+            audio_codec="libopus",
+            duration=0,
+            publish_url="rtsp://127.0.0.1:8554/rife",
+        )
+
+        command = build_encoder_command(source, args)
+        gop = int(command[command.index("-g") + 1])
+        output_fps = 48_000 / 1001
+        self.assertEqual(gop, 95)
+        self.assertLessEqual(gop / output_fps, 2.0)
+        self.assertEqual(
+            command[command.index("-force_key_frames") + 1],
+            "expr:gte(n,n_forced*95)",
+        )
+
+    def test_encoder_aligns_audio_to_paced_video(self) -> None:
+        source = StreamInput(
+            "https://example.com/video.mp4",
+            None,
+            [],
+            None,
+            MediaInfo(Fraction(25), 1920, 1080, 60),
+            Fraction(25),
+        )
+        args = argparse.Namespace(
+            gop=0,
+            factor=2,
+            no_audio=False,
+            start=0,
+            http_proxy=None,
+            quality=16,
+            audio_codec="libopus",
+            duration=0,
+            publish_url="rtsp://127.0.0.1:8554/rife",
+        )
+
+        command = build_encoder_command(source, args)
+
+        self.assertEqual(
+            command[command.index("-af") : command.index("-af") + 2],
+            ["-af", "aresample=async=1:first_pts=0"],
+        )
+        audio_input = command.index("-i", command.index("-i") + 1)
+        self.assertEqual(
+            command[command.index("-readrate") : command.index("-readrate") + 2],
+            ["-readrate", "0"],
+        )
+        self.assertLess(command.index("-readrate"), audio_input)
+        self.assertNotIn("-re", command)
+        self.assertIn("-shortest", command)
 
     def test_vspipe_requests_match_tensorrt_streams(self) -> None:
         source = StreamInput(

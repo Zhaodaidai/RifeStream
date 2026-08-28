@@ -125,8 +125,9 @@ class SkipWindowTests(unittest.TestCase):
     def test_outro_reached(self) -> None:
         settings = SkipSettings(outro=90, skip_outro=True)
         self.assertFalse(outro_reached(1000, 1200, settings))
-        self.assertTrue(outro_reached(1110, 1200, settings))
-        self.assertFalse(outro_reached(1110, 1200, SkipSettings(outro=90)))
+        self.assertFalse(outro_reached(1110, 1200, settings))
+        self.assertTrue(outro_reached(1130, 1200, settings))
+        self.assertFalse(outro_reached(1130, 1200, SkipSettings(outro=90)))
 
 
 class PlaybackTests(unittest.TestCase):
@@ -170,7 +171,9 @@ class PlaybackTests(unittest.TestCase):
         self.assertEqual(PLAYBACK.duration, 200)
 
     def test_snapshot_is_not_seekable_without_duration(self) -> None:
-        payload = playback_snapshot(False, True, now=0)
+        missing = Path("/definitely/missing/rife-stream-status.json")
+        with patch("rife.webui.STREAM_STATUS_FILE", missing):
+            payload = playback_snapshot(False, True, now=0)
         self.assertFalse(payload["seekable"])
         self.assertIsNone(payload["duration"])
 

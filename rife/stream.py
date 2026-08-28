@@ -10,6 +10,7 @@ import time
 import sys
 from urllib.parse import urlsplit, urlunsplit
 
+from rife.hls import encoder_gop, force_key_frames_expr
 from rife.mediamtx import start as start_mediamtx
 from rife.paths import (
     API_PORT,
@@ -310,7 +311,10 @@ def parse_args() -> argparse.Namespace:
         help="NVENC constant quality; lower values preserve more detail",
     )
     parser.add_argument(
-        "--gop", type=int, default=0, help="keyframe interval; 0 selects one second"
+        "--gop",
+        type=int,
+        default=0,
+        help="keyframe interval in output frames; 0 = floor(output_fps * 2s)",
     )
     parser.add_argument("--audio-codec", choices=("libopus", "aac"), default="libopus")
     parser.add_argument("--no-audio", action="store_true")
@@ -432,7 +436,7 @@ def build_decoder_command(
 
 
 def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
-    gop = args.gop or max(1, round(float(source.rate) * args.factor))
+    gop = encoder_gop(source.rate, args.factor, args.gop)
     command = [
         *FFMPEG_BASE,
         *option_args(
@@ -442,7 +446,7 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
     ]
     if not args.no_audio:
         audio_source = source.audio or source.video
-        command.extend(["-thread_queue_size", "512"])
+        command.extend(["-thread_queue_size", "2048", "-readrate", "0"])
         if args.start > 0:
             command.extend(["-ss", format(args.start, ".12g")])
         command.extend(ffmpeg_input_options(audio_source, source.headers, args.http_proxy))
@@ -454,9 +458,12 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         option_args(
             ("-c:v", "h264_nvenc"), ("-preset", "p4"), ("-tune", "hq"),
             ("-profile:v", "high"), ("-rc", "vbr"), ("-cq", args.quality),
-            ("-b:v", 0), ("-multipass", "qres"), ("-g", gop), ("-bf", 0),
+            ("-b:v", 0), ("-multipass", "qres"),
+            ("-g", gop), ("-forced-idr", 1),
+            ("-force_key_frames", force_key_frames_expr(gop)),
+            ("-strict_gop", 1), ("-bf", 0),
             ("-rc-lookahead", 8), ("-spatial-aq", 1), ("-aq-strength", 8),
-            ("-pix_fmt", "yuv420p"),
+            ("-pix_fmt", "yuv420p"), ("-fps_mode", "cfr"),
             ("-colorspace", "bt709"), ("-color_primaries", "bt709"),
             ("-color_trc", "bt709"),
         )
@@ -464,13 +471,32 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
     command.extend(
         ["-an"]
         if args.no_audio
-        else ["-c:a", args.audio_codec, "-b:a", "160000", "-ar", "48000", "-ac", "2"]
+        else [
+            "-c:a",
+            args.audio_codec,
+            "-b:a",
+            "160000",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-af",
+            "aresample=async=1:first_pts=0",
+        ]
     )
     if args.duration > 0:
         command.extend(["-t", format(args.duration, ".12g")])
     return [
         *command,
         "-shortest",
+        "-avoid_negative_ts",
+        "make_zero",
+        "-muxpreload",
+        "0",
+        "-muxdelay",
+        "0",
+        "-flush_packets",
+        "1",
         "-f",
         "rtsp",
         "-rtsp_transport",
@@ -617,6 +643,8 @@ def main() -> int:
     )
     print(f"Output     : {args.publish_url}")
     print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
+    gop = encoder_gop(source.rate, args.factor, args.gop)
+    print(f"HLS GOP    : {gop} frames (~{gop / (fps * args.factor):.3f}s IDR)")
     print("Stop       : Ctrl+C", flush=True)
     try:
         return run_pipeline(source, args)

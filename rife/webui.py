@@ -404,7 +404,9 @@ def encode_duration(start: float, duration: float | None, settings: SkipSettings
 def outro_reached(position: float, duration: float | None, settings: SkipSettings) -> bool:
     if not settings.skip_outro or settings.outro <= 0 or duration is None or duration <= 0:
         return False
-    return position >= max(0.0, duration - settings.outro)
+    # Wall-clock UI position runs even while RIFE is behind; wait extra so
+    # skip-outro does not kill the current encode and look like a restart.
+    return position >= max(0.0, duration - settings.outro) + 20.0
 
 
 def estimate_position(
@@ -748,6 +750,9 @@ def seek_to(seconds: float) -> PlaylistItem:
         if status:
             duration = finite_seconds(status.get("duration"))
     seconds = clamp_seek(seconds, duration)
+    current_position = playback_snapshot(stream_running(), True)["position"]
+    if abs(seconds - current_position) < 2.0:
+        return item
     remember_playback(item.id, seconds)
     spawn_stream(
         item.source,

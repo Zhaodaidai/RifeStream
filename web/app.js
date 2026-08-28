@@ -10,22 +10,14 @@ const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const playBtn = document.getElementById("playBtn");
 const stopBtn = document.getElementById("stopBtn");
-const seekBar = document.getElementById("seekBar");
-const timeNow = document.getElementById("timeNow");
-const timeTotal = document.getElementById("timeTotal");
+const jumpTo = document.getElementById("jumpTo");
+const jumpBtn = document.getElementById("jumpBtn");
+const jumpLabel = document.getElementById("jumpLabel");
 const introSeconds = document.getElementById("introSeconds");
-const outroSeconds = document.getElementById("outroSeconds");
 const skipIntro = document.getElementById("skipIntro");
-const skipOutro = document.getElementById("skipOutro");
 
-let seeking = false;
 let savingSettings = false;
-const clock = {
-  position: 0,
-  duration: 0,
-  streaming: false,
-  sampledAt: 0,
-};
+let jumpInFlight = false;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -56,52 +48,51 @@ function formatTime(seconds) {
   return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-function livePosition() {
-  if (!clock.streaming || seeking) return clock.position;
-  let position = clock.position + (performance.now() - clock.sampledAt) / 1000;
-  if (clock.duration > 0) position = Math.min(position, clock.duration);
-  return Math.max(0, position);
-}
-
-function paintProgress() {
-  if (seeking) return;
-  const position = livePosition();
-  seekBar.value = String(position);
-  timeNow.textContent = formatTime(position);
+function parseTimeSeconds(value) {
+  const text = String(value || "").trim();
+  if (!text) return NaN;
+  if (/^\d+(\.\d+)?$/.test(text)) return Number(text);
+  const parts = text.split(":");
+  if (parts.length < 2 || parts.length > 3) return NaN;
+  const numbers = parts.map((part) => Number(part));
+  if (numbers.some((part) => !Number.isFinite(part) || part < 0)) return NaN;
+  if (parts.length === 2) return numbers[0] * 60 + numbers[1];
+  return numbers[0] * 3600 + numbers[1] * 60 + numbers[2];
 }
 
 function paintSettings(settings) {
   if (!settings) return;
   if (document.activeElement !== introSeconds) {
-    introSeconds.value = String(Number(settings.intro) || 0);
-  }
-  if (document.activeElement !== outroSeconds) {
-    outroSeconds.value = String(Number(settings.outro) || 0);
+    introSeconds.value = formatTime(Number(settings.intro) || 0);
   }
   if (document.activeElement !== skipIntro) {
     skipIntro.checked = Boolean(settings.skip_intro);
   }
-  if (document.activeElement !== skipOutro) {
-    skipOutro.checked = Boolean(settings.skip_outro);
-  }
 }
 
 function settingsPayload() {
+  const text = String(introSeconds.value || "").trim();
+  const intro = text ? parseTimeSeconds(text) : 0;
+  if (!Number.isFinite(intro)) return null;
   return {
-    intro: Number(introSeconds.value) || 0,
-    outro: Number(outroSeconds.value) || 0,
+    intro,
     skip_intro: skipIntro.checked,
-    skip_outro: skipOutro.checked,
+    skip_outro: false,
   };
 }
 
 async function saveSettings() {
   if (savingSettings) return;
+  const payload = settingsPayload();
+  if (!payload) {
+    showError("片头请使用 1:30 或 1:02:03 格式");
+    return;
+  }
   savingSettings = true;
   try {
     renderState(await api("/api/settings", {
       method: "POST",
-      body: JSON.stringify(settingsPayload()),
+      body: JSON.stringify(payload),
     }));
   } catch (error) {
     showError(error.message);
@@ -122,14 +113,9 @@ function renderState(state) {
   prevBtn.disabled = !state.has_prev;
   nextBtn.disabled = !state.has_next;
   playBtn.disabled = !current;
-  clock.position = Number(state.position) || 0;
-  clock.duration = Number(state.duration) || 0;
-  clock.streaming = Boolean(state.streaming);
-  clock.sampledAt = performance.now();
-  seekBar.max = String(clock.duration || 0);
-  seekBar.disabled = !state.seekable;
-  timeTotal.textContent = formatTime(clock.duration);
-  paintProgress();
+  jumpBtn.disabled = !state.seekable || jumpInFlight;
+  const duration = Number(state.duration) || 0;
+  jumpLabel.textContent = duration > 0 ? `跳转到（总长 ${formatTime(duration)}）` : "跳转到";
   showError(state.last_error);
 
   playlistEl.innerHTML = "";
@@ -189,6 +175,26 @@ async function play(body) {
   renderState(await api("/api/play", { method: "POST", body: JSON.stringify(body) }));
 }
 
+async function jump() {
+  const seconds = parseTimeSeconds(jumpTo.value);
+  if (!Number.isFinite(seconds)) {
+    showError("请输入秒数，或 1:30 / 1:02:03 格式");
+    return;
+  }
+  jumpInFlight = true;
+  jumpBtn.disabled = true;
+  try {
+    renderState(await api("/api/seek", {
+      method: "POST",
+      body: JSON.stringify({ seconds }),
+    }));
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    jumpInFlight = false;
+  }
+}
+
 document.getElementById("addBtn").addEventListener("click", () => addSources(false));
 document.getElementById("addPlayBtn").addEventListener("click", () => addSources(true));
 document.getElementById("clearBtn").addEventListener("click", async () => {
@@ -215,40 +221,21 @@ playBtn.addEventListener("click", () => play({}));
 stopBtn.addEventListener("click", async () => {
   renderState(await api("/api/stop", { method: "POST", body: "{}" }));
 });
-seekBar.addEventListener("pointerdown", () => {
-  seeking = true;
-});
-seekBar.addEventListener("input", () => {
-  seeking = true;
-  timeNow.textContent = formatTime(Number(seekBar.value));
-});
-let seekInFlight = false;
-seekBar.addEventListener("change", async () => {
-  seekInFlight = true;
-  try {
-    renderState(await api("/api/seek", {
-      method: "POST",
-      body: JSON.stringify({ seconds: Number(seekBar.value) }),
-    }));
-  } catch (error) {
-    showError(error.message);
-  } finally {
-    seekInFlight = false;
-    seeking = false;
+jumpBtn.addEventListener("click", jump);
+jumpTo.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    jump();
   }
 });
-["pointerup", "pointercancel"].forEach((event) => {
-  seekBar.addEventListener(event, () => {
-    if (!seekInFlight) seeking = false;
-  });
+introSeconds.addEventListener("change", saveSettings);
+introSeconds.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    introSeconds.blur();
+  }
 });
-[introSeconds, outroSeconds].forEach((input) => {
-  input.addEventListener("change", saveSettings);
-});
-[skipIntro, skipOutro].forEach((input) => {
-  input.addEventListener("change", saveSettings);
-});
+skipIntro.addEventListener("change", saveSettings);
 
 refresh();
 setInterval(refresh, 1500);
-setInterval(paintProgress, 250);

@@ -8,15 +8,23 @@ srt: false
 api: true
 apiAddress: 127.0.0.1:9997
 
+# RIFE 偶发卡住时不要把 RTSP 推流掐掉，否则 HLS muxer 会重建，
+# 播放器重新打开清单就会从窗口第一片再播。
+readTimeout: 30s
+writeTimeout: 30s
 writeQueueSize: 2048
 
 # HLS 对局域网开放；RTSP 仅本机推流。
 hlsAddress: :8888
-hlsAllowOrigin: "*"
+hlsAllowOrigins: ["*"]
 hlsAlwaysRemux: true
 hlsVariant: fmp4
+# 这是最短等待，不是目标片长。切片在「超过该时长后的下一枚 IDR」关闭。
+# 编码器 GOP 为 floor(output_fps * 2s)，片长 ≤ 2.000s，TARGETDURATION 保持 2。
+# 若这里写成 2s，略大于 2s 的 IDR 会把片长抬到 3s，客户端就会重拉清单乱跳。
 hlsSegmentDuration: 1s
-hlsSegmentCount: 7
+hlsSegmentCount: 8
+hlsMuxerCloseAfter: 60s
 
 paths:
   all_others:

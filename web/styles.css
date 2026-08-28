@@ -239,37 +239,6 @@ h2 {
   gap: 8px;
 }
 
-.progress {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.progress input[type="range"] {
-  flex: 1;
-  min-width: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
-.progress input[type="range"]:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
-.progress span {
-  flex: none;
-  min-width: 3.6em;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-}
-
-.progress span:last-child {
-  text-align: right;
-}
-
 .transport {
   margin-top: 12px;
   padding-top: 12px;
@@ -299,7 +268,8 @@ h2 {
   font-size: 12px;
 }
 
-.skip-settings input[type="number"] {
+.skip-settings input[type="number"],
+.skip-settings input[type="text"] {
   width: 100%;
   background: #10151f;
   color: var(--text);
@@ -309,9 +279,14 @@ h2 {
   font: inherit;
 }
 
-.skip-settings input[type="number"]:focus {
+.skip-settings input[type="number"]:focus,
+.skip-settings input[type="text"]:focus {
   outline: none;
   border-color: var(--accent-2);
+}
+
+.skip-settings #jumpBtn {
+  align-self: end;
 }
 
 .skip-settings .switch {
