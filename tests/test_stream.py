@@ -12,9 +12,11 @@ from rife.stream import (
     build_decoder_command,
     build_encoder_command,
     build_environment,
+    build_vspipe_command,
     ffmpeg_input_options,
     normalize_headers,
     video_size,
+    vspipe_requests,
 )
 
 
@@ -59,10 +61,11 @@ class StreamInputTests(unittest.TestCase):
         self.assertIn("-hwaccel", command)
         self.assertIn("cuda", command)
         self.assertIn(
-            "scale_cuda=1920:1080:format=yuv420p:interp_algo=lanczos,"
+            "scale_cuda=1920:1080:format=yuv420p:interp_algo=bilinear,"
             "hwdownload,format=yuv420p,fps=25/1",
             command,
         )
+        self.assertIn("-extra_hw_frames", command)
 
     def test_network_frame_count_does_not_overrun_the_decoder(self) -> None:
         source = StreamInput(
@@ -88,7 +91,7 @@ class StreamInputTests(unittest.TestCase):
 
         self.assertEqual(environment["RIFE_PIPE_FRAMES"], "2362")
 
-    def test_encoder_uses_visually_lossless_constant_quality(self) -> None:
+    def test_encoder_uses_realtime_constant_quality(self) -> None:
         source = StreamInput(
             "https://example.com/video.mp4",
             None,
@@ -112,12 +115,13 @@ class StreamInputTests(unittest.TestCase):
         command = build_encoder_command(source, args)
 
         for option in (
-            ["-preset", "p7"],
+            ["-preset", "p4"],
             ["-tune", "hq"],
             ["-profile:v", "high"],
             ["-rc", "vbr"],
             ["-cq", "16"],
-            ["-multipass", "fullres"],
+            ["-multipass", "qres"],
+            ["-rc-lookahead", "8"],
             ["-bf", "0"],
             ["-no-scenecut", "1"],
             ["-strict_gop", "1"],
@@ -125,7 +129,29 @@ class StreamInputTests(unittest.TestCase):
         ):
             index = command.index(option[0])
             self.assertEqual(command[index : index + 2], option)
+        self.assertNotIn("-re", command)
+        self.assertNotIn("fullres", command)
         self.assertNotIn("cbr", command)
+
+    def test_vspipe_requests_match_tensorrt_streams(self) -> None:
+        source = StreamInput(
+            "https://example.com/video.mp4",
+            None,
+            [],
+            None,
+            MediaInfo(Fraction(25), 1920, 1080, 60),
+            Fraction(25),
+        )
+        args = argparse.Namespace(gpu_threads=2)
+
+        command = build_vspipe_command(source, args)
+
+        self.assertEqual(vspipe_requests(2), 2)
+        self.assertEqual(
+            command[command.index("--requests") : command.index("--requests") + 2],
+            ["--requests", "2"],
+        )
+        self.assertNotIn("--arg", command)
 
 
 if __name__ == "__main__":

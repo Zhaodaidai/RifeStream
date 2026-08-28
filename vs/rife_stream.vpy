@@ -1,6 +1,7 @@
 from collections import OrderedDict
 import os
 import sys
+import threading
 
 import numpy as np
 import vapoursynth as vs
@@ -26,6 +27,7 @@ source_fps = env_value("RIFE_SOURCE_FPS", 0.0)
 start_seconds = env_value("RIFE_START_SECONDS", 0.0)
 duration_seconds = env_value("RIFE_DURATION_SECONDS", 0.0)
 pipe_input = env_value("RIFE_PIPE_INPUT", 0) == 1
+vs_threads = max(2, gpu_threads)
 
 if factor < 2:
     raise vs.Error("RIFE_FACTOR must be at least 2")
@@ -37,6 +39,21 @@ if scene_mode not in (0, 1, 2):
     raise vs.Error("RIFE_SCENE_MODE must be 0, 1, or 2")
 if start_seconds < 0 or duration_seconds < 0:
     raise vs.Error("RIFE start and duration values cannot be negative")
+
+core.num_threads = vs_threads
+
+
+def prepare_clip(clip: vs.VideoNode) -> vs.VideoNode:
+    width, height = clip.width, clip.height
+    if max_height and height > max_height:
+        height = max_height // 2 * 2
+        width = max(2, int(clip.width * height / clip.height) // 2 * 2)
+    if width != clip.width or height != clip.height:
+        clip = core.resize.Bilinear(clip, width=width, height=height)
+    if clip.format.id != vs.YUV420P8:
+        clip = core.resize.Bilinear(clip, format=vs.YUV420P8)
+    return clip
+
 
 if pipe_input:
     pipe_width = env_value("RIFE_PIPE_WIDTH", 0)
@@ -52,35 +69,78 @@ if pipe_input:
     source_fps = pipe_fps_num / pipe_fps_den
     source = sys.stdin.buffer
     frame_size = pipe_width * pipe_height * 3 // 2
-    frame_cache: OrderedDict[int, bytes] = OrderedDict()
+    cache_lock = threading.Condition()
+    frame_cache: OrderedDict[int, memoryview] = OrderedDict()
     next_frame = 0
+    last_requested = 0
+    cache_ahead = max(8, vs_threads * 4)
+    cache_keep = 4
+    pipe_error: BaseException | None = None
+    prefetch_stop = threading.Event()
 
-    def read_exact(size: int) -> bytes:
-        chunks = bytearray()
-        while len(chunks) < size:
-            chunk = source.read(size - len(chunks))
-            if not chunk:
+    def read_exact(size: int) -> memoryview | None:
+        buf = bytearray(size)
+        view = memoryview(buf)
+        offset = 0
+        while offset < size:
+            n = source.readinto(view[offset:])
+            if not n:
+                return None
+            offset += n
+        return view
+
+    def store_frame(index: int, data: memoryview) -> None:
+        frame_cache[index] = data
+        while len(frame_cache) > cache_ahead + cache_keep:
+            oldest = next(iter(frame_cache))
+            if oldest >= last_requested - 1:
                 break
-            chunks.extend(chunk)
-        return bytes(chunks)
+            frame_cache.popitem(last=False)
 
-    def get_raw_frame(n: int) -> bytes:
-        global next_frame
-        cached = frame_cache.get(n)
-        if cached is not None:
-            frame_cache.move_to_end(n)
-            return cached
-        if n < next_frame:
-            raise vs.Error(f"Raw pipe frame {n} is no longer cached")
-        while next_frame <= n:
-            data = read_exact(frame_size)
-            if len(data) != frame_size:
-                raise vs.Error(f"Raw video pipe ended at frame {next_frame}")
-            frame_cache[next_frame] = data
-            next_frame += 1
-            while len(frame_cache) > 8:
-                frame_cache.popitem(last=False)
-        return frame_cache[n]
+    def read_next_locked() -> None:
+        global next_frame, pipe_error
+        if pipe_error is not None:
+            raise pipe_error
+        data = read_exact(frame_size)
+        if data is None or len(data) != frame_size:
+            pipe_error = vs.Error(f"Raw video pipe ended at frame {next_frame}")
+            raise pipe_error
+        store_frame(next_frame, data)
+        next_frame += 1
+        cache_lock.notify_all()
+
+    def get_raw_frame(n: int) -> memoryview:
+        global last_requested
+        with cache_lock:
+            last_requested = max(last_requested, n)
+            cache_lock.notify_all()
+            cached = frame_cache.get(n)
+            if cached is not None:
+                frame_cache.move_to_end(n)
+                return cached
+            if n < next_frame:
+                raise vs.Error(f"Raw pipe frame {n} is no longer cached")
+            while next_frame <= n:
+                read_next_locked()
+            return frame_cache[n]
+
+    def prefetch_frames() -> None:
+        try:
+            while not prefetch_stop.is_set():
+                with cache_lock:
+                    if pipe_error is not None:
+                        return
+                    while (
+                        not prefetch_stop.is_set()
+                        and pipe_error is None
+                        and next_frame > last_requested + cache_ahead
+                    ):
+                        cache_lock.wait(timeout=0.05)
+                    if prefetch_stop.is_set() or pipe_error is not None:
+                        return
+                    read_next_locked()
+        except BaseException:
+            return
 
     template = core.std.BlankClip(
         width=pipe_width,
@@ -90,24 +150,37 @@ if pipe_input:
         fpsnum=pipe_fps_num,
         fpsden=pipe_fps_den,
     )
+    template = core.std.SetFrameProps(
+        template,
+        _Matrix=1,
+        _Transfer=1,
+        _Primaries=1,
+        _ColorRange=1,
+    )
+    plane_sizes = (
+        pipe_width * pipe_height,
+        (pipe_width // 2) * (pipe_height // 2),
+        (pipe_width // 2) * (pipe_height // 2),
+    )
 
     def read_pipe_frame(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
         data = get_raw_frame(n)
         output = f.copy()
         offset = 0
-        for plane in range(3):
-            plane_width = pipe_width if plane == 0 else pipe_width // 2
-            plane_height = pipe_height if plane == 0 else pipe_height // 2
-            size = plane_width * plane_height
-            np.asarray(output[plane])[:] = np.frombuffer(
-                data, dtype=np.uint8, count=size, offset=offset
-            ).reshape(plane_height, plane_width)
+        for plane, size in enumerate(plane_sizes):
+            dest = np.asarray(output[plane])
+            np.copyto(
+                dest,
+                np.frombuffer(data, dtype=np.uint8, count=size, offset=offset).reshape(
+                    dest.shape
+                ),
+                casting="no",
+            )
             offset += size
-        for prop in ("_Matrix", "_Transfer", "_Primaries", "_ColorRange"):
-            output.props[prop] = 1
         return output
 
     clip = core.std.ModifyFrame(template, template, read_pipe_frame)
+    threading.Thread(target=prefetch_frames, name="rife-pipe-prefetch", daemon=True).start()
 else:
     input_path = globals().get("input")
     if not input_path:
@@ -118,7 +191,7 @@ else:
     clip = core.bs.VideoSource(
         source=input_path,
         variableformat=0,
-        cachemode=1,
+        cachemode=0,
         showprogress=False,
     )
     if source_fps <= 0:
@@ -133,8 +206,8 @@ else:
     if start_frame >= end_frame:
         raise vs.Error("The requested start/duration range contains no frames")
     clip = clip[start_frame:end_frame]
+    clip = prepare_clip(clip)
 
-clip = k7f.FMT_CTRL(clip, h_max=max_height or clip.height, fmt_pix=1)
 clip = k7f.RIFE_NV(
     clip,
     model=4251,
@@ -147,6 +220,7 @@ clip = k7f.RIFE_NV(
     gpu=gpu,
     gpu_t=gpu_threads,
     ws_size=workspace,
+    vs_t=vs_threads,
 )
 
 clip.set_output()

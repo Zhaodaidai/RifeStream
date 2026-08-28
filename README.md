@@ -66,8 +66,8 @@ runtime\python.exe stream.py "D:\video\input.mkv" --audio-codec aac
 `stream.py` 会在 RTSP 和本地控制 API 未监听时自动启动 MediaMTX。新分辨率首次运行时，
 TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife_v2` 缓存。
 
-默认视频编码为 H.264 NVENC CQ 16，使用 p7、HQ、完整分辨率双遍分析和 AQ，
-目标是 1080p 输出的视觉透明质量。码率不设固定上限，会根据画面复杂度变化；
+默认视频编码为 H.264 NVENC CQ 16，使用 p4、HQ、四分之一分辨率双遍和空间 AQ，
+目标是实时 1080p HLS 下尽量保持观感。码率不设固定上限，会根据画面复杂度变化；
 `--quality` 越小质量和码率越高。这不是数学无损编码。
 
 ## Web UI

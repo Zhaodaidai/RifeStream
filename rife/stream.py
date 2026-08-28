@@ -370,13 +370,14 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
     return env
 
 
-def build_vspipe_command(source: StreamInput) -> list[str]:
-    command = [str(VSPIPE), "--container", "y4m"]
-    command.extend(
-        ["--requests", "1"]
-        if source.is_network
-        else ["--arg", f"input={source.video}"]
-    )
+def vspipe_requests(gpu_threads: int) -> int:
+    return max(2, gpu_threads)
+
+
+def build_vspipe_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
+    command = [str(VSPIPE), "--container", "y4m", "--requests", str(vspipe_requests(args.gpu_threads))]
+    if not source.is_network:
+        command.extend(["--arg", f"input={source.video}"])
     return [*command, str(RIFE_SCRIPT), "-"]
 
 
@@ -393,6 +394,8 @@ def build_decoder_command(
         str(args.gpu),
         "-hwaccel_output_format",
         "cuda",
+        "-extra_hw_frames",
+        "8",
         *ffmpeg_input_options(source.video, source.headers, args.http_proxy),
     ]
     if args.start > 0:
@@ -407,7 +410,7 @@ def build_decoder_command(
             ("-map", "0:v:0"), ("-an",), ("-sn",), ("-dn",),
             (
                 "-vf",
-                f"scale_cuda={width}:{height}:format=yuv420p:interp_algo=lanczos,"
+                f"scale_cuda={width}:{height}:format=yuv420p:interp_algo=bilinear,"
                 f"hwdownload,format=yuv420p,fps={rate}",
             ),
             ("-fps_mode", "cfr"), ("-pix_fmt", "yuv420p"),
@@ -422,13 +425,13 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
     command = [
         *FFMPEG_BASE,
         *option_args(
-            ("-fflags", "+genpts"), ("-thread_queue_size", 16), ("-re",),
+            ("-fflags", "+genpts"), ("-thread_queue_size", 128),
             ("-f", "yuv4mpegpipe"), ("-i", "pipe:0"),
         ),
     ]
     if not args.no_audio:
         audio_source = source.audio or source.video
-        command.extend(["-thread_queue_size", "512", "-re"])
+        command.extend(["-thread_queue_size", "512"])
         if args.start > 0:
             command.extend(["-ss", format(args.start, ".12g")])
         command.extend(ffmpeg_input_options(audio_source, source.headers, args.http_proxy))
@@ -438,11 +441,11 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         command.extend(["-map", "1:a:0?"])
     command.extend(
         option_args(
-            ("-c:v", "h264_nvenc"), ("-preset", "p7"), ("-tune", "hq"),
+            ("-c:v", "h264_nvenc"), ("-preset", "p4"), ("-tune", "hq"),
             ("-profile:v", "high"), ("-rc", "vbr"), ("-cq", args.quality),
-            ("-b:v", 0), ("-multipass", "fullres"), ("-g", gop), ("-bf", 0),
-            ("-rc-lookahead", 20), ("-no-scenecut", 1), ("-strict_gop", 1),
-            ("-spatial-aq", 1), ("-temporal-aq", 1), ("-aq-strength", 8),
+            ("-b:v", 0), ("-multipass", "qres"), ("-g", gop), ("-bf", 0),
+            ("-rc-lookahead", 8), ("-no-scenecut", 1), ("-strict_gop", 1),
+            ("-spatial-aq", 1), ("-temporal-aq", 0), ("-aq-strength", 8),
             ("-forced-idr", 1), ("-pix_fmt", "yuv420p"),
             ("-colorspace", "bt709"), ("-color_primaries", "bt709"),
             ("-color_trc", "bt709"),
@@ -519,18 +522,18 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
                 decoder_command,
                 cwd=ROOT,
                 stdout=subprocess.PIPE,
-                bufsize=0,
+                bufsize=8 * 1024 * 1024,
                 creationflags=PROCESS_FLAGS,
             )
             if decoder.stdout is None:
                 raise RuntimeError("Decoder stdout pipe was not created")
         vspipe = subprocess.Popen(
-            build_vspipe_command(source),
+            build_vspipe_command(source, args),
             cwd=ROOT,
             env=build_environment(source, args),
             stdin=decoder.stdout if decoder else None,
             stdout=subprocess.PIPE,
-            bufsize=0,
+            bufsize=8 * 1024 * 1024,
             creationflags=PROCESS_FLAGS,
         )
         if decoder and decoder.stdout:
