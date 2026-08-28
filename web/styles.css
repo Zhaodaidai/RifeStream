@@ -276,6 +276,89 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
+.skip-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.skip-settings .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.skip-settings .field span,
+.skip-settings .switch span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.skip-settings input[type="number"] {
+  width: 100%;
+  background: #10151f;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.skip-settings input[type="number"]:focus {
+  outline: none;
+  border-color: var(--accent-2);
+}
+
+.skip-settings .switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.skip-settings .switch input {
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #10151f;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.skip-settings .switch input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.skip-settings .switch input:checked {
+  background: #243652;
+  border-color: var(--accent-2);
+}
+
+.skip-settings .switch input:checked::after {
+  transform: translateX(16px);
+  background: var(--accent);
+}
+
 .sources textarea {
   flex: 1;
   min-height: 180px;
@@ -370,5 +453,9 @@ button:disabled {
 
   .sources textarea {
     min-height: 120px;
+  }
+
+  .skip-settings {
+    grid-template-columns: 1fr auto;
   }
 }

@@ -46,6 +46,14 @@ FILE_SCHEMES = {"file"}
 
 
 @dataclass
+class SkipSettings:
+    intro: float = 0.0
+    outro: float = 0.0
+    skip_intro: bool = False
+    skip_outro: bool = False
+
+
+@dataclass
 class PlaylistItem:
     id: str
     source: str
@@ -59,6 +67,7 @@ class PlayerState:
     current_id: str | None = None
     play_generation: int = 0
     last_error: str | None = None
+    settings: SkipSettings = field(default_factory=SkipSettings)
 
 
 class Playlist:
@@ -88,13 +97,19 @@ class Playlist:
         current = data.get("current_id")
         if current not in {item.id for item in items}:
             current = items[0].id if items else None
-        self.state = PlayerState(items, current, int(data.get("play_generation") or 0))
+        self.state = PlayerState(
+            items,
+            current,
+            int(data.get("play_generation") or 0),
+            settings=parse_settings(data.get("settings")),
+        )
 
     def save(self) -> None:
         payload = {
             "items": [asdict(item) for item in self.state.items],
             "current_id": self.state.current_id,
             "play_generation": self.state.play_generation,
+            "settings": asdict(self.state.settings),
         }
         self.path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -116,6 +131,7 @@ class Playlist:
                 "streaming": stream_running(),
                 "last_error": self.state.last_error,
                 "hls_url": hls_playlist_url(),
+                "settings": asdict(self.state.settings),
                 **playback_snapshot(stream_running(), current is not None),
             }
 
@@ -176,8 +192,19 @@ class Playlist:
 
     def clear(self) -> None:
         with self._lock:
-            self.state = PlayerState()
+            settings = self.state.settings
+            self.state = PlayerState(settings=settings)
             self.save()
+
+    def update_settings(self, payload: dict[str, Any]) -> SkipSettings:
+        with self._lock:
+            self.state.settings = parse_settings(payload, self.state.settings, strict=True)
+            self.save()
+            return self.state.settings
+
+    def settings(self) -> SkipSettings:
+        with self._lock:
+            return self.state.settings
 
     def select(self, item_id: str | None = None, offset: int = 0) -> PlaylistItem:
         with self._lock:
@@ -318,6 +345,68 @@ def finite_seconds(value: object) -> float | None:
     return result if math.isfinite(result) else None
 
 
+def parse_settings(
+    payload: object,
+    current: SkipSettings | None = None,
+    *,
+    strict: bool = False,
+) -> SkipSettings:
+    base = current or SkipSettings()
+    if not isinstance(payload, dict):
+        if strict:
+            raise ValueError("Settings object required")
+        return SkipSettings(base.intro, base.outro, base.skip_intro, base.skip_outro)
+
+    def seconds(key: str, fallback: float) -> float:
+        if key not in payload:
+            return fallback
+        value = finite_seconds(payload.get(key))
+        if value is None or value < 0:
+            if strict:
+                raise ValueError(f"{key} must be a non-negative number of seconds")
+            return fallback
+        return value
+
+    def flag(key: str, fallback: bool) -> bool:
+        if key not in payload:
+            return fallback
+        value = payload.get(key)
+        if isinstance(value, bool):
+            return value
+        if strict:
+            raise ValueError(f"{key} must be a boolean")
+        return bool(value)
+
+    return SkipSettings(
+        intro=seconds("intro", base.intro),
+        outro=seconds("outro", base.outro),
+        skip_intro=flag("skip_intro", base.skip_intro),
+        skip_outro=flag("skip_outro", base.skip_outro),
+    )
+
+
+def effective_start(requested: float, settings: SkipSettings) -> float:
+    start = max(0.0, requested)
+    if start == 0 and settings.skip_intro and settings.intro > 0:
+        return settings.intro
+    return start
+
+
+def encode_duration(start: float, duration: float | None, settings: SkipSettings) -> float:
+    if not settings.skip_outro or settings.outro <= 0 or duration is None or duration <= 0:
+        return 0.0
+    end = max(0.0, duration - settings.outro)
+    if end <= start:
+        return 0.0
+    return end - start
+
+
+def outro_reached(position: float, duration: float | None, settings: SkipSettings) -> bool:
+    if not settings.skip_outro or settings.outro <= 0 or duration is None or duration <= 0:
+        return False
+    return position >= max(0.0, duration - settings.outro)
+
+
 def estimate_position(
     start: float,
     spawned_at: float | None,
@@ -367,6 +456,14 @@ def playback_snapshot(
     duration = PLAYBACK.duration
     status = read_stream_status()
     if status:
+        status_started = finite_seconds(status.get("started_at"))
+        if (
+            spawned_at is not None
+            and status_started is not None
+            and status_started + 0.05 < spawned_at
+        ):
+            status = None
+    if status:
         status_duration = finite_seconds(status.get("duration"))
         if duration is None and status_duration is not None:
             duration = status_duration
@@ -385,17 +482,29 @@ def playback_snapshot(
     }
 
 
-def stream_command(source: str, title: str | None, start: float = 0.0) -> list[str]:
+def stream_command(
+    source: str,
+    title: str | None,
+    start: float = 0.0,
+    duration: float = 0.0,
+) -> list[str]:
     command = [sys.executable, str(STREAM_CLI), source]
     if title:
         command.extend(["--title", title])
     if start > 0:
         command.extend(["--start", format(start, ".12g")])
+    if duration > 0:
+        command.extend(["--duration", format(duration, ".12g")])
     return command
 
 
-def spawn_stream(source: str, title: str | None, start: float = 0.0) -> None:
-    command = stream_command(source, title, start)
+def spawn_stream(
+    source: str,
+    title: str | None,
+    start: float = 0.0,
+    duration: float = 0.0,
+) -> None:
+    command = stream_command(source, title, start, duration)
     flags = 0
     extra: dict[str, Any] = {}
     if os.name == "nt":
@@ -508,6 +617,10 @@ class WebHandler(BaseHTTPRequestHandler):
                 stop_stream()
                 self.send_json(self.state_payload())
                 return
+            if path == "/api/settings":
+                PLAYLIST.update_settings(body)
+                self.send_json(self.state_payload())
+                return
             if path == "/api/clear":
                 stop_stream()
                 reset_playback()
@@ -554,6 +667,7 @@ class WebHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def state_payload(self) -> dict[str, Any]:
+        maybe_skip_outro()
         payload = PLAYLIST.snapshot()
         payload["hls_url"] = hls_playlist_url()
         return payload
@@ -570,10 +684,16 @@ class WebHandler(BaseHTTPRequestHandler):
 
 def start_item(item_id: str | None, offset: int = 0, start: float = 0.0) -> PlaylistItem:
     item = PLAYLIST.select(item_id, offset)
+    settings = PLAYLIST.settings()
     duration = PLAYBACK.duration if PLAYBACK.item_id == item.id else None
-    start = clamp_seek(start, duration)
+    start = clamp_seek(effective_start(start, settings), duration)
     remember_playback(item.id, start)
-    spawn_stream(item.source, item.title, start)
+    spawn_stream(
+        item.source,
+        item.title,
+        start,
+        encode_duration(start, duration, settings),
+    )
     return item
 
 
@@ -581,6 +701,7 @@ def seek_to(seconds: float) -> PlaylistItem:
     item = PLAYLIST.current()
     if item is None:
         raise ValueError("No media selected")
+    settings = PLAYLIST.settings()
     duration = PLAYBACK.duration
     if duration is None:
         status = read_stream_status()
@@ -588,8 +709,28 @@ def seek_to(seconds: float) -> PlaylistItem:
             duration = finite_seconds(status.get("duration"))
     seconds = clamp_seek(seconds, duration)
     remember_playback(item.id, seconds)
-    spawn_stream(item.source, item.title, seconds)
+    spawn_stream(
+        item.source,
+        item.title,
+        seconds,
+        encode_duration(seconds, duration, settings),
+    )
     return item
+
+
+def maybe_skip_outro() -> None:
+    settings = PLAYLIST.settings()
+    if not settings.skip_outro or settings.outro <= 0:
+        return
+    if not stream_running() or PLAYLIST.current() is None:
+        return
+    snapshot = playback_snapshot(True, True)
+    if not outro_reached(snapshot["position"], snapshot["duration"], settings):
+        return
+    try:
+        start_item(None, offset=1)
+    except ValueError:
+        stop_stream()
 
 
 def ensure_services() -> None:

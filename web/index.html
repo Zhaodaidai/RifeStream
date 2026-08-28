@@ -41,6 +41,24 @@
         <button type="button" id="nextBtn">下一集</button>
         <button type="button" id="stopBtn">停止转码</button>
       </div>
+      <div class="skip-settings">
+        <label class="field">
+          <span>片头设置</span>
+          <input type="number" id="introSeconds" min="0" step="1" value="0" placeholder="秒">
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="skipIntro">
+          <span>跳过片头</span>
+        </label>
+        <label class="field">
+          <span>片尾设置</span>
+          <input type="number" id="outroSeconds" min="0" step="1" value="0" placeholder="秒">
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="skipOutro">
+          <span>跳过片尾</span>
+        </label>
+      </div>
       <p class="error" id="errorBox" hidden></p>
     </section>
 

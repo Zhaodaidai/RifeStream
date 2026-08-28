@@ -13,8 +13,13 @@ const stopBtn = document.getElementById("stopBtn");
 const seekBar = document.getElementById("seekBar");
 const timeNow = document.getElementById("timeNow");
 const timeTotal = document.getElementById("timeTotal");
+const introSeconds = document.getElementById("introSeconds");
+const outroSeconds = document.getElementById("outroSeconds");
+const skipIntro = document.getElementById("skipIntro");
+const skipOutro = document.getElementById("skipOutro");
 
 let seeking = false;
+let savingSettings = false;
 const clock = {
   position: 0,
   duration: 0,
@@ -65,8 +70,49 @@ function paintProgress() {
   timeNow.textContent = formatTime(position);
 }
 
+function paintSettings(settings) {
+  if (!settings) return;
+  if (document.activeElement !== introSeconds) {
+    introSeconds.value = String(Number(settings.intro) || 0);
+  }
+  if (document.activeElement !== outroSeconds) {
+    outroSeconds.value = String(Number(settings.outro) || 0);
+  }
+  if (document.activeElement !== skipIntro) {
+    skipIntro.checked = Boolean(settings.skip_intro);
+  }
+  if (document.activeElement !== skipOutro) {
+    skipOutro.checked = Boolean(settings.skip_outro);
+  }
+}
+
+function settingsPayload() {
+  return {
+    intro: Number(introSeconds.value) || 0,
+    outro: Number(outroSeconds.value) || 0,
+    skip_intro: skipIntro.checked,
+    skip_outro: skipOutro.checked,
+  };
+}
+
+async function saveSettings() {
+  if (savingSettings) return;
+  savingSettings = true;
+  try {
+    renderState(await api("/api/settings", {
+      method: "POST",
+      body: JSON.stringify(settingsPayload()),
+    }));
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    savingSettings = false;
+  }
+}
+
 function renderState(state) {
   const current = state.current;
+  paintSettings(state.settings);
   nowPlaying.textContent = current
     ? `正在播放：${current.title}`
     : "未选择媒体";
@@ -195,6 +241,12 @@ seekBar.addEventListener("change", async () => {
   seekBar.addEventListener(event, () => {
     if (!seekInFlight) seeking = false;
   });
+});
+[introSeconds, outroSeconds].forEach((input) => {
+  input.addEventListener("change", saveSettings);
+});
+[skipIntro, skipOutro].forEach((input) => {
+  input.addEventListener("change", saveSettings);
 });
 
 refresh();
