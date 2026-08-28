@@ -4,6 +4,7 @@ import argparse
 from dataclasses import asdict, dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 import os
 from pathlib import Path
 import posixpath
@@ -14,6 +15,7 @@ import threading
 from typing import Any
 from urllib.parse import unquote, urlsplit
 import uuid
+import time
 
 from rife.paths import (
     HLS_PORT,
@@ -23,6 +25,7 @@ from rife.paths import (
     ROOT,
     STREAM_CLI,
     STREAM_PID_FILE,
+    STREAM_STATUS_FILE,
     WEBUI_DIR,
     WEBUI_LOG_FILE,
     WEBUI_PORT,
@@ -30,6 +33,15 @@ from rife.paths import (
 from rife.stream import ensure_mediamtx, is_http_source, replace_existing_stream
 
 
+@dataclass
+class Playback:
+    item_id: str | None = None
+    start: float = 0.0
+    spawned_at: float | None = None
+    duration: float | None = None
+
+
+PLAYBACK = Playback()
 FILE_SCHEMES = {"file"}
 
 
@@ -104,6 +116,7 @@ class Playlist:
                 "streaming": stream_running(),
                 "last_error": self.state.last_error,
                 "hls_url": hls_playlist_url(),
+                **playback_snapshot(stream_running(), current is not None),
             }
 
     def current(self) -> PlaylistItem | None:
@@ -287,10 +300,102 @@ def stream_running() -> bool:
     return True
 
 
-def spawn_stream(source: str, title: str | None) -> None:
+def read_stream_status() -> dict[str, Any] | None:
+    if not STREAM_STATUS_FILE.is_file():
+        return None
+    try:
+        data = json.loads(STREAM_STATUS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def finite_seconds(value: object) -> float | None:
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def estimate_position(
+    start: float,
+    spawned_at: float | None,
+    now: float,
+    duration: float | None,
+    streaming: bool,
+) -> float:
+    position = start
+    if streaming and spawned_at is not None:
+        position = start + max(0.0, now - spawned_at)
+    if duration is not None:
+        position = min(position, duration)
+    return max(0.0, position)
+
+
+def clamp_seek(seconds: float, duration: float | None) -> float:
+    if not math.isfinite(seconds) or seconds < 0:
+        raise ValueError("Seek position must be a non-negative number")
+    if duration is not None and duration > 0:
+        return min(seconds, max(0.0, duration - 0.25))
+    return seconds
+
+
+def remember_playback(item_id: str, start: float) -> None:
+    if PLAYBACK.item_id != item_id:
+        PLAYBACK.duration = None
+    PLAYBACK.item_id = item_id
+    PLAYBACK.start = start
+    PLAYBACK.spawned_at = time.time()
+
+
+def reset_playback() -> None:
+    PLAYBACK.item_id = None
+    PLAYBACK.start = 0.0
+    PLAYBACK.spawned_at = None
+    PLAYBACK.duration = None
+
+
+def playback_snapshot(
+    streaming: bool,
+    has_current: bool = True,
+    now: float | None = None,
+) -> dict[str, Any]:
+    now = time.time() if now is None else now
+    start = PLAYBACK.start
+    spawned_at = PLAYBACK.spawned_at
+    duration = PLAYBACK.duration
+    status = read_stream_status()
+    if status:
+        status_duration = finite_seconds(status.get("duration"))
+        if duration is None and status_duration is not None:
+            duration = status_duration
+            PLAYBACK.duration = duration
+        if spawned_at is None:
+            status_start = finite_seconds(status.get("start"))
+            if status_start is not None:
+                start = max(0.0, status_start)
+            spawned_at = finite_seconds(status.get("started_at"))
+    position = estimate_position(start, spawned_at, now, duration, streaming)
+    return {
+        "duration": duration,
+        "position": position,
+        "start": start,
+        "seekable": has_current and duration is not None and duration > 0,
+    }
+
+
+def stream_command(source: str, title: str | None, start: float = 0.0) -> list[str]:
     command = [sys.executable, str(STREAM_CLI), source]
     if title:
         command.extend(["--title", title])
+    if start > 0:
+        command.extend(["--start", format(start, ".12g")])
+    return command
+
+
+def spawn_stream(source: str, title: str | None, start: float = 0.0) -> None:
+    command = stream_command(source, title, start)
     flags = 0
     extra: dict[str, Any] = {}
     if os.name == "nt":
@@ -303,7 +408,7 @@ def spawn_stream(source: str, title: str | None) -> None:
         extra["start_new_session"] = True
     WEBUI_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with WEBUI_LOG_FILE.open("ab", buffering=0) as log:
-        log.write(f"\nPlay: {source}\n".encode())
+        log.write(f"\nPlay: {source} start={start}\n".encode())
         subprocess.Popen(
             command,
             cwd=ROOT,
@@ -317,6 +422,7 @@ def spawn_stream(source: str, title: str | None) -> None:
 
 
 def stop_stream() -> None:
+    PLAYBACK.spawned_at = None
     replace_existing_stream()
 
 
@@ -387,8 +493,16 @@ class WebHandler(BaseHTTPRequestHandler):
             if path == "/api/play":
                 item_id = body.get("id")
                 offset = int(body.get("offset") or 0)
-                item = start_item(str(item_id) if item_id else None, offset)
+                start = finite_seconds(body.get("start")) or 0.0
+                item = start_item(str(item_id) if item_id else None, offset, start)
                 self.send_json({"playing": asdict(item), **self.state_payload()})
+                return
+            if path == "/api/seek":
+                seconds = finite_seconds(body.get("seconds"))
+                if seconds is None:
+                    raise ValueError("Seek position is required")
+                item = seek_to(seconds)
+                self.send_json({"seeking": asdict(item), **self.state_payload()})
                 return
             if path == "/api/stop":
                 stop_stream()
@@ -396,6 +510,7 @@ class WebHandler(BaseHTTPRequestHandler):
                 return
             if path == "/api/clear":
                 stop_stream()
+                reset_playback()
                 PLAYLIST.clear()
                 self.send_json(self.state_payload())
                 return
@@ -416,6 +531,7 @@ class WebHandler(BaseHTTPRequestHandler):
         PLAYLIST.remove(item_id)
         if current and current.id == item_id:
             stop_stream()
+            reset_playback()
         self.send_json(self.state_payload())
 
     def serve_static(self, path: str) -> None:
@@ -452,9 +568,27 @@ class WebHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def start_item(item_id: str | None, offset: int = 0) -> PlaylistItem:
+def start_item(item_id: str | None, offset: int = 0, start: float = 0.0) -> PlaylistItem:
     item = PLAYLIST.select(item_id, offset)
-    spawn_stream(item.source, item.title)
+    duration = PLAYBACK.duration if PLAYBACK.item_id == item.id else None
+    start = clamp_seek(start, duration)
+    remember_playback(item.id, start)
+    spawn_stream(item.source, item.title, start)
+    return item
+
+
+def seek_to(seconds: float) -> PlaylistItem:
+    item = PLAYLIST.current()
+    if item is None:
+        raise ValueError("No media selected")
+    duration = PLAYBACK.duration
+    if duration is None:
+        status = read_stream_status()
+        if status:
+            duration = finite_seconds(status.get("duration"))
+    seconds = clamp_seek(seconds, duration)
+    remember_playback(item.id, seconds)
+    spawn_stream(item.source, item.title, seconds)
     return item
 
 

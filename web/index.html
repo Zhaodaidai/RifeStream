@@ -30,6 +30,11 @@
         <button type="button" id="clearBtn" class="ghost">清空</button>
       </div>
       <ol class="playlist" id="playlist"></ol>
+      <div class="progress">
+        <span id="timeNow">0:00</span>
+        <input type="range" id="seekBar" min="0" max="0" step="0.1" value="0" disabled>
+        <span id="timeTotal">0:00</span>
+      </div>
       <div class="transport">
         <button type="button" id="prevBtn">上一集</button>
         <button type="button" id="playBtn" class="primary">播放</button>

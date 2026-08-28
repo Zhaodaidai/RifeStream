@@ -9,6 +9,7 @@ progress.md
 /auto.key
 /.mediamtx.pid
 /.stream.pid
+/.stream.status.json
 /.playlist.json
 *.mp4
 __pycache__/

@@ -37,6 +37,24 @@ class StreamInputTests(unittest.TestCase):
 
         self.assertEqual(options, ["-http_persistent", "0"])
 
+    def test_decoder_seeks_network_input_before_open(self) -> None:
+        info = MediaInfo(Fraction(25), 1920, 1080, 600)
+        source = StreamInput(
+            "https://example.com/video.mp4", None, [], None, info, Fraction(25)
+        )
+        args = argparse.Namespace(
+            max_height=1080,
+            gpu=0,
+            http_proxy=None,
+            start=123.5,
+            duration=0,
+        )
+
+        command = build_decoder_command(source, args)
+
+        self.assertEqual(command[command.index("-ss") + 1], "123.5")
+        self.assertLess(command.index("-ss"), command.index("-i"))
+
     def test_network_input_is_scaled_before_the_raw_pipe(self) -> None:
         info = MediaInfo(Fraction(25), 3840, 2160, 60)
         source = StreamInput(

@@ -6,6 +6,7 @@ import math
 import os
 from pathlib import Path
 import subprocess
+import time
 import sys
 from urllib.parse import urlsplit, urlunsplit
 
@@ -20,6 +21,7 @@ from rife.paths import (
     ROOT,
     RTSP_PORT,
     STREAM_PID_FILE,
+    STREAM_STATUS_FILE,
     VSPIPE,
     port_open,
 )
@@ -495,10 +497,25 @@ def replace_existing_stream() -> None:
         pid = int(STREAM_PID_FILE.read_text(encoding="ascii").strip())
     except ValueError:
         STREAM_PID_FILE.unlink(missing_ok=True)
+        STREAM_STATUS_FILE.unlink(missing_ok=True)
         return
     if pid != os.getpid():
         stop_process_tree(pid)
     STREAM_PID_FILE.unlink(missing_ok=True)
+    STREAM_STATUS_FILE.unlink(missing_ok=True)
+
+
+def write_stream_status(source: StreamInput, start: float) -> None:
+    STREAM_STATUS_FILE.write_text(
+        json.dumps(
+            {
+                "duration": source.info.duration,
+                "start": start,
+                "started_at": time.time(),
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
@@ -566,7 +583,9 @@ def main() -> int:
     except (RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         STREAM_PID_FILE.unlink(missing_ok=True)
+        STREAM_STATUS_FILE.unlink(missing_ok=True)
         return 1
+    write_stream_status(source, args.start)
 
     width, height = video_size(source.info, args.max_height)
     fps = float(source.rate)
@@ -585,6 +604,7 @@ def main() -> int:
         return run_pipeline(source, args)
     finally:
         STREAM_PID_FILE.unlink(missing_ok=True)
+        STREAM_STATUS_FILE.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

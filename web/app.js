@@ -10,6 +10,17 @@ const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const playBtn = document.getElementById("playBtn");
 const stopBtn = document.getElementById("stopBtn");
+const seekBar = document.getElementById("seekBar");
+const timeNow = document.getElementById("timeNow");
+const timeTotal = document.getElementById("timeTotal");
+
+let seeking = false;
+const clock = {
+  position: 0,
+  duration: 0,
+  streaming: false,
+  sampledAt: 0,
+};
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -28,6 +39,32 @@ function showError(message) {
   errorBox.textContent = message || "";
 }
 
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const total = Math.floor(seconds);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const rest = total % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
+function livePosition() {
+  if (!clock.streaming || seeking) return clock.position;
+  let position = clock.position + (performance.now() - clock.sampledAt) / 1000;
+  if (clock.duration > 0) position = Math.min(position, clock.duration);
+  return Math.max(0, position);
+}
+
+function paintProgress() {
+  if (seeking) return;
+  const position = livePosition();
+  seekBar.value = String(position);
+  timeNow.textContent = formatTime(position);
+}
+
 function renderState(state) {
   const current = state.current;
   nowPlaying.textContent = current
@@ -39,6 +76,14 @@ function renderState(state) {
   prevBtn.disabled = !state.has_prev;
   nextBtn.disabled = !state.has_next;
   playBtn.disabled = !current;
+  clock.position = Number(state.position) || 0;
+  clock.duration = Number(state.duration) || 0;
+  clock.streaming = Boolean(state.streaming);
+  clock.sampledAt = performance.now();
+  seekBar.max = String(clock.duration || 0);
+  seekBar.disabled = !state.seekable;
+  timeTotal.textContent = formatTime(clock.duration);
+  paintProgress();
   showError(state.last_error);
 
   playlistEl.innerHTML = "";
@@ -124,6 +169,34 @@ playBtn.addEventListener("click", () => play({}));
 stopBtn.addEventListener("click", async () => {
   renderState(await api("/api/stop", { method: "POST", body: "{}" }));
 });
+seekBar.addEventListener("pointerdown", () => {
+  seeking = true;
+});
+seekBar.addEventListener("input", () => {
+  seeking = true;
+  timeNow.textContent = formatTime(Number(seekBar.value));
+});
+let seekInFlight = false;
+seekBar.addEventListener("change", async () => {
+  seekInFlight = true;
+  try {
+    renderState(await api("/api/seek", {
+      method: "POST",
+      body: JSON.stringify({ seconds: Number(seekBar.value) }),
+    }));
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    seekInFlight = false;
+    seeking = false;
+  }
+});
+["pointerup", "pointercancel"].forEach((event) => {
+  seekBar.addEventListener(event, () => {
+    if (!seekInFlight) seeking = false;
+  });
+});
 
 refresh();
 setInterval(refresh, 1500);
+setInterval(paintProgress, 250);
