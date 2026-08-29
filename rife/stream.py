@@ -391,6 +391,70 @@ def parse_subtitle_tracks(document: object) -> list[SubtitleTrack]:
     return tracks
 
 
+def _subtitle_language(track: SubtitleTrack) -> str:
+    return (track.language or "").strip().lower().replace("_", "-")
+
+
+def _subtitle_blob(track: SubtitleTrack) -> str:
+    return " ".join(
+        part for part in (_subtitle_language(track), track.title or "") if part
+    ).lower()
+
+
+def is_simplified_chinese(track: SubtitleTrack) -> bool:
+    language = _subtitle_language(track)
+    if language in {"zh-cn", "zh-sg", "zh-hans", "zh-chs", "chi-hans", "cmn-hans"}:
+        return True
+    if language.startswith(("zh-hans", "zh-cn", "zh-sg", "zh-chs")):
+        return True
+    blob = _subtitle_blob(track)
+    markers = (
+        "简体",
+        "简中",
+        "简日",
+        "简英",
+        "simplified",
+        "chs",
+        "gb2312",
+        "gbk",
+    )
+    return any(marker in blob for marker in markers)
+
+
+def is_chinese_subtitle(track: SubtitleTrack) -> bool:
+    if is_simplified_chinese(track):
+        return True
+    language = _subtitle_language(track)
+    if language in {"chi", "zho", "zh", "cmn", "yue", "zh-tw", "zh-hk", "zh-mo", "zh-hant", "zh-cht", "chi-hant"}:
+        return True
+    if language.startswith(("zh", "chi", "zho", "cmn", "yue")):
+        return True
+    blob = _subtitle_blob(track)
+    markers = (
+        "中文",
+        "汉语",
+        "漢語",
+        "国语",
+        "國語",
+        "普通话",
+        "粤语",
+        "粵語",
+        "繁体",
+        "繁體",
+        "繁中",
+        "双语",
+        "雙語",
+        "中日",
+        "中英",
+        "chinese",
+        "traditional",
+        "big5",
+        "cht",
+        "zh-han",
+    )
+    return any(marker in blob for marker in markers)
+
+
 def pick_subtitle_stream(
     tracks: list[SubtitleTrack], requested: int | None
 ) -> SubtitleTrack | None:
@@ -405,6 +469,10 @@ def pick_subtitle_stream(
             )
         return track
     text = [track for track in tracks if is_text_subtitle(track.codec)]
+    chinese = [track for track in text if is_chinese_subtitle(track)]
+    if chinese:
+        simplified = [track for track in chinese if is_simplified_chinese(track)]
+        return simplified[0] if simplified else chinese[0]
     return next((track for track in text if track.default), text[0] if text else None)
 
 

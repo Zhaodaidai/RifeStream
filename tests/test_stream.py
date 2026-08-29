@@ -305,18 +305,13 @@ class StreamInputTests(unittest.TestCase):
             ":fontsdir='/tmp/fonts'",
         )
 
-    def test_default_subtitle_prefers_text_default_over_pgs(self) -> None:
+    def test_default_subtitle_prefers_simplified_chinese(self) -> None:
         tracks = parse_subtitle_tracks(
             {
                 "streams": [
                     {
                         "codec_name": "hdmv_pgs_subtitle",
                         "disposition": {"default": 1},
-                        "tags": {"language": "eng"},
-                    },
-                    {
-                        "codec_name": "ass",
-                        "disposition": {"default": 0},
                         "tags": {"language": "chi", "title": "简体"},
                     },
                     {
@@ -324,13 +319,38 @@ class StreamInputTests(unittest.TestCase):
                         "disposition": {"default": 1},
                         "tags": {"language": "jpn"},
                     },
+                    {
+                        "codec_name": "ass",
+                        "disposition": {"default": 0},
+                        "tags": {"language": "chi", "title": "繁體"},
+                    },
+                    {
+                        "codec_name": "ass",
+                        "disposition": {"default": 0},
+                        "tags": {"language": "chi", "title": "简体"},
+                    },
                 ]
             }
         )
         chosen = pick_subtitle_stream(tracks, None)
-        self.assertEqual(chosen, tracks[2])
-        self.assertEqual(chosen.label, "s:2 ass jpn")
-        self.assertEqual(pick_subtitle_stream(tracks, 1).index, 1)
+        self.assertEqual(chosen, tracks[3])
+        self.assertEqual(chosen.label, "s:3 ass chi 简体")
+        self.assertEqual(pick_subtitle_stream(tracks, 2).index, 2)
+
+    def test_default_subtitle_prefers_any_chinese_over_default(self) -> None:
+        tracks = [
+            SubtitleTrack(0, "ass", "eng", default=True),
+            SubtitleTrack(1, "ass", "jpn"),
+            SubtitleTrack(2, "ass", "chi", "中文"),
+        ]
+        self.assertEqual(pick_subtitle_stream(tracks, None), tracks[2])
+
+    def test_default_subtitle_falls_back_without_chinese(self) -> None:
+        tracks = [
+            SubtitleTrack(0, "ass", "eng"),
+            SubtitleTrack(1, "ass", "jpn", default=True),
+        ]
+        self.assertEqual(pick_subtitle_stream(tracks, None), tracks[1])
 
     def test_bitmap_subtitle_index_is_rejected(self) -> None:
         tracks = [SubtitleTrack(0, "hdmv_pgs_subtitle")]
