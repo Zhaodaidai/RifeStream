@@ -61,7 +61,13 @@ runtime\python.exe stream.py "https://example.com/video.m3u8" ^
 runtime\python.exe stream.py "D:\video\input.mkv" --duration 10
 runtime\python.exe stream.py "D:\video\input.mkv" --max-height 720 --quality 16
 runtime\python.exe stream.py "D:\video\input.mkv" --audio-codec aac
+runtime\python.exe stream.py "D:\video\input.mkv" --subtitle-stream 1
+runtime\python.exe stream.py "D:\video\input.mkv" --subtitles "D:\video\ep01.ass"
+runtime\python.exe stream.py "D:\video\input.mkv" --no-subtitles
 ```
+
+本地和网络 MKV/MP4 会在 RIFE 补帧之后、NVENC 之前硬嵌第一条文本字幕（ASS/SRT 等）。
+网络内嵌字幕会先抽出 ASS 和字体再烧录。位图字幕（PGS 等）会跳过。
 
 `stream.py` 会在需要时启动 HLS HTTP 服务。新分辨率首次运行时，
 TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife_v2` 缓存。

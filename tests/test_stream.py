@@ -1,5 +1,6 @@
 import argparse
 from fractions import Fraction
+from unittest import mock
 import sys
 import unittest
 from pathlib import Path
@@ -10,13 +11,21 @@ from rife.paths import ENGINE_DIR
 from rife.stream import (
     HTTP_RECONNECT_OPTIONS,
     MediaInfo,
+    ResolvedSubtitles,
     StreamInput,
+    SubtitleTrack,
     build_decoder_command,
     build_encoder_command,
     build_environment,
     build_vspipe_command,
+    escape_filter_path,
+    extract_embedded_subtitles_command,
     ffmpeg_input_options,
     normalize_headers,
+    parse_subtitle_tracks,
+    pick_subtitle_stream,
+    resolve_subtitles,
+    subtitle_filter,
     video_size,
 )
 
@@ -184,6 +193,7 @@ class StreamInputTests(unittest.TestCase):
         self.assertNotIn("fullres", command)
         self.assertNotIn("cbr", command)
         self.assertNotIn("rtsp", command)
+        self.assertNotIn("-vf", command)
 
     def test_encoder_gop_never_exceeds_two_seconds(self) -> None:
         source = StreamInput(
@@ -272,6 +282,178 @@ class StreamInputTests(unittest.TestCase):
             ["--requests", "2"],
         )
         self.assertNotIn("--arg", command)
+
+    def test_subtitle_path_is_escaped_for_ffmpeg_filters(self) -> None:
+        self.assertEqual(
+            escape_filter_path(r"C:\Shows\Foo: Bar\[1].mkv"),
+            r"C\:/Shows/Foo\: Bar/\[1\].mkv",
+        )
+
+    def test_subtitle_filter_shifts_pts_after_seek(self) -> None:
+        self.assertEqual(
+            subtitle_filter("/tmp/video.mkv", 1, 0, (1920, 1080)),
+            "subtitles='/tmp/video.mkv':si=1:original_size=1920x1080",
+        )
+        self.assertEqual(
+            subtitle_filter("/tmp/video.mkv", 0, 12.5, (1910, 1080)),
+            "setpts=PTS+12.5/TB,subtitles='/tmp/video.mkv':si=0"
+            ":original_size=1910x1080,setpts=PTS-STARTPTS",
+        )
+        self.assertEqual(
+            subtitle_filter("/tmp/track.ass", 0, 0, (1920, 1080), "/tmp/fonts"),
+            "subtitles='/tmp/track.ass':si=0:original_size=1920x1080"
+            ":fontsdir='/tmp/fonts'",
+        )
+
+    def test_default_subtitle_prefers_text_default_over_pgs(self) -> None:
+        tracks = parse_subtitle_tracks(
+            {
+                "streams": [
+                    {
+                        "codec_name": "hdmv_pgs_subtitle",
+                        "disposition": {"default": 1},
+                        "tags": {"language": "eng"},
+                    },
+                    {
+                        "codec_name": "ass",
+                        "disposition": {"default": 0},
+                        "tags": {"language": "chi", "title": "简体"},
+                    },
+                    {
+                        "codec_name": "ass",
+                        "disposition": {"default": 1},
+                        "tags": {"language": "jpn"},
+                    },
+                ]
+            }
+        )
+        chosen = pick_subtitle_stream(tracks, None)
+        self.assertEqual(chosen, tracks[2])
+        self.assertEqual(chosen.label, "s:2 ass jpn")
+        self.assertEqual(pick_subtitle_stream(tracks, 1).index, 1)
+
+    def test_bitmap_subtitle_index_is_rejected(self) -> None:
+        tracks = [SubtitleTrack(0, "hdmv_pgs_subtitle")]
+        with self.assertRaises(ValueError):
+            pick_subtitle_stream(tracks, 0)
+        self.assertIsNone(pick_subtitle_stream(tracks, None))
+
+    def test_resolve_subtitles_auto_picks_local_text_track(self) -> None:
+        args = argparse.Namespace(
+            no_subtitles=False, subtitles=None, subtitle_stream=None
+        )
+        track = SubtitleTrack(0, "ass", "chi")
+        with mock.patch(
+            "rife.stream.probe_subtitle_tracks", return_value=[track]
+        ):
+            resolved = resolve_subtitles("/tmp/a.mkv", args, [], None)
+        self.assertEqual(resolved.path, "/tmp/a.mkv")
+        self.assertEqual(resolved.index, 0)
+        self.assertEqual(resolved.label, "s:0 ass chi")
+        self.assertIsNone(resolved.workdir)
+
+    def test_resolve_subtitles_extracts_network_text_track(self) -> None:
+        args = argparse.Namespace(
+            no_subtitles=False, subtitles=None, subtitle_stream=None
+        )
+        track = SubtitleTrack(1, "ass", "chi")
+        with mock.patch(
+            "rife.stream.probe_subtitle_tracks", return_value=[track]
+        ), mock.patch(
+            "rife.stream.extract_embedded_subtitles",
+            return_value=("/tmp/track.ass", "/tmp/fonts", "/tmp/subs"),
+        ) as extract:
+            resolved = resolve_subtitles(
+                "https://example.com/v.mkv",
+                args,
+                ["Referer: https://example.com"],
+                "http://127.0.0.1:7890",
+            )
+        extract.assert_called_once_with(
+            "https://example.com/v.mkv",
+            1,
+            ["Referer: https://example.com"],
+            "http://127.0.0.1:7890",
+        )
+        self.assertEqual(
+            resolved,
+            ResolvedSubtitles(
+                "/tmp/track.ass", 0, "s:1 ass chi", "/tmp/fonts", "/tmp/subs"
+            ),
+        )
+
+    def test_resolve_subtitles_skips_network_without_text_track(self) -> None:
+        args = argparse.Namespace(
+            no_subtitles=False, subtitles=None, subtitle_stream=None
+        )
+        with mock.patch("rife.stream.probe_subtitle_tracks", return_value=[]):
+            self.assertEqual(
+                resolve_subtitles("https://example.com/v.mkv", args, [], None),
+                ResolvedSubtitles(),
+            )
+
+    def test_resolve_subtitles_skips_failed_network_extract(self) -> None:
+        args = argparse.Namespace(
+            no_subtitles=False, subtitles=None, subtitle_stream=None
+        )
+        track = SubtitleTrack(0, "srt")
+        with mock.patch(
+            "rife.stream.probe_subtitle_tracks", return_value=[track]
+        ), mock.patch(
+            "rife.stream.extract_embedded_subtitles",
+            side_effect=RuntimeError("Could not extract network subtitles"),
+        ), mock.patch("rife.stream.sys.stderr"):
+            self.assertEqual(
+                resolve_subtitles("https://example.com/v.mkv", args, [], None),
+                ResolvedSubtitles(),
+            )
+
+    def test_extract_command_dumps_fonts_before_open(self) -> None:
+        command = extract_embedded_subtitles_command(
+            "https://example.com/v.mkv",
+            1,
+            ["referer: https://example.com"],
+            None,
+            "/tmp/track.ass",
+            True,
+        )
+        self.assertLess(command.index("-dump_attachment:t"), command.index("-i"))
+        self.assertEqual(command[command.index("-map") + 1], "0:s:1")
+        self.assertEqual(command[command.index("-c:s") + 1], "ass")
+        self.assertIn("-headers", command)
+
+    def test_encoder_burns_subtitles_after_rife(self) -> None:
+        source = StreamInput(
+            "/tmp/video.mkv",
+            None,
+            [],
+            None,
+            MediaInfo(Fraction(25), 1920, 1080, 60),
+            Fraction(25),
+            "/tmp/video.mkv",
+            1,
+            "s:1 ass chi",
+            "/tmp/fonts",
+        )
+        args = argparse.Namespace(
+            gop=0,
+            factor=2,
+            no_audio=True,
+            start=8,
+            http_proxy=None,
+            quality=16,
+            audio_codec="aac",
+            duration=0,
+            publish_url="/tmp/rife/index.m3u8",
+        )
+
+        command = build_encoder_command(source, args)
+
+        self.assertEqual(
+            command[command.index("-vf") + 1],
+            subtitle_filter("/tmp/video.mkv", 1, 8, (1920, 1080), "/tmp/fonts"),
+        )
+        self.assertLess(command.index("-vf"), command.index("-c:v"))
 
 
 if __name__ == "__main__":

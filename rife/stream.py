@@ -5,7 +5,9 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import subprocess
+import tempfile
 import time
 import sys
 from urllib.parse import urlsplit, urlunsplit
@@ -34,6 +36,7 @@ from rife.paths import (
     capture,
     is_http_source,
     replace_existing_stream,
+    windows_rife_dir,
 )
 
 
@@ -42,6 +45,31 @@ DEFAULT_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 )
 FFMPEG_BASE = [str(FFMPEG), "-hide_banner", "-nostdin", "-loglevel", "warning"]
+BITMAP_SUBTITLE_CODECS = {
+    "dvd_subtitle",
+    "dvb_subtitle",
+    "dvb_teletext",
+    "hdmv_pgs_subtitle",
+    "xsub",
+}
+TEXT_SUBTITLE_CODECS = {
+    "arib_caption",
+    "ass",
+    "eia_608",
+    "jacosub",
+    "microdvd",
+    "mpl2",
+    "mov_text",
+    "sami",
+    "srt",
+    "ssa",
+    "stl",
+    "subrip",
+    "subviewer",
+    "text",
+    "ttml",
+    "webvtt",
+}
 
 
 @dataclass
@@ -52,6 +80,24 @@ class MediaInfo:
     duration: float | None
 
 
+@dataclass(frozen=True)
+class SubtitleTrack:
+    index: int
+    codec: str
+    language: str | None = None
+    title: str | None = None
+    default: bool = False
+
+    @property
+    def label(self) -> str:
+        parts = [f"s:{self.index}", self.codec]
+        if self.language:
+            parts.append(self.language)
+        if self.title:
+            parts.append(self.title)
+        return " ".join(parts)
+
+
 @dataclass
 class StreamInput:
     video: str
@@ -60,6 +106,11 @@ class StreamInput:
     title: str | None
     info: MediaInfo
     rate: Fraction
+    subtitle: str | None = None
+    subtitle_index: int = 0
+    subtitle_label: str | None = None
+    subtitle_fontsdir: str | None = None
+    subtitle_workdir: str | None = None
 
     @property
     def is_network(self) -> bool:
@@ -191,6 +242,243 @@ def probe_video(
     raise RuntimeError("Input frame rate is unavailable; pass --source-fps")
 
 
+def is_text_subtitle(codec: str) -> bool:
+    name = codec.lower()
+    if name in BITMAP_SUBTITLE_CODECS:
+        return False
+    return name in TEXT_SUBTITLE_CODECS
+
+
+def escape_filter_path(path: str) -> str:
+    escaped = path.replace("\\", "/")
+    for character in (":", "'", "[", "]", ",", ";"):
+        escaped = escaped.replace(character, f"\\{character}")
+    return escaped
+
+
+def subtitle_filter(
+    path: str,
+    stream_index: int,
+    start: float,
+    original_size: tuple[int, int],
+    fontsdir: str | None = None,
+) -> str:
+    width, height = original_size
+    overlay = (
+        f"subtitles='{escape_filter_path(path)}':si={stream_index}"
+        f":original_size={width}x{height}"
+    )
+    if fontsdir:
+        overlay += f":fontsdir='{escape_filter_path(fontsdir)}'"
+    if start <= 0:
+        return overlay
+    offset = format(start, ".12g")
+    return f"setpts=PTS+{offset}/TB,{overlay},setpts=PTS-STARTPTS"
+
+
+@dataclass(frozen=True)
+class ResolvedSubtitles:
+    path: str | None = None
+    index: int = 0
+    label: str | None = None
+    fontsdir: str | None = None
+    workdir: str | None = None
+
+
+def subtitle_cache_dir() -> Path:
+    base = windows_rife_dir() / "subs" if os.name == "nt" else ROOT / ".subs"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def extract_embedded_subtitles_command(
+    video: str,
+    stream_index: int,
+    headers: list[str],
+    proxy: str | None,
+    ass_path: str,
+    dump_fonts: bool,
+) -> list[str]:
+    command = [*FFMPEG_BASE]
+    if dump_fonts:
+        command.extend(["-dump_attachment:t", ""])
+    command.extend(ffmpeg_input_options(video, headers, proxy))
+    command.extend(
+        [
+            "-i",
+            video,
+            "-map",
+            f"0:s:{stream_index}",
+            "-vn",
+            "-an",
+            "-c:s",
+            "ass",
+            "-y",
+            ass_path,
+        ]
+    )
+    return command
+
+
+def extract_embedded_subtitles(
+    video: str,
+    stream_index: int,
+    headers: list[str],
+    proxy: str | None,
+) -> tuple[str, str | None, str]:
+    workdir = Path(tempfile.mkdtemp(prefix="subs-", dir=str(subtitle_cache_dir())))
+    ass_path = workdir / "track.ass"
+    fontsdir = workdir / "fonts"
+    fontsdir.mkdir()
+
+    def extracted() -> bool:
+        return ass_path.is_file() and ass_path.stat().st_size > 0
+
+    result = capture(
+        extract_embedded_subtitles_command(
+            video, stream_index, headers, proxy, str(ass_path), True
+        ),
+        cwd=fontsdir,
+    )
+    if not extracted():
+        result = capture(
+            extract_embedded_subtitles_command(
+                video, stream_index, headers, proxy, str(ass_path), False
+            )
+        )
+    if not extracted():
+        shutil.rmtree(workdir, ignore_errors=True)
+        detail = result.stderr.strip().splitlines()
+        raise RuntimeError(
+            "Could not extract network subtitles"
+            + (f": {detail[-1]}" if detail else "")
+        )
+    font_path = str(fontsdir) if any(fontsdir.iterdir()) else None
+    return str(ass_path), font_path, str(workdir)
+
+
+def parse_subtitle_tracks(document: object) -> list[SubtitleTrack]:
+    if not isinstance(document, dict):
+        return []
+    tracks: list[SubtitleTrack] = []
+    streams = document.get("streams")
+    if not isinstance(streams, list):
+        return []
+    for position, stream in enumerate(streams):
+        if not isinstance(stream, dict):
+            continue
+        codec = stream.get("codec_name")
+        if not isinstance(codec, str) or not codec:
+            continue
+        disposition = stream.get("disposition")
+        tags = stream.get("tags")
+        language = None
+        title = None
+        if isinstance(tags, dict):
+            raw_language = tags.get("language")
+            raw_title = tags.get("title")
+            language = raw_language if isinstance(raw_language, str) else None
+            title = raw_title if isinstance(raw_title, str) else None
+        tracks.append(
+            SubtitleTrack(
+                position,
+                codec,
+                language,
+                title,
+                bool(isinstance(disposition, dict) and disposition.get("default")),
+            )
+        )
+    return tracks
+
+
+def pick_subtitle_stream(
+    tracks: list[SubtitleTrack], requested: int | None
+) -> SubtitleTrack | None:
+    if requested is not None:
+        if requested < 0 or requested >= len(tracks):
+            raise ValueError(f"Subtitle stream {requested} is not in the file")
+        track = tracks[requested]
+        if not is_text_subtitle(track.codec):
+            raise ValueError(
+                f"Subtitle stream {requested} is {track.codec}; "
+                "bitmap subtitles cannot be burned in"
+            )
+        return track
+    text = [track for track in tracks if is_text_subtitle(track.codec)]
+    return next((track for track in text if track.default), text[0] if text else None)
+
+
+def probe_subtitle_tracks(
+    input_source: str, headers: list[str], proxy: str | None
+) -> list[SubtitleTrack]:
+    command = [
+        str(FFPROBE),
+        "-v",
+        "error",
+        *ffmpeg_input_options(input_source, headers, proxy),
+        "-select_streams",
+        "s",
+        "-show_entries",
+        "stream=codec_name,disposition:stream_tags=language,title",
+        "-of",
+        "json",
+        input_source,
+    ]
+    result = capture(command)
+    if result.returncode != 0:
+        return []
+    try:
+        return parse_subtitle_tracks(json.loads(result.stdout))
+    except json.JSONDecodeError:
+        return []
+
+
+def resolve_subtitles(
+    video: str,
+    args: argparse.Namespace,
+    headers: list[str],
+    proxy: str | None,
+) -> ResolvedSubtitles:
+    requested = args.subtitle_stream
+    explicit = bool(args.subtitles) or requested is not None
+    empty = ResolvedSubtitles()
+    if args.no_subtitles:
+        if explicit:
+            raise ValueError("Cannot combine --no-subtitles with subtitle options")
+        return empty
+    subtitle_file = (
+        normalize_source(args.subtitles, "Subtitles") if args.subtitles else None
+    )
+    if subtitle_file and is_http_source(subtitle_file):
+        raise ValueError("Subtitle files must be local")
+    if subtitle_file is None:
+        subtitle_file = video
+    probe_headers = headers if subtitle_file == video else []
+    tracks = probe_subtitle_tracks(subtitle_file, probe_headers, proxy)
+    try:
+        track = pick_subtitle_stream(tracks, requested)
+    except ValueError:
+        if explicit:
+            raise
+        return empty
+    if track is None:
+        if explicit:
+            raise ValueError("No text subtitle stream found")
+        return empty
+    if is_http_source(subtitle_file):
+        try:
+            path, fontsdir, workdir = extract_embedded_subtitles(
+                subtitle_file, track.index, probe_headers, proxy
+            )
+        except RuntimeError as exc:
+            if explicit:
+                raise
+            print(f"Warning    : {exc}", file=sys.stderr, flush=True)
+            return empty
+        return ResolvedSubtitles(path, 0, track.label, fontsdir, workdir)
+    return ResolvedSubtitles(subtitle_file, track.index, track.label)
+
+
 def headers_from_ytdlp(value: object) -> list[str]:
     if not isinstance(value, dict):
         return []
@@ -312,6 +600,22 @@ def parse_args() -> argparse.Namespace:
         help="HLS MPEG-TS carries AAC; libopus may not play in HLS players",
     )
     parser.add_argument("--no-audio", action="store_true")
+    parser.add_argument(
+        "--subtitles",
+        help="local subtitle file; omit to burn the first text track in the input",
+    )
+    parser.add_argument(
+        "--subtitle-stream",
+        type=int,
+        default=None,
+        metavar="INDEX",
+        help="0-based subtitle stream index to burn in",
+    )
+    parser.add_argument(
+        "--no-subtitles",
+        action="store_true",
+        help="do not burn subtitles into the video",
+    )
     parser.add_argument("--start", type=float, default=0.0, help="start position in seconds")
     parser.add_argument("--duration", type=float, default=0.0, help="stop after this many seconds")
     return parser.parse_args()
@@ -341,7 +645,20 @@ def prepare_input(args: argparse.Namespace) -> StreamInput:
         if args.source_fps > 0
         else info.frame_rate
     )
-    return StreamInput(video, audio, headers, title, info, rate)
+    subtitles = resolve_subtitles(video, args, headers, args.http_proxy)
+    return StreamInput(
+        video,
+        audio,
+        headers,
+        title,
+        info,
+        rate,
+        subtitles.path,
+        subtitles.index,
+        subtitles.label,
+        subtitles.fontsdir,
+        subtitles.workdir,
+    )
 
 
 def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str, str]:
@@ -453,6 +770,19 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
     if not args.no_audio:
         command.extend(["-map", "1:a:0?"])
     command.extend(["-map_metadata", "-1"])
+    if source.subtitle:
+        command.extend(
+            [
+                "-vf",
+                subtitle_filter(
+                    source.subtitle,
+                    source.subtitle_index,
+                    args.start,
+                    (source.info.width, source.info.height),
+                    source.subtitle_fontsdir,
+                ),
+            ]
+        )
     command.extend(
         option_args(
             ("-c:v", "h264_nvenc"), ("-preset", "p4"), ("-tune", "hq"),
@@ -508,6 +838,12 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         ]
     )
     return command
+
+
+def cleanup_subtitles(source: StreamInput | None) -> None:
+    if source is None or not source.subtitle_workdir:
+        return
+    shutil.rmtree(source.subtitle_workdir, ignore_errors=True)
 
 
 def stop_process(process: subprocess.Popen[bytes] | None) -> None:
@@ -593,12 +929,14 @@ def main() -> int:
         return 2
     replace_existing_stream()
     STREAM_PID_FILE.write_text(str(os.getpid()), encoding="ascii")
+    source = None
     try:
         source = prepare_input(args)
         reset_hls_output(Path(args.publish_url))
         ensure_hls_server()
     except (RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr, flush=True)
+        cleanup_subtitles(source)
         STREAM_PID_FILE.unlink(missing_ok=True)
         STREAM_STATUS_FILE.unlink(missing_ok=True)
         return 1
@@ -624,10 +962,15 @@ def main() -> int:
         print(f"Audio      : {args.audio_codec}")
         if args.audio_codec != "aac":
             print("Warning    : use AAC for HLS players; this codec may be silent")
+    if source.subtitle:
+        print(f"Subtitles  : burn {source.subtitle_label or source.subtitle}")
+    else:
+        print("Subtitles  : none")
     print("Stop       : Ctrl+C", flush=True)
     try:
         return run_pipeline(source, args)
     finally:
+        cleanup_subtitles(source)
         STREAM_PID_FILE.unlink(missing_ok=True)
         STREAM_STATUS_FILE.unlink(missing_ok=True)
 

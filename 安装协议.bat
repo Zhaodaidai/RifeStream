@@ -1,0 +1,1 @@
+runtime\python.exe mpv_protocol.py install --force
