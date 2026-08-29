@@ -452,6 +452,7 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
     command.extend(["-map", "0:v:0"])
     if not args.no_audio:
         command.extend(["-map", "1:a:0?"])
+    command.extend(["-map_metadata", "-1"])
     command.extend(
         option_args(
             ("-c:v", "h264_nvenc"), ("-preset", "p4"), ("-tune", "hq"),

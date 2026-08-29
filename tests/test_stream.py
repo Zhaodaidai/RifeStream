@@ -168,6 +168,7 @@ class StreamInputTests(unittest.TestCase):
             ["-hls_list_size", "0"],
             ["-hls_segment_type", "mpegts"],
             ["-hls_flags", "independent_segments+temp_file"],
+            ["-map_metadata", "-1"],
         ):
             index = command.index(option[0])
             self.assertEqual(command[index : index + 2], option)
