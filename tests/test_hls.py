@@ -18,7 +18,7 @@ from rife.hls import (
     reset_hls_output,
 )
 from rife.hls_server import wait_hls_bytes
-from rife.paths import windows_hls_dir
+from rife.paths import windows_hls_dir, windows_rife_dir
 
 
 class HlsTimingTests(unittest.TestCase):
@@ -72,7 +72,15 @@ class HlsTimingTests(unittest.TestCase):
 
     def test_windows_hls_dir_uses_localappdata(self) -> None:
         with patch.dict(os.environ, {"LOCALAPPDATA": "/tmp/appdata"}):
+            self.assertEqual(windows_rife_dir(), Path("/tmp/appdata") / "rife")
             self.assertEqual(windows_hls_dir(), Path("/tmp/appdata") / "rife" / "hls")
+
+    def test_windows_engine_dir_stays_on_local_ntfs(self) -> None:
+        with patch.dict(os.environ, {"LOCALAPPDATA": "/tmp/appdata"}):
+            self.assertEqual(
+                windows_rife_dir() / "engines",
+                Path("/tmp/appdata") / "rife" / "engines",
+            )
 
 
 if __name__ == "__main__":

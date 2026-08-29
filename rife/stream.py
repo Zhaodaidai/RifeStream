@@ -20,6 +20,7 @@ from rife.hls import (
 )
 from rife.hls_server import ensure as ensure_hls_server
 from rife.paths import (
+    ENGINE_DIR,
     FFMPEG,
     FFPROBE,
     HLS_PLAYLIST,
@@ -96,11 +97,12 @@ def merge_headers(*groups: list[str]) -> list[str]:
 def video_size(info: MediaInfo, max_height: int) -> tuple[int, int]:
     width = info.width // 2 * 2
     height = info.height // 2 * 2
-    if not max_height or height <= max_height:
-        return width, height
-    output_height = max_height // 2 * 2
-    output_width = max(2, int(width * output_height / height) // 2 * 2)
-    return output_width, output_height
+    if max_height and height > max_height:
+        height = max_height // 2 * 2
+        width = max(2, int(info.width * height / info.height) // 2 * 2)
+    # Pad width to 32 so 1910x1080 reuses a 1920x1080 TensorRT engine.
+    width = max(2, (width + 31) // 32 * 32)
+    return width, height
 
 
 HTTP_RECONNECT_OPTIONS = [
@@ -343,11 +345,15 @@ def prepare_input(args: argparse.Namespace) -> StreamInput:
 
 
 def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str, str]:
+    width, height = video_size(source.info, args.max_height)
     env = os.environ.copy()
     env.update(
         {
             "RIFE_FACTOR": str(args.factor),
             "RIFE_MAX_HEIGHT": str(args.max_height),
+            "RIFE_OUT_WIDTH": str(width),
+            "RIFE_OUT_HEIGHT": str(height),
+            "RIFE_ENGINE_DIR": str(ENGINE_DIR),
             "RIFE_GPU": str(args.gpu),
             "RIFE_GPU_THREADS": str(args.gpu_threads),
             "RIFE_SCENE_MODE": str(args.scene_mode),
@@ -359,7 +365,6 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
         }
     )
     if source.is_network:
-        width, height = video_size(source.info, args.max_height)
         duration = args.duration or (
             max(0.0, source.info.duration - args.start)
             if source.info.duration is not None

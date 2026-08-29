@@ -23,9 +23,13 @@ HLS_SERVER_DIR_FILE = ROOT / ".hls_server.dir"
 HLS_SERVER_LOG_FILE = ROOT / "hls_server.log"
 
 
-def windows_hls_dir() -> Path:
+def windows_rife_dir() -> Path:
     base = os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()
-    return Path(base) / "rife" / "hls"
+    return Path(base) / "rife"
+
+
+def windows_hls_dir() -> Path:
+    return windows_rife_dir() / "hls"
 
 
 def default_hls_dir(_root: Path = ROOT) -> Path:
@@ -36,7 +40,16 @@ def default_hls_dir(_root: Path = ROOT) -> Path:
     return _root / ".hls"
 
 
+def default_engine_dir(_root: Path = ROOT) -> Path:
+    # TensorRT cannot reliably read/write *.engine.cache on UNC/Z: shares
+    # (mixed separators like //host/share/runtime/vs-plugins\models\...).
+    if os.name == "nt":
+        return windows_rife_dir() / "engines"
+    return _root / ".engines"
+
+
 HLS_DIR = default_hls_dir()
+ENGINE_DIR = default_engine_dir()
 HLS_PLAYLIST = HLS_DIR / "rife" / "index.m3u8"
 PROTOCOL_LOG_FILE = ROOT / "mpv_protocol.log"
 PLAYLIST_FILE = ROOT / ".playlist.json"

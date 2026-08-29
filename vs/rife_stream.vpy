@@ -19,6 +19,8 @@ def env_value(name: str, default: int | float) -> int | float:
 
 factor = env_value("RIFE_FACTOR", 2)
 max_height = env_value("RIFE_MAX_HEIGHT", 1080)
+out_width = int(env_value("RIFE_OUT_WIDTH", 0))
+out_height = int(env_value("RIFE_OUT_HEIGHT", 0))
 gpu = env_value("RIFE_GPU", 0)
 gpu_threads = env_value("RIFE_GPU_THREADS", 2)
 scene_mode = env_value("RIFE_SCENE_MODE", 1)
@@ -34,11 +36,19 @@ core.num_threads = vs_threads
 
 def prepare_clip(clip: vs.VideoNode) -> vs.VideoNode:
     width, height = clip.width, clip.height
-    if max_height and height > max_height:
+    if out_width > 0 and out_height > 0:
+        width, height = out_width, out_height
+    elif max_height and height > max_height:
         height = max_height // 2 * 2
         width = max(2, int(clip.width * height / clip.height) // 2 * 2)
-    if width != clip.width or height != clip.height:
+        width = max(2, (width + 31) // 32 * 32)
+    else:
+        width = max(2, (width // 2 * 2 + 31) // 32 * 32)
+        height = height // 2 * 2
+    if height != clip.height or width < clip.width:
         clip = core.resize.Bilinear(clip, width=width, height=height)
+    elif width > clip.width:
+        clip = core.std.AddBorders(clip, right=width - clip.width)
     if clip.format.id != vs.YUV420P8:
         clip = core.resize.Bilinear(clip, format=vs.YUV420P8)
     return clip
@@ -196,6 +206,18 @@ else:
         raise vs.Error("The requested start/duration range contains no frames")
     clip = clip[start_frame:end_frame]
     clip = prepare_clip(clip)
+
+engine_dir = os.environ.get("RIFE_ENGINE_DIR", "").strip()
+if engine_dir:
+    import vsmlrt
+
+    _trt = vsmlrt.BackendV2.TRT
+
+    def trt_with_local_engines(*args, **kwargs):
+        kwargs.setdefault("engine_folder", engine_dir)
+        return _trt(*args, **kwargs)
+
+    vsmlrt.BackendV2.TRT = staticmethod(trt_with_local_engines)
 
 clip = k7f.RIFE_NV(
     clip,

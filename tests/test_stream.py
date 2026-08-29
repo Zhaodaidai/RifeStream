@@ -6,6 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from rife.paths import ENGINE_DIR
 from rife.stream import (
     HTTP_RECONNECT_OPTIONS,
     MediaInfo,
@@ -112,6 +113,19 @@ class StreamInputTests(unittest.TestCase):
         environment = build_environment(source, args)
 
         self.assertEqual(environment["RIFE_PIPE_FRAMES"], "2362")
+        self.assertEqual(environment["RIFE_OUT_WIDTH"], "1920")
+        self.assertEqual(environment["RIFE_OUT_HEIGHT"], "1080")
+        self.assertEqual(environment["RIFE_ENGINE_DIR"], str(ENGINE_DIR))
+
+    def test_nonstandard_1080p_width_reuses_1920_engine(self) -> None:
+        self.assertEqual(
+            video_size(MediaInfo(Fraction(24), 1910, 1080, 60), 1080),
+            (1920, 1080),
+        )
+        self.assertEqual(
+            video_size(MediaInfo(Fraction(24), 1920, 1080, 60), 1080),
+            (1920, 1080),
+        )
 
     def test_encoder_uses_realtime_constant_quality(self) -> None:
         source = StreamInput(
