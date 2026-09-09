@@ -1,16 +1,9 @@
-# Findings: quality-safe RIFE speedups
+# Findings
+
+## GPU copies
+vs-mlrt RIFE always uploads RGBH and downloads YUV. FFmpeg has a vapoursynth *demuxer*, not a parallel filter. `getFrame` there is sequential, so replacing vspipe would cap TensorRT at one request.
+
+Left in place: NVDEC scale_cuda → one hwdownload → pipe → RIFE H2D/D2H → Y4M → NVENC upload.
 
 ## Landed
-- Default `--gpu-threads` is 3 (choices 1–4); VSPipe `--requests` stays aligned
-- Local and HTTP both: FFmpeg NVDEC → scale_cuda → hwdownload → raw pipe → RIFE
-- 1910×1080 still pads to 1920 after CUDA scale (not stretched)
-- Local `-ss` is after `-i` (accurate); network `-ss` stays before `-i`
-- `rife_stream.vpy` is pipe-only; numpy gone; packed YUV copied with memoryview + buffer pool
-
-## Pipeline
-Local/HTTP: NVDEC + scale_cuda → raw YUV pipe → SCDetect → RGBH → TRT RIFE → Y4M → NVENC → HLS
-
-## Remaining
-- GPU round-trips across three processes
-- TRT builder tactics / workspace
-- `get_frame(0)` at RIFE_NV load
+NVENC `-gpu` uses the same device as RIFE.

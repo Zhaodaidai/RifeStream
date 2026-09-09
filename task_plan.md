@@ -1,7 +1,7 @@
-# Task Plan: Land gpu-threads, NVDEC, pipe copy
+# Task Plan: GPU passthrough (reduced scope)
 
 ## Goal
-Raise default TensorRT streams to 3, decode local files with NVDEC like the network path, and replace numpy stdin copies—without dropping interpolation quality.
+Cut avoidable GPU copies without rewriting vs-mlrt or serializing TensorRT.
 
 ## Current Phase
 Phase 5
@@ -9,39 +9,36 @@ Phase 5
 ## Phases
 
 ### Phase 1: Requirements & Discovery
-- [x] Confirm defaults, decoder split, pipe ModifyFrame
+- [x] vs-mlrt needs CPU RGBH; FFmpeg vapoursynth demuxer getFrame is serial
 - **Status:** complete
 
 ### Phase 2: Planning & Structure
-- [x] Always FFmpeg CUDA decode; pad width after scale; memoryview pipe fill
+- [x] Do not host RIFE inside `ffmpeg -f vapoursynth` (would stall `--gpu-threads`)
+- [x] Pin NVENC to the same GPU as TRT
 - **Status:** complete
 
 ### Phase 3: Implementation
-- [x] gpu-threads default 3, allow 4
-- [x] Local NVDEC + scale_cuda + pad-to-32
-- [x] Pipe path only; no numpy
-- [x] Tests and README
+- [x] Encoder `-gpu` matches `--gpu`
 - **Status:** complete
 
 ### Phase 4: Testing & Verification
-- [x] `python -m unittest discover -s tests` — 60 OK
+- [x] unittest
 - **Status:** complete
 
 ### Phase 5: Delivery
-- [x] Summarize what changed
+- [x] Explain what was left on the table
 - **Status:** complete
 
 ## Key Questions
-1. Pad or stretch 1910→1920? Pad, matching old local AddBorders.
-2. Local seek: `-ss` after `-i` for frame-accurate trim.
+1. Can TRT consume NVDEC CUDA frames? Not through vs-mlrt.
+2. Can one FFmpeg process replace vspipe? Demuxer is serial; no parallel vapoursynth filter.
 
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
-| Always raw YUV pipe into VS | One decode path; BestSource skipped in stream |
-| Pad after hwdownload | Same pixels as AddBorders, not scale-stretch |
-| memoryview fill, not a new plugin | No extra VS plugin in runtime |
-| Default gpu-threads 3, max 4 | Occupancy only; fp16 model unchanged |
+| Keep decoder \| vspipe \| encoder | Parallel TRT requests |
+| NVENC `-gpu` | Avoid cross-GPU copies |
+| No custom CUDA RIFE/NVENC graph | Too much for the remaining copies |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

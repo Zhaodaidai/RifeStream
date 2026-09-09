@@ -239,6 +239,7 @@ class StreamInputTests(unittest.TestCase):
             ["-profile:v", "high"],
             ["-rc", "vbr"],
             ["-cq", "16"],
+            ["-gpu", "0"],
             ["-multipass", "qres"],
             ["-g", "100"],
             ["-forced-idr", "1"],
@@ -270,6 +271,32 @@ class StreamInputTests(unittest.TestCase):
         self.assertNotIn("cbr", command)
         self.assertNotIn("rtsp", command)
         self.assertNotIn("-vf", command)
+
+    def test_encoder_nvenc_stays_on_the_rife_gpu(self) -> None:
+        source = StreamInput(
+            "https://example.com/video.mp4",
+            None,
+            [],
+            None,
+            MediaInfo(Fraction(25), 1920, 1080, 60),
+            Fraction(25),
+        )
+        args = argparse.Namespace(
+            gop=0,
+            factor=2,
+            no_audio=True,
+            start=0,
+            http_proxy=None,
+            quality=16,
+            audio_codec="aac",
+            duration=0,
+            gpu=2,
+            publish_url="/tmp/rife/index.m3u8",
+        )
+
+        command = build_encoder_command(source, args)
+
+        self.assertEqual(command[command.index("-gpu") + 1], "2")
 
     def test_encoder_gop_never_exceeds_two_seconds(self) -> None:
         source = StreamInput(

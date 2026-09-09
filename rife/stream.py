@@ -871,7 +871,8 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
         )
     command.extend(
         option_args(
-            ("-c:v", "h264_nvenc"), ("-preset", "p4"), ("-tune", "hq"),
+            ("-c:v", "h264_nvenc"), ("-gpu", getattr(args, "gpu", 0)),
+            ("-preset", "p4"), ("-tune", "hq"),
             ("-profile:v", "high"), ("-rc", "vbr"), ("-cq", args.quality),
             ("-b:v", 0), ("-multipass", "qres"),
             ("-g", gop), ("-forced-idr", 1),
