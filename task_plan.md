@@ -1,7 +1,7 @@
-# Task Plan: Tidy the repository root
+# Task Plan: Land gpu-threads, NVDEC, pipe copy
 
 ## Goal
-Leave the project root with only launchers and docs; one CLI entry, runtime junk in `var/`.
+Raise default TensorRT streams to 3, decode local files with NVDEC like the network path, and replace numpy stdin copies—without dropping interpolation quality.
 
 ## Current Phase
 Phase 5
@@ -9,40 +9,39 @@ Phase 5
 ## Phases
 
 ### Phase 1: Requirements & Discovery
-- [x] List root files and how CLI / state paths are used
-- [x] Document why wrappers exist (protocol handler cwd)
+- [x] Confirm defaults, decoder split, pipe ModifyFrame
 - **Status:** complete
 
 ### Phase 2: Planning & Structure
-- [x] Single `run.py` dispatcher (not `rife.py`, package name collision)
-- [x] State and logs under `var/`
+- [x] Always FFmpeg CUDA decode; pad width after scale; memoryview pipe fill
 - **Status:** complete
 
 ### Phase 3: Implementation
-- [x] Add `run.py`, point STREAM_CLI at it
-- [x] Move pid/log/playlist paths to `var/`
-- [x] Update bats, README, check, protocol registry, tests
-- [x] Delete five root wrappers
+- [x] gpu-threads default 3, allow 4
+- [x] Local NVDEC + scale_cuda + pad-to-32
+- [x] Pipe path only; no numpy
+- [x] Tests and README
 - **Status:** complete
 
 ### Phase 4: Testing & Verification
-- [x] `python -m unittest discover -s tests` — 57 OK
+- [x] `python -m unittest discover -s tests` — 60 OK
 - **Status:** complete
 
 ### Phase 5: Delivery
-- [x] Summarize new root layout and commands
+- [x] Summarize what changed
 - **Status:** complete
 
 ## Key Questions
-1. Can wrappers be deleted if protocol cwd is System32? Yes — `run.py` inserts ROOT via `__file__`.
-2. Name the dispatcher `rife.py`? No — collides with the `rife/` package.
+1. Pad or stretch 1910→1920? Pad, matching old local AddBorders.
+2. Local seek: `-ss` after `-i` for frame-accurate trim.
 
 ## Decisions Made
 | Decision | Rationale |
 |----------|-----------|
-| `run.py` instead of `rife.py` | Same-directory package/module name clash |
-| `var/` for pid, logs, playlist | Root stays a launch surface, not a dump |
-| Keep two `.bat` files at root | Windows double-click launchers |
+| Always raw YUV pipe into VS | One decode path; BestSource skipped in stream |
+| Pad after hwdownload | Same pixels as AddBorders, not scale-stretch |
+| memoryview fill, not a new plugin | No extra VS plugin in runtime |
+| Default gpu-threads 3, max 4 | Occupancy only; fp16 model unchanged |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

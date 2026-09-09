@@ -357,3 +357,55 @@ Stop       : Ctrl+C
 [http @ 000001adcde52fc0] Stream ends prematurely at 1141440560, should be 1175648118
 [http @ 000001adcde52fc0] Will reconnect at 1141440560 in 0 second(s), error=I/O error.
 Output 55376 frames in 450.62 seconds (122.89 fps)
+127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "DELETE /api/items/3b6cc3ac-bbe4-423e-a5c8-87ecf3c0ccdc HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "POST /api/play HTTP/1.1" 200 -
+
+Play: http://192.168.10.1:5244/d/本地/downloads/凡人修仙传第190集-国创-高清独家在线观看-bilibili-哔哩哔哩.mp4 start=0.0
+HLS server is already running (C:\Users\Administrator\AppData\Local\rife\hls)
+Pipeline   : FFmpeg NVDEC -> VSPipe RIFE -> FFmpeg NVENC -> HLS
+RIFE model : 4.25 Lite (TensorRT)
+Input      : http://192.168.10.1:5244/d/����/downloads/�������ɴ���190��-����-����������߹ۿ�-bilibili-��������.mp4
+Title      : �������ɴ���190��-����-����������߹ۿ�-bilibili-��������.mp4
+Resolution : 3840x2160 -> 1920x1080
+Output     : C:\Users\Administrator\AppData\Local\rife\hls\rife\index.m3u8
+Frame rate : 25 x 2 = 50.000 fps
+HLS GOP    : 100 frames (~2.000s IDR)
+Audio      : aac
+Subtitles  : none
+Stop       : Ctrl+C
+[http @ 0000012fe3010c00] Stream ends prematurely at 1324067561, should be 1324597103
+[http @ 0000012fe3010c00] Will reconnect at 1324067561 in 0 second(s), error=I/O error.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -

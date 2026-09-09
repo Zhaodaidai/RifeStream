@@ -1,20 +1,14 @@
 {
   "items": [
     {
-      "id": "3b6cc3ac-bbe4-423e-a5c8-87ecf3c0ccdc",
-      "source": "http://192.168.10.1:5244/d/本地/downloads/凡人修仙传第189集-国创-高清独家在线观看-bilibili-哔哩哔哩.mp4",
-      "title": "凡人修仙传第189集-国创-高清独家在线观看-bilibili-哔哩哔哩.mp4",
-      "kind": "url"
-    },
-    {
       "id": "536b8037-8cd1-4e81-a209-525496bce422",
       "source": "http://192.168.10.1:5244/d/本地/downloads/凡人修仙传第190集-国创-高清独家在线观看-bilibili-哔哩哔哩.mp4",
       "title": "凡人修仙传第190集-国创-高清独家在线观看-bilibili-哔哩哔哩.mp4",
       "kind": "url"
     }
   ],
-  "current_id": "3b6cc3ac-bbe4-423e-a5c8-87ecf3c0ccdc",
-  "play_generation": 2,
+  "current_id": "536b8037-8cd1-4e81-a209-525496bce422",
+  "play_generation": 3,
   "settings": {
     "intro": 0.0,
     "outro": 0.0,

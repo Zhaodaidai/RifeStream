@@ -579,3 +579,137 @@ Serving HLS from C:\Users\Administrator\AppData\Local\rife\hls
 192.168.10.217 - "GET /rife/seg435.ts HTTP/1.1" 200 -
 192.168.10.217 - "GET /rife/seg436.ts HTTP/1.1" 200 -
 192.168.10.217 - "GET /rife/seg437.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg438.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg439.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg440.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg441.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg442.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg443.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg444.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg445.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg446.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg447.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg448.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg449.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg450.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg451.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg452.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg453.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg454.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg455.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg456.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg457.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg458.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg459.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg460.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg461.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg462.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg463.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg464.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg465.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg466.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg467.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg468.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg469.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg470.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg471.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg472.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg473.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg474.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg475.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg476.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg477.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg478.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg479.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg480.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg481.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg482.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg483.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg484.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg485.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg486.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg487.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg488.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg489.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg490.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg491.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg492.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg493.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg494.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg495.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg496.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg497.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg498.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg499.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg500.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg501.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg502.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg503.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg504.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg505.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg506.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg507.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg508.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg509.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg510.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg511.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg512.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg513.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg514.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg515.ts HTTP/1.1" 200 -
+----------------------------------------
+----------------------------------------
+Exception occurred during processing of request from ('192.168.10.217', 48772)
+Exception occurred during processing of request from ('192.168.10.217', 37646)
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "socketserver.py", line 692, in process_request_thread
+  File "socketserver.py", line 692, in process_request_thread
+  File "socketserver.py", line 362, in finish_request
+  File "\\192.168.10.100\game\rife\rife\hls_server.py", line 61, in __init__
+    super().__init__(*args, directory=str(HLS_DIR), **kwargs)
+  File "socketserver.py", line 362, in finish_request
+  File "\\192.168.10.100\game\rife\rife\hls_server.py", line 61, in __init__
+    super().__init__(*args, directory=str(HLS_DIR), **kwargs)
+  File "http\server.py", line 672, in __init__
+  File "socketserver.py", line 761, in __init__
+  File "http\server.py", line 438, in handle
+  File "http\server.py", line 424, in handle_one_request
+  File "http\server.py", line 679, in do_GET
+  File "http\server.py", line 878, in copyfile
+  File "shutil.py", line 204, in copyfileobj
+  File "socketserver.py", line 840, in write
+ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+  File "http\server.py", line 672, in __init__
+  File "socketserver.py", line 761, in __init__
+  File "http\server.py", line 438, in handle
+  File "http\server.py", line 404, in handle_one_request
+  File "socket.py", line 720, in readinto
+----------------------------------------
+ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+----------------------------------------
+Serving HLS from C:\Users\Administrator\AppData\Local\rife\hls
+192.168.10.217 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg1.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg2.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg3.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg4.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg5.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg6.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg7.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg8.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg9.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg10.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg11.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg12.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg13.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg14.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg15.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg16.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg17.ts HTTP/1.1" 200 -

@@ -3,8 +3,7 @@
 将本地或网络视频补帧并发布到局域网：
 
 ```text
-Local file -> BestSource -> VapourSynth/RIFE -> FFmpeg NVENC -> HLS
-HTTP/HLS   -> FFmpeg CUDA decode/scale -> VapourSynth/RIFE -> FFmpeg NVENC -> HLS
+Local/HTTP -> FFmpeg NVDEC + scale_cuda -> VapourSynth/RIFE -> FFmpeg NVENC -> HLS
 ```
 
 项目使用 `runtime` 下的便携 Python、VapourSynth 和 FFmpeg，不依赖系统 Python

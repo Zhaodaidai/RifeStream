@@ -1,26 +1,16 @@
-# Findings & Decisions
+# Findings: quality-safe RIFE speedups
 
-## Requirements
-- Root should not mix CLI stubs, logs, pid files, and package code
-- Windows protocol handler must still find `rife` when cwd is not the repo
-- Existing `stream` / `webui` / `hls` / `protocol` / `check` behavior stays the same
+## Landed
+- Default `--gpu-threads` is 3 (choices 1–4); VSPipe `--requests` stays aligned
+- Local and HTTP both: FFmpeg NVDEC → scale_cuda → hwdownload → raw pipe → RIFE
+- 1910×1080 still pads to 1920 after CUDA scale (not stretched)
+- Local `-ss` is after `-i` (accurate); network `-ss` stays before `-i`
+- `rife_stream.vpy` is pipe-only; numpy gone; packed YUV copied with memoryview + buffer pool
 
-## Research Findings
-- Root wrappers only insert `ROOT` on `sys.path` and call `rife.*.main`
-- `STREAM_CLI` / `PROTOCOL_CLI` are those wrapper paths; protocol registry embeds `mpv_protocol.py`
-- HLS already launches `rife/hls_server.py` with its own bootstrap
-- Logs, `.hls_server.*`, `.playlist.json` currently live in `ROOT`
+## Pipeline
+Local/HTTP: NVDEC + scale_cuda → raw YUV pipe → SCDetect → RGBH → TRT RIFE → Y4M → NVENC → HLS
 
-## Technical Decisions
-| Decision | Rationale | Alternatives considered |
-|----------|-----------|------------------------|
-| `run.py` dispatcher | One file; protocol can quote a stable path | Five `scripts/` stubs; `python -m rife.*` (breaks when cwd is wrong) |
-| Not named `rife.py` | Would shadow or fight the `rife/` package | |
-| `var/` state dir | Runtime files are not project source | `%LOCALAPPDATA%\rife` for logs too (HLS already uses that for segments) |
-
-## Issues Encountered
--
-
-## Resources
-- `rife/paths.py` owns ROOT and state paths
-- `tests/test_protocol.py` asserts CLI script path in `build_stream_command`
+## Remaining
+- GPU round-trips across three processes
+- TRT builder tactics / workspace
+- `get_frame(0)` at RIFE_NV load

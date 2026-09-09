@@ -18,6 +18,7 @@ from rife.stream import (
     build_encoder_command,
     build_environment,
     build_vspipe_command,
+    decoder_scale_filter,
     escape_filter_path,
     extract_embedded_subtitles_command,
     ffmpeg_input_options,
@@ -74,6 +75,23 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(command[command.index("-ss") + 1], "123.5")
         self.assertLess(command.index("-ss"), command.index("-i"))
 
+    def test_decoder_seeks_local_input_after_open(self) -> None:
+        info = MediaInfo(Fraction(25), 1920, 1080, 600)
+        source = StreamInput("/tmp/video.mkv", None, [], None, info, Fraction(25))
+        args = argparse.Namespace(
+            max_height=1080,
+            gpu=0,
+            http_proxy=None,
+            start=123.5,
+            duration=0,
+        )
+
+        command = build_decoder_command(source, args)
+
+        self.assertEqual(command[command.index("-ss") + 1], "123.5")
+        self.assertGreater(command.index("-ss"), command.index("-i"))
+        self.assertIn("cuda", command)
+
     def test_network_input_is_scaled_before_the_raw_pipe(self) -> None:
         info = MediaInfo(Fraction(25), 3840, 2160, 60)
         source = StreamInput(
@@ -92,12 +110,34 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(video_size(info, 1080), (1920, 1080))
         self.assertIn("-hwaccel", command)
         self.assertIn("cuda", command)
+        self.assertEqual(
+            command[command.index("-vf") + 1],
+            decoder_scale_filter(info, 1080, Fraction(25)),
+        )
         self.assertIn(
             "scale_cuda=1920:1080:format=yuv420p:interp_algo=bilinear,"
             "hwdownload,format=yuv420p,fps=25/1",
             command,
         )
         self.assertIn("-extra_hw_frames", command)
+
+    def test_local_input_is_decoded_on_cuda(self) -> None:
+        info = MediaInfo(Fraction(24), 1920, 1080, 60)
+        source = StreamInput("/tmp/video.mkv", None, [], None, info, Fraction(24))
+        args = argparse.Namespace(
+            max_height=1080,
+            gpu=1,
+            http_proxy=None,
+            start=0,
+            duration=10,
+        )
+
+        command = build_decoder_command(source, args)
+
+        self.assertEqual(command[command.index("-hwaccel_device") + 1], "1")
+        self.assertEqual(command[command.index("-t") + 1], "10")
+        self.assertIn("/tmp/video.mkv", command)
+        self.assertNotIn("BestSource", " ".join(command))
 
     def test_network_frame_count_does_not_overrun_the_decoder(self) -> None:
         source = StreamInput(
@@ -122,9 +162,36 @@ class StreamInputTests(unittest.TestCase):
         environment = build_environment(source, args)
 
         self.assertEqual(environment["RIFE_PIPE_FRAMES"], "2362")
+        self.assertEqual(environment["RIFE_PIPE_INPUT"], "1")
         self.assertEqual(environment["RIFE_OUT_WIDTH"], "1920")
         self.assertEqual(environment["RIFE_OUT_HEIGHT"], "1080")
         self.assertEqual(environment["RIFE_ENGINE_DIR"], str(ENGINE_DIR))
+
+    def test_local_file_also_feeds_the_raw_pipe(self) -> None:
+        source = StreamInput(
+            "/tmp/video.mkv",
+            None,
+            [],
+            None,
+            MediaInfo(Fraction(25), 1920, 1080, 60),
+            Fraction(25),
+        )
+        args = argparse.Namespace(
+            factor=2,
+            max_height=1080,
+            gpu=0,
+            gpu_threads=3,
+            scene_mode=1,
+            workspace_mib=0,
+            start=0,
+            duration=0,
+        )
+
+        environment = build_environment(source, args)
+
+        self.assertEqual(environment["RIFE_PIPE_INPUT"], "1")
+        self.assertEqual(environment["RIFE_PIPE_FRAMES"], "1499")
+        self.assertEqual(environment["RIFE_GPU_THREADS"], "3")
 
     def test_nonstandard_1080p_width_reuses_1920_engine(self) -> None:
         self.assertEqual(
@@ -134,6 +201,13 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(
             video_size(MediaInfo(Fraction(24), 1920, 1080, 60), 1080),
             (1920, 1080),
+        )
+        self.assertEqual(
+            decoder_scale_filter(
+                MediaInfo(Fraction(24), 1910, 1080, 60), 1080, Fraction(24)
+            ),
+            "scale_cuda=1910:1080:format=yuv420p:interp_algo=bilinear,"
+            "hwdownload,format=yuv420p,pad=1920:1080:0:0,fps=24/1",
         )
 
     def test_encoder_uses_realtime_constant_quality(self) -> None:
@@ -284,6 +358,20 @@ class StreamInputTests(unittest.TestCase):
             ["--requests", "2"],
         )
         self.assertNotIn("--arg", command)
+
+        local = StreamInput(
+            "/tmp/video.mkv",
+            None,
+            [],
+            None,
+            MediaInfo(Fraction(25), 1920, 1080, 60),
+            Fraction(25),
+        )
+        local_command = build_vspipe_command(local, args)
+        self.assertNotIn("--arg", local_command)
+        self.assertEqual(
+            local_command[local_command.index("--requests") + 1], "2"
+        )
 
     def test_subtitle_path_is_escaped_for_ffmpeg_filters(self) -> None:
         self.assertEqual(

@@ -146,15 +146,38 @@ def merge_headers(*groups: list[str]) -> list[str]:
     return normalize_headers([header for group in groups for header in group])
 
 
-def video_size(info: MediaInfo, max_height: int) -> tuple[int, int]:
+def scaled_video_size(info: MediaInfo, max_height: int) -> tuple[int, int, int, int]:
     width = info.width // 2 * 2
     height = info.height // 2 * 2
     if max_height and height > max_height:
         height = max_height // 2 * 2
         width = max(2, int(info.width * height / info.height) // 2 * 2)
     # Pad width to 32 so 1910x1080 reuses a 1920x1080 TensorRT engine.
-    width = max(2, (width + 31) // 32 * 32)
+    padded_width = max(2, (width + 31) // 32 * 32)
+    return width, height, padded_width, height
+
+
+def video_size(info: MediaInfo, max_height: int) -> tuple[int, int]:
+    _, _, width, height = scaled_video_size(info, max_height)
     return width, height
+
+
+def decoder_scale_filter(
+    info: MediaInfo, max_height: int, rate: Fraction
+) -> str:
+    scale_width, scale_height, out_width, out_height = scaled_video_size(
+        info, max_height
+    )
+    rate_text = f"{rate.numerator}/{rate.denominator}"
+    filters = [
+        f"scale_cuda={scale_width}:{scale_height}:format=yuv420p:interp_algo=bilinear",
+        "hwdownload",
+        "format=yuv420p",
+    ]
+    if out_width != scale_width or out_height != scale_height:
+        filters.append(f"pad={out_width}:{out_height}:0:0")
+    filters.append(f"fps={rate_text}")
+    return ",".join(filters)
 
 
 HTTP_RECONNECT_OPTIONS = [
@@ -645,7 +668,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--factor", type=int, choices=(2, 3, 4), default=2)
     parser.add_argument("--max-height", type=int, default=1080)
     parser.add_argument("--gpu", type=int, choices=(0, 1, 2), default=0)
-    parser.add_argument("--gpu-threads", type=int, choices=(1, 2, 3), default=2)
+    parser.add_argument("--gpu-threads", type=int, choices=(1, 2, 3, 4), default=3)
     parser.add_argument("--scene-mode", type=int, choices=(0, 1, 2), default=1)
     parser.add_argument("--workspace-mib", type=int, default=0)
     parser.add_argument("--source-fps", type=float, default=0.0)
@@ -745,46 +768,44 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
             "RIFE_SCENE_MODE": str(args.scene_mode),
             "RIFE_WORKSPACE_MIB": str(args.workspace_mib),
             "RIFE_SOURCE_FPS": format(float(source.rate), ".12g"),
-            "RIFE_START_SECONDS": format(0 if source.is_network else args.start, ".12g"),
-            "RIFE_DURATION_SECONDS": format(0 if source.is_network else args.duration, ".12g"),
-            "RIFE_PIPE_INPUT": str(int(source.is_network)),
+            "RIFE_PIPE_INPUT": "1",
         }
     )
-    if source.is_network:
-        duration = args.duration or (
-            max(0.0, source.info.duration - args.start)
-            if source.info.duration is not None
-            else None
-        )
-        frames = (
-            max(1, math.floor(duration * float(source.rate)) - 1)
-            if duration is not None
-            else 2_000_000_000
-        )
-        env.update(
-            {
-                "RIFE_PIPE_WIDTH": str(width),
-                "RIFE_PIPE_HEIGHT": str(height),
-                "RIFE_PIPE_FRAMES": str(frames),
-                "RIFE_PIPE_FPS_NUM": str(source.rate.numerator),
-                "RIFE_PIPE_FPS_DEN": str(source.rate.denominator),
-            }
-        )
+    duration = args.duration or (
+        max(0.0, source.info.duration - args.start)
+        if source.info.duration is not None
+        else None
+    )
+    frames = (
+        max(1, math.floor(duration * float(source.rate)) - 1)
+        if duration is not None
+        else 2_000_000_000
+    )
+    env.update(
+        {
+            "RIFE_PIPE_WIDTH": str(width),
+            "RIFE_PIPE_HEIGHT": str(height),
+            "RIFE_PIPE_FRAMES": str(frames),
+            "RIFE_PIPE_FPS_NUM": str(source.rate.numerator),
+            "RIFE_PIPE_FPS_DEN": str(source.rate.denominator),
+        }
+    )
     return env
 
 
-def build_vspipe_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
-    command = [str(VSPIPE), "--container", "y4m", "--requests", str(args.gpu_threads)]
-    if not source.is_network:
-        command.extend(["--arg", f"input={source.video}"])
-    return [*command, str(RIFE_SCRIPT), "-"]
+def build_vspipe_command(_source: StreamInput, args: argparse.Namespace) -> list[str]:
+    return [
+        str(VSPIPE),
+        "--container",
+        "y4m",
+        "--requests",
+        str(args.gpu_threads),
+        str(RIFE_SCRIPT),
+        "-",
+    ]
 
 
-def build_decoder_command(
-    source: StreamInput, args: argparse.Namespace
-) -> list[str] | None:
-    if not source.is_network:
-        return None
+def build_decoder_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
     command = [
         *FFMPEG_BASE,
         "-hwaccel",
@@ -797,21 +818,17 @@ def build_decoder_command(
         "8",
         *ffmpeg_input_options(source.video, source.headers, args.http_proxy),
     ]
-    if args.start > 0:
+    if source.is_network and args.start > 0:
         command.extend(["-ss", format(args.start, ".12g")])
     command.extend(["-i", source.video])
+    if not source.is_network and args.start > 0:
+        command.extend(["-ss", format(args.start, ".12g")])
     if args.duration > 0:
         command.extend(["-t", format(args.duration, ".12g")])
-    rate = f"{source.rate.numerator}/{source.rate.denominator}"
-    width, height = video_size(source.info, args.max_height)
     command.extend(
         option_args(
             ("-map", "0:v:0"), ("-an",), ("-sn",), ("-dn",),
-            (
-                "-vf",
-                f"scale_cuda={width}:{height}:format=yuv420p:interp_algo=bilinear,"
-                f"hwdownload,format=yuv420p,fps={rate}",
-            ),
+            ("-vf", decoder_scale_filter(source.info, args.max_height, source.rate)),
             ("-fps_mode", "cfr"), ("-pix_fmt", "yuv420p"),
             ("-f", "rawvideo"), ("pipe:1",),
         )
@@ -946,25 +963,23 @@ def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
     vspipe: subprocess.Popen[bytes] | None = None
     encoder: subprocess.Popen[bytes] | None = None
     try:
-        decoder_command = build_decoder_command(source, args)
-        if decoder_command:
-            decoder = subprocess.Popen(
-                decoder_command,
-                cwd=ROOT,
-                stdout=subprocess.PIPE,
-                bufsize=8 * 1024 * 1024,
-                creationflags=PROCESS_FLAGS,
-            )
-        vspipe = subprocess.Popen(
-            build_vspipe_command(source, args),
+        decoder = subprocess.Popen(
+            build_decoder_command(source, args),
             cwd=ROOT,
-            env=build_environment(source, args),
-            stdin=decoder.stdout if decoder else None,
             stdout=subprocess.PIPE,
             bufsize=8 * 1024 * 1024,
             creationflags=PROCESS_FLAGS,
         )
-        if decoder and decoder.stdout:
+        vspipe = subprocess.Popen(
+            build_vspipe_command(source, args),
+            cwd=ROOT,
+            env=build_environment(source, args),
+            stdin=decoder.stdout,
+            stdout=subprocess.PIPE,
+            bufsize=8 * 1024 * 1024,
+            creationflags=PROCESS_FLAGS,
+        )
+        if decoder.stdout:
             decoder.stdout.close()
         encoder = subprocess.Popen(
             build_encoder_command(source, args),
@@ -1016,7 +1031,7 @@ def main() -> int:
 
     width, height = video_size(source.info, args.max_height)
     fps = float(source.rate)
-    print("Pipeline   : VSPipe -> RIFE -> FFmpeg NVENC -> HLS")
+    print("Pipeline   : FFmpeg NVDEC -> VSPipe RIFE -> FFmpeg NVENC -> HLS")
     print("RIFE model : 4.25 Lite (TensorRT)")
     print(f"Input      : {display_source(source.video)}")
     if source.title:
