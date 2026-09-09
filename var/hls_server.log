@@ -573,3 +573,9 @@ Serving HLS from C:\Users\Administrator\AppData\Local\rife\hls
 192.168.10.217 - "GET /rife/seg429.ts HTTP/1.1" 200 -
 192.168.10.217 - "GET /rife/seg430.ts HTTP/1.1" 200 -
 192.168.10.217 - "GET /rife/seg431.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg432.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg433.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg434.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg435.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg436.ts HTTP/1.1" 200 -
+192.168.10.217 - "GET /rife/seg437.ts HTTP/1.1" 200 -
