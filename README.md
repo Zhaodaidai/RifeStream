@@ -61,7 +61,7 @@ runtime\python.exe run.py stream "https://example.com/video.m3u8" ^
 
 ```bat
 runtime\python.exe run.py stream "D:\video\input.mkv" --duration 10
-runtime\python.exe run.py stream "D:\video\input.mkv" --max-height 720 --quality 16
+runtime\python.exe run.py stream "D:\video\input.mkv" --max-height 720 --quality 12
 runtime\python.exe run.py stream "D:\video\input.mkv" --audio-codec aac
 runtime\python.exe run.py stream "D:\video\input.mkv" --subtitle-stream 1
 runtime\python.exe run.py stream "D:\video\input.mkv" --subtitles "D:\video\ep01.ass"
@@ -74,8 +74,8 @@ runtime\python.exe run.py stream "D:\video\input.mkv" --no-subtitles
 `run.py stream` 会在需要时启动 HLS HTTP 服务。新分辨率首次运行时，
 TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife_v2` 缓存。
 
-默认视频编码为 H.264 NVENC CQ 16，音频为 AAC。使用 p4、HQ、四分之一分辨率双遍和空间 AQ，
-目标是 1080p HLS 下尽量保持观感。码率不设固定上限，会根据画面复杂度变化；
+默认视频编码为 H.264 NVENC CQ 12，音频为 AAC。使用 p4、HQ、四分之一分辨率双遍，
+以及空间和时间 AQ，目标是 1080p HLS 下接近视觉无损。码率不设固定上限，会根据画面复杂度变化；
 `--quality` 越小质量和码率越高。这不是数学无损编码。
 
 ## Web UI

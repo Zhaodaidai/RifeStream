@@ -171,6 +171,8 @@ class StreamInputTests(unittest.TestCase):
             ["-force_key_frames", "expr:gte(n,n_forced*100)"],
             ["-strict_gop", "1"],
             ["-rc-lookahead", "8"],
+            ["-spatial-aq", "1"],
+            ["-temporal-aq", "1"],
             ["-bf", "0"],
             ["-fps_mode", "cfr"],
             ["-avoid_negative_ts", "make_zero"],

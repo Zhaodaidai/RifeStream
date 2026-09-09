@@ -653,8 +653,8 @@ def parse_args() -> argparse.Namespace:
         "--quality",
         type=int,
         choices=range(1, 31),
-        default=16,
-        help="NVENC constant quality; lower values preserve more detail",
+        default=12,
+        help="NVENC constant quality; lower is closer to visually lossless",
     )
     parser.add_argument(
         "--gop",
@@ -860,7 +860,8 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
             ("-g", gop), ("-forced-idr", 1),
             ("-force_key_frames", force_key_frames_expr(gop)),
             ("-strict_gop", 1), ("-bf", 0),
-            ("-rc-lookahead", 8), ("-spatial-aq", 1), ("-aq-strength", 8),
+            ("-rc-lookahead", 8), ("-spatial-aq", 1), ("-temporal-aq", 1),
+            ("-aq-strength", 8),
             ("-pix_fmt", "yuv420p"), ("-fps_mode", "cfr"),
             ("-colorspace", "bt709"), ("-color_primaries", "bt709"),
             ("-color_trc", "bt709"),
