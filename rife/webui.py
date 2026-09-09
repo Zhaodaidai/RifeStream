@@ -24,12 +24,12 @@ from rife.paths import (
     HTTP_SCHEMES,
     PLAYLIST_FILE,
     ROOT,
-    STREAM_CLI,
     STREAM_PID_FILE,
     STREAM_STATUS_FILE,
     WEBUI_DIR,
     WEBUI_LOG_FILE,
     WEBUI_PORT,
+    cli_command,
     is_http_source,
     pid_is_running,
     read_pid,
@@ -506,7 +506,7 @@ def stream_command(
     start: float = 0.0,
     duration: float = 0.0,
 ) -> list[str]:
-    command = [sys.executable, "-u", str(STREAM_CLI), source]
+    command = cli_command("stream", source, unbuffered=True)
     if title:
         command.extend(["--title", title])
     if start > 0:

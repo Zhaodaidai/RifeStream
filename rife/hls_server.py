@@ -31,12 +31,13 @@ from rife.paths import (
     HLS_SERVER_LOG_FILE,
     HLS_SERVER_PID_FILE,
     ROOT,
+    cli_command,
+    ensure_var,
     port_open,
     read_pid,
     stop_pid_tree,
 )
 
-HLS_SERVER_SCRIPT = Path(__file__).resolve()
 WAIT_INTERVAL = 0.05
 TRANSIENT_ERRNO = {errno.ENOENT, errno.EACCES, errno.EAGAIN, errno.EBUSY}
 
@@ -117,6 +118,7 @@ def _clear_server_state() -> None:
 
 def serve() -> int:
     HLS_DIR.mkdir(parents=True, exist_ok=True)
+    ensure_var()
     HLS_SERVER_DIR_FILE.write_text(str(HLS_DIR.resolve()), encoding="utf-8")
     sys.stderr.write(f"Serving HLS from {HLS_DIR.resolve()}\n")
     server = ThreadingHTTPServer(("0.0.0.0", HLS_PORT), HlsHandler)
@@ -145,9 +147,10 @@ def start() -> int:
         print(f"Port {HLS_PORT} is occupied by another process", file=sys.stderr)
         return 1
 
+    ensure_var()
     with HLS_SERVER_LOG_FILE.open("ab", buffering=0) as log:
         process = subprocess.Popen(
-            [sys.executable, str(HLS_SERVER_SCRIPT), "serve"],
+            cli_command("hls", "serve"),
             cwd=ROOT,
             stdin=subprocess.DEVNULL,
             stdout=log,

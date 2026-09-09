@@ -1,1 +1,1 @@
-runtime\python.exe mpv_protocol.py install --force
+runtime\python.exe run.py protocol install --force

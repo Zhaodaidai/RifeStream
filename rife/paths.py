@@ -2,25 +2,28 @@ import os
 from pathlib import Path
 import socket
 import subprocess
+import sys
 import tempfile
 from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNTIME = ROOT / "runtime"
+VAR = ROOT / "var"
 VSPIPE = RUNTIME / "VSPipe.exe"
 FFMPEG = RUNTIME / "ffmpeg" / "ffmpeg.exe"
 FFPROBE = RUNTIME / "ffmpeg" / "ffprobe.exe"
 PYTHON = RUNTIME / "python.exe"
 RIFE_SCRIPT = ROOT / "vs" / "rife_stream.vpy"
 PROBE_SCRIPT = ROOT / "vs" / "probe_plugins.vpy"
-STREAM_CLI = ROOT / "stream.py"
-PROTOCOL_CLI = ROOT / "mpv_protocol.py"
-STREAM_PID_FILE = ROOT / ".stream.pid"
-STREAM_STATUS_FILE = ROOT / ".stream.status.json"
-HLS_SERVER_PID_FILE = ROOT / ".hls_server.pid"
-HLS_SERVER_DIR_FILE = ROOT / ".hls_server.dir"
-HLS_SERVER_LOG_FILE = ROOT / "hls_server.log"
+CLI = ROOT / "run.py"
+STREAM_CLI = CLI
+PROTOCOL_CLI = ROOT / "rife" / "protocol.py"
+STREAM_PID_FILE = VAR / "stream.pid"
+STREAM_STATUS_FILE = VAR / "stream.status.json"
+HLS_SERVER_PID_FILE = VAR / "hls_server.pid"
+HLS_SERVER_DIR_FILE = VAR / "hls_server.dir"
+HLS_SERVER_LOG_FILE = VAR / "hls_server.log"
 
 
 def windows_rife_dir() -> Path:
@@ -51,10 +54,23 @@ def default_engine_dir(_root: Path = ROOT) -> Path:
 HLS_DIR = default_hls_dir()
 ENGINE_DIR = default_engine_dir()
 HLS_PLAYLIST = HLS_DIR / "rife" / "index.m3u8"
-PROTOCOL_LOG_FILE = ROOT / "mpv_protocol.log"
-PLAYLIST_FILE = ROOT / ".playlist.json"
+PROTOCOL_LOG_FILE = VAR / "protocol.log"
+PLAYLIST_FILE = VAR / "playlist.json"
 WEBUI_DIR = ROOT / "web"
-WEBUI_LOG_FILE = ROOT / "webui.log"
+WEBUI_LOG_FILE = VAR / "webui.log"
+
+
+def ensure_var() -> Path:
+    VAR.mkdir(parents=True, exist_ok=True)
+    return VAR
+
+
+def cli_command(command: str, *args: str, unbuffered: bool = False) -> list[str]:
+    prefix = [sys.executable]
+    if unbuffered:
+        prefix.append("-u")
+    return prefix + [str(CLI), command, *args]
+
 
 if os.name == "nt":
     PROCESS_FLAGS = subprocess.CREATE_NO_WINDOW

@@ -34,6 +34,7 @@ from rife.paths import (
     STREAM_STATUS_FILE,
     VSPIPE,
     capture,
+    ensure_var,
     is_http_source,
     replace_existing_stream,
     windows_rife_dir,
@@ -926,6 +927,7 @@ def stop_process(process: subprocess.Popen[bytes] | None) -> None:
 
 
 def write_stream_status(source: StreamInput, start: float) -> None:
+    ensure_var()
     STREAM_STATUS_FILE.write_text(
         json.dumps(
             {
@@ -996,6 +998,7 @@ def main() -> int:
         print(f"Required file not found: {missing}", file=sys.stderr, flush=True)
         return 2
     replace_existing_stream()
+    ensure_var()
     STREAM_PID_FILE.write_text(str(os.getpid()), encoding="ascii")
     source = None
     try:

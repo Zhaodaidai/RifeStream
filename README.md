@@ -13,11 +13,13 @@ HTTP/HLS   -> FFmpeg CUDA decode/scale -> VapourSynth/RIFE -> FFmpeg NVENC -> HL
 布局：
 
 ```text
-stream.py / mpv_protocol.py / hls_server.py / webui.py / check_setup.py   CLI 入口
-rife/        路径、协议、转码、HLS 服务、环境检查
-vs/          VapourSynth 脚本
-tests/       单元测试
-runtime/     便携 Python、VSPipe、FFmpeg、插件
+run.py           唯一 CLI 入口（stream / webui / hls / protocol / check）
+rife/            路径、协议、转码、HLS 服务、环境检查
+vs/              VapourSynth 脚本
+web/             Web UI 静态页
+tests/           单元测试
+runtime/         便携 Python、VSPipe、FFmpeg、插件
+var/             运行时 pid、播放列表、日志（自动生成）
 ```
 
 ## URL 协议
@@ -34,13 +36,13 @@ yt-dlp 格式、标题和起始位置。未知 MPV 参数会被忽略；协议�
 
 ```bat
 cd /d D:\rife
-runtime\python.exe mpv_protocol.py install --force
+runtime\python.exe run.py protocol install --force
 ```
 
 卸载并恢复安装前的协议处理器：
 
 ```bat
-runtime\python.exe mpv_protocol.py uninstall
+runtime\python.exe run.py protocol uninstall
 ```
 
 首次请求会启动转码并写出 HLS；后续请求会替换当前媒体，不会保留重复转码进程。
@@ -50,26 +52,26 @@ runtime\python.exe mpv_protocol.py uninstall
 指定本地或网络输入：
 
 ```bat
-runtime\python.exe stream.py "D:\video\input.mkv"
-runtime\python.exe stream.py "https://example.com/video.m3u8" ^
+runtime\python.exe run.py stream "D:\video\input.mkv"
+runtime\python.exe run.py stream "https://example.com/video.m3u8" ^
   --http-header-field "Referer: https://example.com/watch"
 ```
 
 常用参数：
 
 ```bat
-runtime\python.exe stream.py "D:\video\input.mkv" --duration 10
-runtime\python.exe stream.py "D:\video\input.mkv" --max-height 720 --quality 16
-runtime\python.exe stream.py "D:\video\input.mkv" --audio-codec aac
-runtime\python.exe stream.py "D:\video\input.mkv" --subtitle-stream 1
-runtime\python.exe stream.py "D:\video\input.mkv" --subtitles "D:\video\ep01.ass"
-runtime\python.exe stream.py "D:\video\input.mkv" --no-subtitles
+runtime\python.exe run.py stream "D:\video\input.mkv" --duration 10
+runtime\python.exe run.py stream "D:\video\input.mkv" --max-height 720 --quality 16
+runtime\python.exe run.py stream "D:\video\input.mkv" --audio-codec aac
+runtime\python.exe run.py stream "D:\video\input.mkv" --subtitle-stream 1
+runtime\python.exe run.py stream "D:\video\input.mkv" --subtitles "D:\video\ep01.ass"
+runtime\python.exe run.py stream "D:\video\input.mkv" --no-subtitles
 ```
 
 本地和网络 MKV/MP4 会在 RIFE 补帧之后、NVENC 之前硬嵌第一条文本字幕（ASS/SRT 等）。
 网络内嵌字幕会先抽出 ASS 和字体再烧录。位图字幕（PGS 等）会跳过。
 
-`stream.py` 会在需要时启动 HLS HTTP 服务。新分辨率首次运行时，
+`run.py stream` 会在需要时启动 HLS HTTP 服务。新分辨率首次运行时，
 TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife_v2` 缓存。
 
 默认视频编码为 H.264 NVENC CQ 16，音频为 AAC。使用 p4、HQ、四分之一分辨率双遍和空间 AQ，
@@ -85,7 +87,7 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 - 页面显示 HLS 清单地址，用外部播放器打开即可
 
 ```bat
-runtime\python.exe webui.py
+runtime\python.exe run.py webui
 ```
 
 Web UI 会在需要时启动 HLS 服务。切集时会替换当前转码进程，与协议入口相同。
@@ -97,13 +99,13 @@ Web UI 会在需要时启动 HLS 服务。切集时会替换当前转码进程�
 - HLS 清单：`http://<PC-LAN-IP>:8888/rife/index.m3u8`
 
 HLS 是持续增长的 live 清单：从已有分片开头顺序播放，卡顿时等待缓冲，不追实时沿。
-协议或 `stream.py` 再次启动时会替换当前转码进程。若要从指定位置开始，使用 `--start`。
+协议或 `run.py stream` 再次启动时会替换当前转码进程。若要从指定位置开始，使用 `--start`。
 
 ## 管理命令
 
 ```bat
-runtime\python.exe check_setup.py
-runtime\python.exe hls_server.py status
-runtime\python.exe hls_server.py restart
+runtime\python.exe run.py check
+runtime\python.exe run.py hls status
+runtime\python.exe run.py hls restart
 runtime\python.exe -m unittest discover -s tests
 ```

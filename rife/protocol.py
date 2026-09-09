@@ -8,7 +8,15 @@ import subprocess
 import sys
 from urllib.parse import unquote, urlsplit
 
-from rife.paths import DETACHED_FLAGS, HTTP_SCHEMES, PROTOCOL_LOG_FILE, ROOT, STREAM_CLI
+from rife.paths import (
+    CLI,
+    DETACHED_FLAGS,
+    HTTP_SCHEMES,
+    PROTOCOL_LOG_FILE,
+    ROOT,
+    cli_command,
+    ensure_var,
+)
 
 
 PROXY_SCHEMES = HTTP_SCHEMES | {"socks4", "socks4a", "socks5", "socks5h"}
@@ -140,7 +148,7 @@ def parse_uri(uri: str) -> MpvRequest:
 
 
 def build_stream_command(request: MpvRequest) -> list[str]:
-    command = [sys.executable, str(STREAM_CLI), request.video]
+    command = cli_command("stream", request.video)
     for header in request.headers:
         command.extend(["--http-header-field", header])
     options = {
@@ -160,6 +168,7 @@ def build_stream_command(request: MpvRequest) -> list[str]:
 def start_stream(request: MpvRequest) -> int:
     command = build_stream_command(request)
     command[0] = str(gui_python())
+    ensure_var()
     with PROTOCOL_LOG_FILE.open("ab", buffering=0) as log:
         log.write(f"\nStart: {request.video}\n".encode())
         subprocess.Popen(
@@ -176,12 +185,13 @@ def start_stream(request: MpvRequest) -> int:
 
 def report_error(message: str) -> None:
     print(message, file=sys.stderr)
+    ensure_var()
     with PROTOCOL_LOG_FILE.open("a", encoding="utf-8") as log:
         log.write(f"\n{message}\n")
 
 
 def registry_command() -> str:
-    return f'"{gui_python()}" "{ROOT / "mpv_protocol.py"}" "%1"'
+    return f'"{gui_python()}" "{CLI}" protocol "%1"'
 
 
 def install_protocol(force: bool) -> int:
@@ -209,7 +219,7 @@ def install_protocol(force: bool) -> int:
         for scheme, command in conflicts.items():
             print(f"Another {scheme} handler is already registered:", file=sys.stderr)
             print(command, file=sys.stderr)
-        print("Run 'mpv_protocol.py install --force' to replace them.", file=sys.stderr)
+        print("Run 'run.py protocol install --force' to replace them.", file=sys.stderr)
         return 2
 
     for scheme, name in PROTOCOL_NAMES.items():
@@ -304,7 +314,7 @@ def main() -> int:
     arguments = sys.argv[1:]
     if arguments and arguments[0] == "install":
         if len(arguments) > 2 or (len(arguments) == 2 and arguments[1] != "--force"):
-            print("Usage: mpv_protocol.py install [--force]", file=sys.stderr)
+            print("Usage: run.py protocol install [--force]", file=sys.stderr)
             return 2
         return install_protocol("--force" in arguments)
     if arguments == ["uninstall"]:
@@ -316,7 +326,7 @@ def main() -> int:
         uri = arguments[0]
     else:
         print(
-            "Usage: mpv_protocol.py <ush://MPV?... | mpv://...> | decode <URI> | "
+            "Usage: run.py protocol <ush://MPV?... | mpv://...> | decode <URI> | "
             "install [--force] | uninstall",
             file=sys.stderr,
         )

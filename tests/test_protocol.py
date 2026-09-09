@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from rife.paths import PROTOCOL_CLI, STREAM_CLI
+from rife.paths import CLI, STREAM_CLI
 from rife.protocol import MpvRequest, ProtocolError, build_stream_command, parse_mpv_command, parse_uri
 
 
@@ -23,7 +23,8 @@ class MpvProtocolTests(unittest.TestCase):
             [
                 str(Path(sys.executable)),
                 "-P",
-                str(PROTOCOL_CLI),
+                str(CLI),
+                "protocol",
                 "decode",
                 "mpv://https%3A%2F%2Fexample.com%2Fvideo.mp4",
             ],
@@ -74,6 +75,7 @@ class MpvProtocolTests(unittest.TestCase):
 
         invocation = build_stream_command(request)
         self.assertEqual(Path(invocation[1]).resolve(), STREAM_CLI.resolve())
+        self.assertEqual(invocation[2], "stream")
         self.assertIn("--audio-input", invocation)
         self.assertEqual(invocation.count("--http-header-field"), 3)
         self.assertIn("--start", invocation)
