@@ -84,10 +84,19 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 - 批量粘贴 HTTP/HTTPS 链接
 - 列表中点击某一集切换转码；支持上一集 / 下一集
 - 页面显示 HLS 清单地址，用外部播放器打开即可
+- **Anime4K Mode A**：开启后走「1080 → Anime4K 升到 4K（修复+2×）→ 缩回 1080 → RIFE 补帧」；下次播放生效
 
 ```bat
 runtime\python.exe run.py webui
 ```
+
+也可在 CLI 直接启用：
+
+```bat
+runtime\python.exe run.py stream "D:\video\input.mkv" --anime4k
+```
+
+需要 `runtime\vs-plugins\ac_filter_avs_vs.dll`（Anime4KCPP v3.2 VS 插件）。
 
 Web UI 会在需要时启动 HLS 服务。切集时会替换当前转码进程，与协议入口相同。
 

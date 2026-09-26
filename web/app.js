@@ -15,6 +15,7 @@ const jumpBtn = document.getElementById("jumpBtn");
 const jumpLabel = document.getElementById("jumpLabel");
 const introSeconds = document.getElementById("introSeconds");
 const skipIntro = document.getElementById("skipIntro");
+const anime4k = document.getElementById("anime4k");
 
 let savingSettings = false;
 let jumpInFlight = false;
@@ -68,6 +69,9 @@ function paintSettings(settings) {
   if (document.activeElement !== skipIntro) {
     skipIntro.checked = Boolean(settings.skip_intro);
   }
+  if (document.activeElement !== anime4k) {
+    anime4k.checked = Boolean(settings.anime4k);
+  }
 }
 
 function settingsPayload() {
@@ -78,6 +82,7 @@ function settingsPayload() {
     intro,
     skip_intro: skipIntro.checked,
     skip_outro: false,
+    anime4k: anime4k.checked,
   };
 }
 
@@ -236,6 +241,7 @@ introSeconds.addEventListener("keydown", (event) => {
   }
 });
 skipIntro.addEventListener("change", saveSettings);
+anime4k.addEventListener("change", saveSettings);
 
 refresh();
 setInterval(refresh, 1500);

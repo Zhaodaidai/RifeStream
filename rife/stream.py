@@ -710,6 +710,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--start", type=float, default=0.0, help="start position in seconds")
     parser.add_argument("--duration", type=float, default=0.0, help="stop after this many seconds")
+    parser.add_argument(
+        "--anime4k",
+        action="store_true",
+        help="Anime4K Mode A: 1080→4K (restore+2x) then downscale to max-height before RIFE",
+    )
     return parser.parse_args()
 
 
@@ -754,6 +759,7 @@ def prepare_input(args: argparse.Namespace) -> StreamInput:
 
 
 def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str, str]:
+    anime4k = bool(getattr(args, "anime4k", False))
     width, height = video_size(source.info, args.max_height)
     env = os.environ.copy()
     env.update(
@@ -762,6 +768,7 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
             "RIFE_MAX_HEIGHT": str(args.max_height),
             "RIFE_OUT_WIDTH": str(width),
             "RIFE_OUT_HEIGHT": str(height),
+            "RIFE_ANIME4K": "1" if anime4k else "0",
             "RIFE_ENGINE_DIR": str(ENGINE_DIR),
             "RIFE_GPU": str(args.gpu),
             "RIFE_GPU_THREADS": str(args.gpu_threads),
@@ -1030,16 +1037,29 @@ def main() -> int:
         return 1
     write_stream_status(source, args.start)
 
+    anime4k = bool(getattr(args, "anime4k", False))
     width, height = video_size(source.info, args.max_height)
     fps = float(source.rate)
-    print("Pipeline   : FFmpeg NVDEC -> VSPipe RIFE -> FFmpeg NVENC -> HLS")
+    if anime4k:
+        print(
+            "Pipeline   : FFmpeg NVDEC -> Anime4K Mode A (→4K→1080) -> RIFE -> NVENC -> HLS"
+        )
+        print("Anime4K    : Mode A (acnet-hdn0 2x to 4K, then downscale)")
+    else:
+        print("Pipeline   : FFmpeg NVDEC -> VSPipe RIFE -> FFmpeg NVENC -> HLS")
     print("RIFE model : 4.25 Lite (TensorRT)")
     print(f"Input      : {display_source(source.video)}")
     if source.title:
         print(f"Title      : {source.title}")
-    print(
-        f"Resolution : {source.info.width}x{source.info.height} -> {width}x{height}"
-    )
+    if anime4k:
+        print(
+            f"Resolution : {source.info.width}x{source.info.height} -> "
+            f"{width}x{height} -> Anime4K 4K -> {width}x{height}"
+        )
+    else:
+        print(
+            f"Resolution : {source.info.width}x{source.info.height} -> {width}x{height}"
+        )
     print(f"Output     : {args.publish_url}")
     print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
     gop = encoder_gop(source.rate, args.factor, args.gop)

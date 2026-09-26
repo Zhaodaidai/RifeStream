@@ -192,6 +192,29 @@ if engine_dir:
 
     vsmlrt.BackendV2.TRT = staticmethod(trt_with_local_engines)
 
+anime4k = int(env_value("RIFE_ANIME4K", 0))
+out_width = int(env_value("RIFE_OUT_WIDTH", pipe_width))
+out_height = int(env_value("RIFE_OUT_HEIGHT", pipe_height))
+
+if anime4k:
+    # Mode A for 1080→4K: Restore + Upscale×2. ACUpscale cannot run at 1×, so
+    # acnet-hdn0 2× covers Restore+Upscale to 4K; then downscale back for RIFE/HLS.
+    # (A second Upscale would go to 8K — not used when the working target is 4K.)
+    if not hasattr(core, "anime4kcpp"):
+        raise vs.Error(
+            "Anime4K is enabled but the anime4kcpp plugin is missing "
+            "(expected runtime/vs-plugins/ac_filter_avs_vs.dll)"
+        )
+    clip = core.anime4kcpp.ACUpscale(
+        clip,
+        factor=2.0,
+        processor="cuda",
+        device=int(gpu),
+        model="acnet-hdn0",
+    )
+    if clip.width != out_width or clip.height != out_height:
+        clip = core.resize.Lanczos(clip, width=out_width, height=out_height)
+
 clip = k7f.RIFE_NV(
     clip,
     model=4251,

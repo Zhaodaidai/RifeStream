@@ -1,18 +1,19 @@
 {
   "items": [
     {
-      "id": "17accb03-e20b-4693-8083-7b7b9475b5b0",
-      "source": "http://192.168.10.1:5244/d/%E6%9C%AC%E5%9C%B0/downloads/%E5%87%A1%E4%BA%BA%E4%BF%AE%E4%BB%99%E4%BC%A0%E7%AC%AC191%E9%9B%86-%E5%9B%BD%E5%88%9B-%E9%AB%98%E6%B8%85%E7%8B%AC%E5%AE%B6%E5%9C%A8%E7%BA%BF%E8%A7%82%E7%9C%8B-bilibili-%E5%93%94%E5%93%A9%E5%93%94%E5%93%A9.mp4",
-      "title": "凡人修仙传第191集-国创-高清独家在线观看-bilibili-哔哩哔哩.mp4",
+      "id": "1d4c22a6-0b2a-49ab-a651-f1e0d7b489e7",
+      "source": "http://192.168.10.1:5244/d/%E5%A4%B8%E5%85%8B%E7%BD%91%E7%9B%98/%E6%9D%A5%E8%87%AA%EF%BC%9A%E5%88%86%E4%BA%AB/4K/%E5%92%92%E6%9C%AF%E5%9B%9E%E6%88%98.2026.S03E02.2160p.CR.WEBRip.HEVC.10bit.AAC.SRTx2-NoxiaAI.mkv",
+      "title": "咒术回战.2026.S03E02.2160p.CR.WEBRip.HEVC.10bit.AAC.SRTx2-NoxiaAI.mkv",
       "kind": "url"
     }
   ],
-  "current_id": "17accb03-e20b-4693-8083-7b7b9475b5b0",
-  "play_generation": 6,
+  "current_id": "1d4c22a6-0b2a-49ab-a651-f1e0d7b489e7",
+  "play_generation": 16,
   "settings": {
     "intro": 160.0,
     "outro": 0.0,
-    "skip_intro": true,
-    "skip_outro": false
+    "skip_intro": false,
+    "skip_outro": false,
+    "anime4k": true
   }
 }

@@ -192,6 +192,41 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(environment["RIFE_PIPE_INPUT"], "1")
         self.assertEqual(environment["RIFE_PIPE_FRAMES"], "1499")
         self.assertEqual(environment["RIFE_GPU_THREADS"], "3")
+        self.assertEqual(environment["RIFE_ANIME4K"], "0")
+
+    def test_anime4k_keeps_1080_pipe_and_marks_env(self) -> None:
+        source = StreamInput(
+            "/tmp/video.mkv",
+            None,
+            [],
+            None,
+            MediaInfo(Fraction(24), 1920, 1080, 60),
+            Fraction(24),
+        )
+        args = argparse.Namespace(
+            factor=2,
+            max_height=1080,
+            gpu=0,
+            gpu_threads=3,
+            scene_mode=1,
+            workspace_mib=0,
+            start=0,
+            duration=0,
+            anime4k=True,
+        )
+
+        self.assertEqual(video_size(source.info, 1080), (1920, 1080))
+        environment = build_environment(source, args)
+        self.assertEqual(environment["RIFE_ANIME4K"], "1")
+        self.assertEqual(environment["RIFE_PIPE_WIDTH"], "1920")
+        self.assertEqual(environment["RIFE_PIPE_HEIGHT"], "1080")
+        self.assertEqual(environment["RIFE_OUT_WIDTH"], "1920")
+        self.assertEqual(environment["RIFE_OUT_HEIGHT"], "1080")
+        self.assertEqual(
+            decoder_scale_filter(source.info, 1080, Fraction(24)),
+            "scale_cuda=1920:1080:format=yuv420p:interp_algo=bilinear,"
+            "hwdownload,format=yuv420p,fps=24/1",
+        )
 
     def test_nonstandard_1080p_width_reuses_1920_engine(self) -> None:
         self.assertEqual(

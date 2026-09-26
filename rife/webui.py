@@ -55,6 +55,7 @@ class SkipSettings:
     outro: float = 0.0
     skip_intro: bool = False
     skip_outro: bool = False
+    anime4k: bool = False
 
 
 @dataclass
@@ -363,7 +364,9 @@ def parse_settings(
     if not isinstance(payload, dict):
         if strict:
             raise ValueError("Settings object required")
-        return SkipSettings(base.intro, base.outro, base.skip_intro, base.skip_outro)
+        return SkipSettings(
+            base.intro, base.outro, base.skip_intro, base.skip_outro, base.anime4k
+        )
 
     def seconds(key: str, fallback: float) -> float:
         if key not in payload:
@@ -390,6 +393,7 @@ def parse_settings(
         outro=seconds("outro", base.outro),
         skip_intro=flag("skip_intro", base.skip_intro),
         skip_outro=flag("skip_outro", base.skip_outro),
+        anime4k=flag("anime4k", base.anime4k),
     )
 
 
@@ -505,6 +509,8 @@ def stream_command(
     title: str | None,
     start: float = 0.0,
     duration: float = 0.0,
+    *,
+    anime4k: bool = False,
 ) -> list[str]:
     command = cli_command("stream", source, unbuffered=True)
     if title:
@@ -513,6 +519,8 @@ def stream_command(
         command.extend(["--start", format(start, ".12g")])
     if duration > 0:
         command.extend(["--duration", format(duration, ".12g")])
+    if anime4k:
+        command.append("--anime4k")
     return command
 
 
@@ -545,8 +553,10 @@ def spawn_stream(
     title: str | None,
     start: float = 0.0,
     duration: float = 0.0,
+    *,
+    anime4k: bool = False,
 ) -> None:
-    command = stream_command(source, title, start, duration)
+    command = stream_command(source, title, start, duration, anime4k=anime4k)
     extra: dict[str, Any] = {}
     if os.name != "nt":
         extra["start_new_session"] = True
@@ -754,6 +764,7 @@ def start_item(item_id: str | None, offset: int = 0, start: float = 0.0) -> Play
         item.title,
         start,
         encode_duration(start, duration, settings),
+        anime4k=settings.anime4k,
     )
     return item
 
@@ -778,6 +789,7 @@ def seek_to(seconds: float) -> PlaylistItem:
         item.title,
         seconds,
         encode_duration(seconds, duration, settings),
+        anime4k=settings.anime4k,
     )
     return item
 

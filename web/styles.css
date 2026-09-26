@@ -255,6 +255,11 @@ h2 {
   border-top: 1px solid var(--line);
 }
 
+.skip-settings .anime4k-switch {
+  grid-column: 1 / -1;
+  padding-top: 2px;
+}
+
 .skip-settings .field {
   display: flex;
   flex-direction: column;
