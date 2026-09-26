@@ -713,7 +713,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--anime4k",
         action="store_true",
-        help="Anime4K Mode A: 1080→4K (restore+2x) then downscale to max-height before RIFE",
+        help="Anime4K: upscale 2x then downscale to max-height before RIFE",
     )
     return parser.parse_args()
 
@@ -759,25 +759,7 @@ def prepare_input(args: argparse.Namespace) -> StreamInput:
 
 
 def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str, str]:
-    anime4k = bool(getattr(args, "anime4k", False))
     width, height = video_size(source.info, args.max_height)
-    env = os.environ.copy()
-    env.update(
-        {
-            "RIFE_FACTOR": str(args.factor),
-            "RIFE_MAX_HEIGHT": str(args.max_height),
-            "RIFE_OUT_WIDTH": str(width),
-            "RIFE_OUT_HEIGHT": str(height),
-            "RIFE_ANIME4K": "1" if anime4k else "0",
-            "RIFE_ENGINE_DIR": str(ENGINE_DIR),
-            "RIFE_GPU": str(args.gpu),
-            "RIFE_GPU_THREADS": str(args.gpu_threads),
-            "RIFE_SCENE_MODE": str(args.scene_mode),
-            "RIFE_WORKSPACE_MIB": str(args.workspace_mib),
-            "RIFE_SOURCE_FPS": format(float(source.rate), ".12g"),
-            "RIFE_PIPE_INPUT": "1",
-        }
-    )
     duration = args.duration or (
         max(0.0, source.info.duration - args.start)
         if source.info.duration is not None
@@ -788,8 +770,16 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
         if duration is not None
         else 2_000_000_000
     )
+    env = os.environ.copy()
     env.update(
         {
+            "RIFE_FACTOR": str(args.factor),
+            "RIFE_ANIME4K": "1" if args.anime4k else "0",
+            "RIFE_ENGINE_DIR": str(ENGINE_DIR),
+            "RIFE_GPU": str(args.gpu),
+            "RIFE_GPU_THREADS": str(args.gpu_threads),
+            "RIFE_SCENE_MODE": str(args.scene_mode),
+            "RIFE_WORKSPACE_MIB": str(args.workspace_mib),
             "RIFE_PIPE_WIDTH": str(width),
             "RIFE_PIPE_HEIGHT": str(height),
             "RIFE_PIPE_FRAMES": str(frames),
@@ -1037,29 +1027,20 @@ def main() -> int:
         return 1
     write_stream_status(source, args.start)
 
-    anime4k = bool(getattr(args, "anime4k", False))
     width, height = video_size(source.info, args.max_height)
     fps = float(source.rate)
-    if anime4k:
-        print(
-            "Pipeline   : FFmpeg NVDEC -> Anime4K Mode A (→4K→1080) -> RIFE -> NVENC -> HLS"
-        )
-        print("Anime4K    : Mode A (acnet-hdn0 2x to 4K, then downscale)")
-    else:
-        print("Pipeline   : FFmpeg NVDEC -> VSPipe RIFE -> FFmpeg NVENC -> HLS")
+    pipeline = "FFmpeg NVDEC"
+    if args.anime4k:
+        pipeline += " -> Anime4K 2x->down"
+    pipeline += " -> RIFE -> NVENC -> HLS"
+    print(f"Pipeline   : {pipeline}")
     print("RIFE model : 4.25 Lite (TensorRT)")
     print(f"Input      : {display_source(source.video)}")
     if source.title:
         print(f"Title      : {source.title}")
-    if anime4k:
-        print(
-            f"Resolution : {source.info.width}x{source.info.height} -> "
-            f"{width}x{height} -> Anime4K 4K -> {width}x{height}"
-        )
-    else:
-        print(
-            f"Resolution : {source.info.width}x{source.info.height} -> {width}x{height}"
-        )
+    print(f"Resolution : {source.info.width}x{source.info.height} -> {width}x{height}")
+    if args.anime4k:
+        print(f"Anime4K    : {width}x{height} -> {width * 2}x{height * 2} -> {width}x{height}")
     print(f"Output     : {args.publish_url}")
     print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
     gop = encoder_gop(source.rate, args.factor, args.gop)

@@ -84,7 +84,7 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 - 批量粘贴 HTTP/HTTPS 链接
 - 列表中点击某一集切换转码；支持上一集 / 下一集
 - 页面显示 HLS 清单地址，用外部播放器打开即可
-- **Anime4K Mode A**：开启后走「1080 → Anime4K 升到 4K（修复+2×）→ 缩回 1080 → RIFE 补帧」；下次播放生效
+- **Anime4K**：开后先 2× 升到约 4K，再缩回输出分辨率，然后 RIFE；下次播放生效
 
 ```bat
 runtime\python.exe run.py webui

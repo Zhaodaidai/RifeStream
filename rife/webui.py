@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import math
@@ -364,9 +364,7 @@ def parse_settings(
     if not isinstance(payload, dict):
         if strict:
             raise ValueError("Settings object required")
-        return SkipSettings(
-            base.intro, base.outro, base.skip_intro, base.skip_outro, base.anime4k
-        )
+        return replace(base)
 
     def seconds(key: str, fallback: float) -> float:
         if key not in payload:
