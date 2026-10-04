@@ -10181,3 +10181,106 @@ Output 117632 frames in 1176.92 seconds (99.95 fps)
 127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
 127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
 127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "POST /api/play HTTP/1.1" 200 -
+
+Play: https://omts.tc.qq.com///GifAH1eljGhQSAakOPibWzRQg_MzxSCWIhGUa_2dxR2j58jlpbtyStYozLHGtv5aLopWsieG4oTl4eKSAnk1bEmTQN1cJEeymRb73owqnZApvpg9fPGs09h1EELxfj9Q4XfLyYgz8l17uoVub2wQR63p5YeoOUHgkEFuEZfXvA9JxhGMnmfHIV_dRen86tMbocFJ2Pa4Kr-qp2XVChBowngaNFh3jXAG-McA1v8L7Ioj4WAHMIpHGZhViztu4O1H/gzc_1000102_0b53juadwaaaxiacb4sk6jvmatodhnaqap2a.f322157.ts.m3u8?ver=4 start=0.0
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+HLS server is already running (C:\Users\Administrator\AppData\Local\rife\hls)
+Pipeline   : FFmpeg NVDEC -> RIFE -> NVENC -> HLS
+RIFE model : 4.25 Lite (TensorRT)
+Input      : https://omts.tc.qq.com///GifAH1eljGhQSAakOPibWzRQg_MzxSCWIhGUa_2dxR2j58jlpbtyStYozLHGtv5aLopWsieG4oTl4eKSAnk1bEmTQN1cJEeymRb73owqnZApvpg9fPGs09h1EELxfj9Q4XfLyYgz8l17uoVub2wQR63p5YeoOUHgkEFuEZfXvA9JxhGMnmfHIV_dRen86tMbocFJ2Pa4Kr-qp2XVChBowngaNFh3jXAG-McA1v8L7Ioj4WAHMIpHGZhViztu4O1H/gzc_1000102_0b53juadwaaaxiacb4sk6jvmatodhnaqap2a.f322157.ts.m3u8
+Title      : ���� ��04��
+Resolution : 3840x1606 -> 2592x1080
+Output     : C:\Users\Administrator\AppData\Local\rife\hls\rife\index.m3u8
+Frame rate : 25 x 2 = 50.000 fps
+HLS GOP    : 100 frames (~2.000s IDR)
+Audio      : aac
+Subtitles  : none
+Stop       : Ctrl+C
+127.0.0.1 - "DELETE /api/items/154ed3e6-bbad-4fd6-a8d6-a09a9afb4381 HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[https @ 000002c8296ea800] Will reconnect at 55625 in 0 second(s), error=End of file.
+[https @ 000002c8296ea800] Will reconnect at 55625 in 1 second(s), error=End of file.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[https @ 000002c8296ea800] Will reconnect at 55625 in 0 second(s), error=End of file.
+[https @ 000002c8296ea800] Will reconnect at 55625 in 1 second(s), error=End of file.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[https @ 0000016b4fb632c0] Will reconnect at 55625 in 0 second(s), error=End of file.
+[https @ 0000016b4fb632c0] Will reconnect at 55625 in 1 second(s), error=End of file.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[https @ 0000016b4fb632c0] Will reconnect at 55625 in 0 second(s), error=End of file.
+[https @ 0000016b4fb632c0] Will reconnect at 55625 in 1 second(s), error=End of file.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -

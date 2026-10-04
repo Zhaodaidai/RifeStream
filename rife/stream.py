@@ -183,11 +183,10 @@ def decoder_scale_filter(
 
 
 HTTP_RECONNECT_OPTIONS = [
+    # EOF 对点播和已结束的 HLS 媒体是正常状态，不把它当成网络故障重连。
     "-reconnect",
     "1",
     "-reconnect_streamed",
-    "1",
-    "-reconnect_at_eof",
     "1",
     "-reconnect_on_network_error",
     "1",

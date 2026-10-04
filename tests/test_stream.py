@@ -68,6 +68,7 @@ class StreamInputTests(unittest.TestCase):
             ffmpeg_input_options("https://example.com/video.mp4", headers, None),
             [*HTTP_RECONNECT_OPTIONS, "-headers", "referer: https://last.example\r\n"],
         )
+        self.assertNotIn("-reconnect_at_eof", HTTP_RECONNECT_OPTIONS)
 
     def test_mp4_http_input_does_not_pass_hls_only_options(self) -> None:
         options = ffmpeg_input_options("https://example.com/video.mp4", [], None)
