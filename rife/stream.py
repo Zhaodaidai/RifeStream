@@ -825,6 +825,7 @@ def build_decoder_command(source: StreamInput, args: argparse.Namespace) -> list
     command.extend(
         option_args(
             ("-map", "0:v:0"), ("-an",), ("-sn",), ("-dn",),
+            ("-map_metadata", "-1"),
             ("-vf", decoder_scale_filter(source.info, args.max_height, source.rate)),
             ("-fps_mode", "cfr"), ("-pix_fmt", "yuv420p"),
             ("-f", "rawvideo"), ("pipe:1",),

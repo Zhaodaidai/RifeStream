@@ -110,6 +110,8 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(video_size(info, 1080), (1920, 1080))
         self.assertIn("-hwaccel", command)
         self.assertIn("cuda", command)
+        metadata_index = command.index("-map_metadata")
+        self.assertEqual(command[metadata_index : metadata_index + 2], ["-map_metadata", "-1"])
         self.assertEqual(
             command[command.index("-vf") + 1],
             decoder_scale_filter(info, 1080, Fraction(25)),
