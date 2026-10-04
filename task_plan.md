@@ -1,45 +1,25 @@
-# Task Plan: GPU passthrough (reduced scope)
+# 性能优化计划
 
-## Goal
-Cut avoidable GPU copies without rewriting vs-mlrt or serializing TensorRT.
+目标：在不降低输出画质的前提下，减少 RIFE 视频流水线中的重复计算、内存拷贝、阻塞和不必要 I/O，逐阶段验证。
 
-## Current Phase
-Phase 5
+## 阶段
+- [complete] 建立架构基线，识别性能热点和画质约束
+- [complete] 优化解码、缩放和 rawvideo 管道
+- [complete] 优化 VapourSynth 帧缓存与 RIFE 调度
+- [pending] 优化 NVENC/HLS 输出与进程 I/O
+- [pending] 优化 WebUI/协议的非播放路径
+- [complete] 全量测试、静态检查和回归总结
 
-## Phases
+## 当前结论
+- 已完成低风险优化，未改变分辨率、帧率、RIFE 模型、颜色参数或 NVENC 画质参数。
+- NVENC/HLS 和 TensorRT 并发参数保留待真实 NVIDIA 环境基准后再调整。
 
-### Phase 1: Requirements & Discovery
-- [x] vs-mlrt needs CPU RGBH; FFmpeg vapoursynth demuxer getFrame is serial
-- **Status:** complete
+## 画质约束
+- 不降低输入分辨率和输出帧率。
+- 不提高 NVENC `-cq` 数值，不改变颜色空间和色彩参数。
+- 不删除 RIFE、Anime4K、字幕等处理步骤。
+- 优先消除重复工作和不必要拷贝，而不是降低算法质量。
 
-### Phase 2: Planning & Structure
-- [x] Do not host RIFE inside `ffmpeg -f vapoursynth` (would stall `--gpu-threads`)
-- [x] Pin NVENC to the same GPU as TRT
-- **Status:** complete
-
-### Phase 3: Implementation
-- [x] Encoder `-gpu` matches `--gpu`
-- **Status:** complete
-
-### Phase 4: Testing & Verification
-- [x] unittest
-- **Status:** complete
-
-### Phase 5: Delivery
-- [x] Explain what was left on the table
-- **Status:** complete
-
-## Key Questions
-1. Can TRT consume NVDEC CUDA frames? Not through vs-mlrt.
-2. Can one FFmpeg process replace vspipe? Demuxer is serial; no parallel vapoursynth filter.
-
-## Decisions Made
-| Decision | Rationale |
-|----------|-----------|
-| Keep decoder \| vspipe \| encoder | Parallel TRT requests |
-| NVENC `-gpu` | Avoid cross-GPU copies |
-| No custom CUDA RIFE/NVENC graph | Too much for the remaining copies |
-
-## Errors Encountered
-| Error | Attempt | Resolution |
-|-------|---------|------------|
+## 错误记录
+| 错误 | 尝试 | 处理 |
+|---|---:|---|

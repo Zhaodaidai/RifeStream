@@ -25,6 +25,7 @@ from rife.stream import (
     normalize_headers,
     parse_subtitle_tracks,
     pick_subtitle_stream,
+    probe_media,
     resolve_subtitles,
     subtitle_filter,
     video_size,
@@ -32,6 +33,25 @@ from rife.stream import (
 
 
 class StreamInputTests(unittest.TestCase):
+    def test_probe_media_reads_video_and_subtitles_in_one_probe(self) -> None:
+        result = mock.Mock(
+            returncode=0,
+            stdout=(
+                '{"streams":['
+                '{"codec_type":"video","width":1920,"height":1080,'
+                '"avg_frame_rate":"25/1","duration":"60"},'
+                '{"codec_type":"subtitle","codec_name":"ass",'
+                '"disposition":{"default":1},"tags":{"language":"chi"}}'
+                '],"format":{"duration":"60"}}'
+            ),
+            stderr="",
+        )
+        with mock.patch("rife.stream.capture", return_value=result) as capture:
+            info, tracks = probe_media("/tmp/video.mkv", [], None)
+        self.assertEqual(info, MediaInfo(Fraction(25), 1920, 1080, 60.0))
+        self.assertEqual(tracks, [SubtitleTrack(0, "ass", "chi", None, True)])
+        capture.assert_called_once()
+
     def test_headers_are_deduplicated_case_insensitively(self) -> None:
         headers = normalize_headers(
             ["Referer: https://first.example", "referer: https://last.example"]

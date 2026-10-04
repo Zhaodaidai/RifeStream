@@ -225,18 +225,17 @@ def safe_float(value: object) -> float | None:
     return result if math.isfinite(result) and result >= 0 else None
 
 
-def probe_video(
+def probe_media(
     input_source: str, headers: list[str], proxy: str | None
-) -> MediaInfo:
+) -> tuple[MediaInfo, list[SubtitleTrack]]:
     command = [
         str(FFPROBE),
         "-v",
         "error",
         *ffmpeg_input_options(input_source, headers, proxy),
-        "-select_streams",
-        "v:0",
         "-show_entries",
-        "stream=width,height,avg_frame_rate,r_frame_rate,duration:format=duration",
+        "stream=codec_type,width,height,avg_frame_rate,r_frame_rate,duration,"
+        "codec_name,disposition:stream_tags=language,title:format=duration",
         "-of",
         "json",
         input_source,
@@ -251,7 +250,8 @@ def probe_video(
         raise RuntimeError("ffprobe could not inspect the input video")
     try:
         document = json.loads(result.stdout)
-        stream = document["streams"][0]
+        streams = document["streams"]
+        stream = next(item for item in streams if item.get("codec_type") == "video")
         width = int(stream["width"])
         height = int(stream["height"])
         for key in ("avg_frame_rate", "r_frame_rate"):
@@ -260,8 +260,22 @@ def probe_video(
                 duration = safe_float(stream.get("duration"))
                 if duration is None:
                     duration = safe_float(document.get("format", {}).get("duration"))
-                return MediaInfo(rate, width, height, duration)
-    except (KeyError, IndexError, TypeError, ValueError, ZeroDivisionError) as exc:
+                subtitle_document = {
+                    "streams": [
+                        item for item in streams if item.get("codec_type") == "subtitle"
+                    ]
+                }
+                return MediaInfo(rate, width, height, duration), parse_subtitle_tracks(
+                    subtitle_document
+                )
+    except (
+        KeyError,
+        IndexError,
+        StopIteration,
+        TypeError,
+        ValueError,
+        ZeroDivisionError,
+    ) as exc:
         raise RuntimeError("ffprobe returned invalid video metadata") from exc
     raise RuntimeError("Input frame rate is unavailable; pass --source-fps")
 
@@ -530,6 +544,7 @@ def resolve_subtitles(
     args: argparse.Namespace,
     headers: list[str],
     proxy: str | None,
+    tracks: list[SubtitleTrack] | None = None,
 ) -> ResolvedSubtitles:
     requested = args.subtitle_stream
     explicit = bool(args.subtitles) or requested is not None
@@ -546,7 +561,8 @@ def resolve_subtitles(
     if subtitle_file is None:
         subtitle_file = video
     probe_headers = headers if subtitle_file == video else []
-    tracks = probe_subtitle_tracks(subtitle_file, probe_headers, proxy)
+    if tracks is None or subtitle_file != video:
+        tracks = probe_subtitle_tracks(subtitle_file, probe_headers, proxy)
     try:
         track = pick_subtitle_stream(tracks, requested)
     except ValueError:
@@ -736,13 +752,13 @@ def prepare_input(args: argparse.Namespace) -> StreamInput:
         header.lower().startswith("user-agent:") for header in headers
     ):
         headers = [f"User-Agent: {DEFAULT_USER_AGENT}", *headers]
-    info = probe_video(video, headers, args.http_proxy)
+    info, tracks = probe_media(video, headers, args.http_proxy)
     rate = (
         Fraction(str(args.source_fps)).limit_denominator(1_000_000)
         if args.source_fps > 0
         else info.frame_rate
     )
-    subtitles = resolve_subtitles(video, args, headers, args.http_proxy)
+    subtitles = resolve_subtitles(video, args, headers, args.http_proxy, tracks)
     return StreamInput(
         video,
         audio,

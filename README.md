@@ -44,7 +44,7 @@ runtime\python.exe run.py protocol install --force
 runtime\python.exe run.py protocol uninstall
 ```
 
-首次请求会启动转码并写出 HLS；后续请求会替换当前媒体，不会保留重复转码进程。
+协议请求只会把媒体加入 WebUI 播放列表，不会自动启动转码；请在 WebUI 中点击播放。
 
 ## 直接运行
 
@@ -107,7 +107,7 @@ Web UI 会在需要时启动 HLS 服务。切集时会替换当前转码进程�
 - HLS 清单：`http://<PC-LAN-IP>:8888/rife/index.m3u8`
 
 HLS 是持续增长的 live 清单：从已有分片开头顺序播放，卡顿时等待缓冲，不追实时沿。
-协议或 `run.py stream` 再次启动时会替换当前转码进程。若要从指定位置开始，使用 `--start`。
+WebUI 或 `run.py stream` 启动新的媒体时会替换当前转码进程。若要从指定位置开始，使用 `--start`。
 
 ## 管理命令
 

@@ -6,6 +6,10 @@ import unittest
 
 
 class PipeFrameTests(unittest.TestCase):
+    def test_script_reads_the_raw_pipe_without_buffered_copy(self) -> None:
+        script = Path(__file__).resolve().parent.parent / "vs" / "rife_stream.vpy"
+        self.assertIn("source = sys.stdin.buffer.raw", script.read_text(encoding="utf-8"))
+
     @classmethod
     def setUpClass(cls) -> None:
         script = Path(__file__).resolve().parent.parent / "vs" / "rife_stream.vpy"
@@ -27,7 +31,14 @@ class PipeFrameTests(unittest.TestCase):
             ),
             get_stride=lambda plane: stride,
         )
-        self.copy_plane(frame, 0, source, width, height)
+        self.copy_plane(
+            frame,
+            0,
+            ctypes.addressof(ctypes.c_ubyte.from_buffer(source)),
+            0,
+            width,
+            height,
+        )
         return destination
 
     def test_contiguous_plane(self) -> None:

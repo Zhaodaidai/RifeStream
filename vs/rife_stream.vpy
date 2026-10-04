@@ -37,7 +37,7 @@ if pipe_width % 2 or pipe_height % 2:
     raise vs.Error("The raw YUV420P8 pipe dimensions must be even")
 
 source_fps = pipe_fps_num / pipe_fps_den
-source = sys.stdin.buffer
+source = sys.stdin.buffer.raw
 frame_size = pipe_width * pipe_height * 3 // 2
 cache_lock = threading.Condition()
 frame_cache: OrderedDict[int, memoryview] = OrderedDict()
@@ -130,7 +130,8 @@ def prefetch_frames() -> None:
 def copy_plane(
     frame: vs.VideoFrame,
     plane: int,
-    src: memoryview,
+    source_pointer: int,
+    source_offset: int,
     width: int,
     height: int,
 ) -> None:
@@ -138,24 +139,24 @@ def copy_plane(
     pointer = frame.get_write_ptr(plane)
     if isinstance(pointer, ctypes.c_void_p):
         pointer = pointer.value
-    source_pointer = ctypes.addressof(ctypes.c_ubyte.from_buffer(src))
     stride = frame.get_stride(plane)
     if stride == width:
-        ctypes.memmove(pointer, source_pointer, packed)
+        ctypes.memmove(pointer, source_pointer + source_offset, packed)
         return
     for row in range(height):
         ctypes.memmove(
             pointer + row * stride,
-            source_pointer + row * width,
+            source_pointer + source_offset + row * width,
             width,
         )
 
 
 def fill_yuv420(output: vs.VideoFrame, data: memoryview) -> None:
+    source_pointer = ctypes.addressof(ctypes.c_ubyte.from_buffer(data))
     offset = 0
     for plane, (width, height) in enumerate(plane_dims):
         packed = width * height
-        copy_plane(output, plane, data[offset : offset + packed], width, height)
+        copy_plane(output, plane, source_pointer, offset, width, height)
         offset += packed
 
 

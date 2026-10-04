@@ -1,6 +1,9 @@
-# Progress Log
+# 优化进度
 
-## Session: 2026-09-10
-
-- Scoped GPU passthrough down: no ffmpeg-vapoursynth host
-- NVENC `-gpu` aligned with `--gpu`
+- 已初始化性能优化计划和发现记录。
+- 已完成：合并视频与字幕的单次 `ffprobe`，避免网络媒体重复打开。
+- 已完成：优化 VapourSynth rawvideo 平面复制，减少每帧切片和地址转换。
+- 已完成：让 VapourSynth 直接读取 raw pipe 底层文件对象，减少 Python 缓冲层。
+- 已完成：补充回归测试；当前测试总数为 68 个。
+- 已完成：更新协议行为文档，明确 `mpv://` 只加入播放列表。
+- 暂缓：NVENC、TensorRT 并发和 HLS 缓冲参数，等待可用 NVIDIA 环境进行真实性能基准。
