@@ -1,15 +1,25 @@
 import base64
 import gzip
+import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
+from unittest.mock import patch
 from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rife.paths import CLI, STREAM_CLI
-from rife.protocol import MpvRequest, ProtocolError, build_stream_command, parse_mpv_command, parse_uri
+from rife.protocol import (
+    MpvRequest,
+    ProtocolError,
+    build_stream_command,
+    parse_mpv_command,
+    parse_uri,
+    register_playlist_item,
+)
 
 
 def ush_uri(command: str, target: str = "MPV") -> str:
@@ -119,6 +129,15 @@ class MpvProtocolTests(unittest.TestCase):
         invocation = build_stream_command(request)
 
         self.assertEqual(invocation[invocation.index("--start") + 1], "42.5")
+
+    def test_protocol_item_is_registered_in_playlist(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            playlist = Path(folder) / "playlist.json"
+            with patch("rife.protocol.PLAYLIST_FILE", playlist):
+                register_playlist_item(MpvRequest("https://example.com/video.mp4"))
+            data = json.loads(playlist.read_text(encoding="utf-8"))
+            self.assertEqual(data["items"][0]["source"], "https://example.com/video.mp4")
+            self.assertEqual(data["current_id"], data["items"][0]["id"])
 
 
 if __name__ == "__main__":

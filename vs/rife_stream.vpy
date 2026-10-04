@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import ctypes
 import os
 import sys
 import threading
@@ -126,31 +127,35 @@ def prefetch_frames() -> None:
         return
 
 
-def copy_plane(dest: memoryview, src: memoryview, width: int, height: int) -> None:
+def copy_plane(
+    frame: vs.VideoFrame,
+    plane: int,
+    src: memoryview,
+    width: int,
+    height: int,
+) -> None:
     packed = width * height
-    if dest.contiguous and dest.nbytes == packed:
-        dest.cast("B")[:packed] = src
+    pointer = frame.get_write_ptr(plane)
+    if isinstance(pointer, ctypes.c_void_p):
+        pointer = pointer.value
+    source_pointer = ctypes.addressof(ctypes.c_ubyte.from_buffer(src))
+    stride = frame.get_stride(plane)
+    if stride == width:
+        ctypes.memmove(pointer, source_pointer, packed)
         return
-    if dest.ndim == 1:
-        dest_b = dest.cast("B")
-        stride = dest.nbytes // height
-        offset = 0
-        for row in range(height):
-            start = row * stride
-            dest_b[start : start + width] = src[offset : offset + width]
-            offset += width
-        return
-    offset = 0
     for row in range(height):
-        memoryview(dest[row]).cast("B")[:width] = src[offset : offset + width]
-        offset += width
+        ctypes.memmove(
+            pointer + row * stride,
+            source_pointer + row * width,
+            width,
+        )
 
 
 def fill_yuv420(output: vs.VideoFrame, data: memoryview) -> None:
     offset = 0
     for plane, (width, height) in enumerate(plane_dims):
         packed = width * height
-        copy_plane(memoryview(output[plane]), data[offset : offset + packed], width, height)
+        copy_plane(output, plane, data[offset : offset + packed], width, height)
         offset += packed
 
 

@@ -6131,3 +6131,410 @@ Stop       : Ctrl+C
 127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
 127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
 127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "DELETE /api/items/fc423d49-c9bf-4de6-a445-16755b290b1e HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "DELETE /api/items/72a7c01a-b79b-4ae7-b399-2984289cb979 HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+
+Play: https://omts.tc.qq.com///AigfLuHERrxz0E-AXsEIq0EocYaM3LOH47RiU9iPv7ISyoFuYPTwU9n2RXKkXRrQ83E7_I5YtW01YoM-Br7-sDThupluXSkyiCgWTqDKjKy6ItuaY8TMdGQcXJNCuaW_YRVpKEolkV0-L21eg884anU3a7gVAjxTclqSvoW85myrMudYc5c6NB_kXxc8F2AdaZ_I9UGVZe0mTRnNZzM7v3_006xDPmjHJNFziDX9uLwUWYzA6YHIXy2OFk7tPp9i/gzc_1000102_0b53g4ag6aaadmagktaqjzvman6dn45qa22a.f322157.ts.m3u8?ver=4 start=0.0
+127.0.0.1 - "POST /api/play HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+HLS server is already running (C:\Users\Administrator\AppData\Local\rife\hls)
+Pipeline   : FFmpeg NVDEC -> RIFE -> NVENC -> HLS
+RIFE model : 4.25 Lite (TensorRT)
+Input      : https://omts.tc.qq.com///AigfLuHERrxz0E-AXsEIq0EocYaM3LOH47RiU9iPv7ISyoFuYPTwU9n2RXKkXRrQ83E7_I5YtW01YoM-Br7-sDThupluXSkyiCgWTqDKjKy6ItuaY8TMdGQcXJNCuaW_YRVpKEolkV0-L21eg884anU3a7gVAjxTclqSvoW85myrMudYc5c6NB_kXxc8F2AdaZ_I9UGVZe0mTRnNZzM7v3_006xDPmjHJNFziDX9uLwUWYzA6YHIXy2OFk7tPp9i/gzc_1000102_0b53g4ag6aaadmagktaqjzvman6dn45qa22a.f322157.ts.m3u8
+Title      : ���� ��02��
+Resolution : 3840x1606 -> 2592x1080
+Output     : C:\Users\Administrator\AppData\Local\rife\hls\rife\index.m3u8
+Frame rate : 25 x 2 = 50.000 fps
+HLS GOP    : 100 frames (~2.000s IDR)
+Audio      : aac
+Subtitles  : none
+Stop       : Ctrl+C
+[https @ 000001d4097e0a80] Will reconnect at 44638 in 0 second(s), error=End of file.
+[https @ 000001d4097e0a80] Will reconnect at 44638 in 1 second(s), error=End of file.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[https @ 000001d4097e0a80] Will reconnect at 44638 in 0 second(s), error=End of file.
+[https @ 000001d4097e0a80] Will reconnect at 44638 in 1 second(s), error=End of file.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+Script evaluation failed:
+Python exception: 
+Traceback (most recent call last):
+  File "src\\cython\\vapoursynth.pyx", line 3216, in vapoursynth.publicFunction
+  File "src\\cython\\vapoursynth.pyx", line 3218, in vapoursynth.publicFunction
+  File "src\\cython\\vapoursynth.pyx", line 834, in vapoursynth.FuncData.__call__
+  File "\\192.168.10.100\game\rife\vs\rife_stream.vpy", line 176, in read_pipe_frame
+    fill_yuv420(output, get_raw_frame(n))
+  File "\\192.168.10.100\game\rife\vs\rife_stream.vpy", line 153, in fill_yuv420
+    copy_plane(memoryview(output[plane]), data[offset : offset + packed], width, height)
+  File "\\192.168.10.100\game\rife\vs\rife_stream.vpy", line 145, in copy_plane
+    memoryview(dest[row]).cast("B")[:width] = src[offset : offset + width]
+               ~~~~^^^^^
+NotImplementedError: multi-dimensional sub-views are not implemented
+
+
+Traceback (most recent call last):
+  File "src\\cython\\vapoursynth.pyx", line 3387, in vapoursynth._vpy_evaluate
+  File "src\\cython\\vapoursynth.pyx", line 3388, in vapoursynth._vpy_evaluate
+  File "\\192.168.10.100\game\rife\vs\rife_stream.vpy", line 204, in <module>
+    clip = k7f.RIFE_NV(
+           ^^^^^^^^^^^^
+  File "\\192.168.10.100\game\rife\runtime\k7sfunc.py", line 1745, in RIFE_NV
+    colorlv = getattr(input.get_frame(0).props, "_ColorRange", 0)
+                      ^^^^^^^^^^^^^^^^^^
+  File "src\\cython\\vapoursynth.pyx", line 2194, in vapoursynth.VideoNode.get_frame
+vapoursynth.Error: 
+Traceback (most recent call last):
+  File "src\\cython\\vapoursynth.pyx", line 3216, in vapoursynth.publicFunction
+  File "src\\cython\\vapoursynth.pyx", line 3218, in vapoursynth.publicFunction
+  File "src\\cython\\vapoursynth.pyx", line 834, in vapoursynth.FuncData.__call__
+  File "\\192.168.10.100\game\rife\vs\rife_stream.vpy", line 176, in read_pipe_frame
+    fill_yuv420(output, get_raw_frame(n))
+  File "\\192.168.10.100\game\rife\vs\rife_stream.vpy", line 153, in fill_yuv420
+    copy_plane(memoryview(output[plane]), data[offset : offset + packed], width, height)
+  File "\\192.168.10.100\game\rife\vs\rife_stream.vpy", line 145, in copy_plane
+    memoryview(dest[row]).cast("B")[:width] = src[offset : offset + width]
+               ~~~~^^^^^
+NotImplementedError: multi-dimensional sub-views are not implemented
+
+
+[in#0 @ 000001d1498d6cc0] Header too large.
+[in#0 @ 000001d1498d68c0] Error opening input: Invalid argument
+Error opening input file pipe:0.
+Error opening input files: Invalid argument
+[vost#0:0/rawvideo @ 000001d40984ae80] Error submitting a packet to the muxer: Broken pipe
+    Last message repeated 1 times
+[out#0/rawvideo @ 000001d409850640] Error muxing a packet
+[out#0/rawvideo @ 000001d409850640] Task finished with error: Broken pipe
+[out#0/rawvideo @ 000001d409850640] Terminating thread with error: Broken pipe
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET / HTTP/1.1" 200 -
+127.0.0.1 - "GET /styles.css HTTP/1.1" 200 -
+127.0.0.1 - "GET /app.js HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "DELETE /api/items/1dc06eff-2745-43b5-b6d8-7d38d9d43caf HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+
+Play: https://omts.tc.qq.com///S_Cey8PB_339xLaSQ1zJ8kJrHbE10fD5ulLJKxC7lUTU2COFiFIsGXiHn5pGXgRZ6UH2QTan5ie_K9crCb3ibWahBSNeRmertfrlYpN3gRNwRZVbDbWUklrhahIQjPnZ-linWQaWOo5HGzOCLPJP7bgS8z8145di6q98QjmdqNmawbL25GEGt_Hdat15aNYgZ5p0uS1Torx1ElLItgeRLppGe284y0S3bqxJHq1QJ5OQhPOqC6QpZkYkgoEIW6sX/gzc_1000102_0b53g4ag6aaadmagktaqjzvman6dn45qa22a.f322157.ts.m3u8?ver=4 start=0.0
+127.0.0.1 - "POST /api/play HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+HLS server is already running (C:\Users\Administrator\AppData\Local\rife\hls)
+Pipeline   : FFmpeg NVDEC -> RIFE -> NVENC -> HLS
+RIFE model : 4.25 Lite (TensorRT)
+Input      : https://omts.tc.qq.com///S_Cey8PB_339xLaSQ1zJ8kJrHbE10fD5ulLJKxC7lUTU2COFiFIsGXiHn5pGXgRZ6UH2QTan5ie_K9crCb3ibWahBSNeRmertfrlYpN3gRNwRZVbDbWUklrhahIQjPnZ-linWQaWOo5HGzOCLPJP7bgS8z8145di6q98QjmdqNmawbL25GEGt_Hdat15aNYgZ5p0uS1Torx1ElLItgeRLppGe284y0S3bqxJHq1QJ5OQhPOqC6QpZkYkgoEIW6sX/gzc_1000102_0b53g4ag6aaadmagktaqjzvman6dn45qa22a.f322157.ts.m3u8
+Title      : ���� ��02��
+Resolution : 3840x1606 -> 2592x1080
+Output     : C:\Users\Administrator\AppData\Local\rife\hls\rife\index.m3u8
+Frame rate : 25 x 2 = 50.000 fps
+HLS GOP    : 100 frames (~2.000s IDR)
+Audio      : aac
+Subtitles  : none
+Stop       : Ctrl+C
+[https @ 000001cd383f1100] Will reconnect at 44638 in 0 second(s), error=End of file.
+[https @ 000001cd383f1100] Will reconnect at 44638 in 1 second(s), error=End of file.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[https @ 000001cd383f1100] Will reconnect at 44638 in 0 second(s), error=End of file.
+[https @ 000001cd383f1100] Will reconnect at 44638 in 1 second(s), error=End of file.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+&&&& RUNNING TensorRT.trtexec [TensorRT v100900] [b34] # //192.168.10.100/game/rife/runtime/vs-plugins\vsmlrt-cuda\trtexec --onnx=//192.168.10.100/game/rife/runtime/vs-plugins\models\rife_v2\rife_v4.25_lite.onnx --timingCacheFile=C:\Users\Administrator\AppData\Local\rife\engines\43e7e526.engine.cache --device=0 --saveEngine=C:\Users\Administrator\AppData\Local\rife\engines\43e7e526.engine --shapes=input:1x7x1080x2592 --fp16 --tacticSources=-CUBLAS,-CUBLAS_LT,-CUDNN,+EDGE_MASK_CONVOLUTIONS,+JIT_CONVOLUTIONS --useCudaGraph --noDataTransfers --noTF32 --inputIOFormats=fp16:chw --outputIOFormats=fp16:chw --builderOptimizationLevel=3 --precisionConstraints=obey --layerPrecisions=/Cast_2:fp32,/Cast_3:fp32,/Cast_5:fp32,/Cast_7:fp32,/Reciprocal:fp32,/Reciprocal_1:fp32,/Mul:fp32,/Mul_1:fp32,/Mul_8:fp32,/Mul_10:fp32,/Sub_5:fp32,/Sub_6:fp32,ONNXTRT_Broadcast_236:fp32,ONNXTRT_Broadcast_238:fp32,ONNXTRT_Broadcast_273:fp32,ONNXTRT_Broadcast_275:fp32,ONNXTRT_Broadcast_*:fp32
+[10/05/2026-02:10:45] [I] === Model Options ===
+[10/05/2026-02:10:45] [I] Format: ONNX
+[10/05/2026-02:10:45] [I] Model: //192.168.10.100/game/rife/runtime/vs-plugins\models\rife_v2\rife_v4.25_lite.onnx
+[10/05/2026-02:10:45] [I] Output:
+[10/05/2026-02:10:45] [I] === Build Options ===
+[10/05/2026-02:10:45] [I] Memory Pools: workspace: default, dlaSRAM: default, dlaLocalDRAM: default, dlaGlobalDRAM: default, tacticSharedMem: default
+[10/05/2026-02:10:45] [I] avgTiming: 8
+[10/05/2026-02:10:45] [I] Precision: FP32+FP16 (obey precision constraints)
+[10/05/2026-02:10:45] [I] LayerPrecisions: /Mul_1:fp32,/Sub_5:fp32,/Mul_10:fp32,/Cast_2:fp32,/Cast_3:fp32,/Cast_5:fp32,/Cast_7:fp32,/Reciprocal_1:fp32,/Reciprocal:fp32,ONNXTRT_Broadcast_236:fp32,/Mul:fp32,/Mul_8:fp32,/Sub_6:fp32,ONNXTRT_Broadcast_238:fp32,ONNXTRT_Broadcast_273:fp32,ONNXTRT_Broadcast_275:fp32,ONNXTRT_Broadcast_*:fp32
+[10/05/2026-02:10:45] [I] Layer Device Types: 
+[10/05/2026-02:10:45] [I] Calibration: 
+[10/05/2026-02:10:45] [I] Refit: Disabled
+[10/05/2026-02:10:45] [I] Strip weights: Disabled
+[10/05/2026-02:10:45] [I] Version Compatible: Disabled
+[10/05/2026-02:10:45] [I] ONNX Plugin InstanceNorm: Disabled
+[10/05/2026-02:10:45] [I] TensorRT runtime: full
+[10/05/2026-02:10:45] [I] Lean DLL Path: 
+[10/05/2026-02:10:45] [I] Tempfile Controls: { in_memory: allow, temporary: allow }
+[10/05/2026-02:10:45] [I] Exclude Lean Runtime: Disabled
+[10/05/2026-02:10:45] [I] Sparsity: Disabled
+[10/05/2026-02:10:45] [I] Safe mode: Disabled
+[10/05/2026-02:10:45] [I] Build DLA standalone loadable: Disabled
+[10/05/2026-02:10:45] [I] Allow GPU fallback for DLA: Disabled
+[10/05/2026-02:10:45] [I] DirectIO mode: Disabled
+[10/05/2026-02:10:45] [I] Restricted mode: Disabled
+[10/05/2026-02:10:45] [I] Skip inference: Disabled
+[10/05/2026-02:10:45] [I] Save engine: C:\Users\Administrator\AppData\Local\rife\engines\43e7e526.engine
+[10/05/2026-02:10:45] [I] Load engine: 
+[10/05/2026-02:10:45] [I] Profiling verbosity: 0
+[10/05/2026-02:10:45] [I] Tactic sources: cublas [OFF], cublasLt [OFF], cudnn [OFF], edge mask convolutions [ON], JIT convolutions [ON], 
+[10/05/2026-02:10:45] [I] timingCacheMode: global
+[10/05/2026-02:10:45] [I] timingCacheFile: C:\Users\Administrator\AppData\Local\rife\engines\43e7e526.engine.cache
+[10/05/2026-02:10:45] [I] Enable Compilation Cache: Enabled
+[10/05/2026-02:10:45] [I] Enable Monitor Memory: Disabled
+[10/05/2026-02:10:45] [I] errorOnTimingCacheMiss: Disabled
+[10/05/2026-02:10:45] [I] Preview Features: Use default preview flags.
+[10/05/2026-02:10:45] [I] MaxAuxStreams: -1
+[10/05/2026-02:10:45] [I] BuilderOptimizationLevel: 3
+[10/05/2026-02:10:45] [I] MaxTactics: -1
+[10/05/2026-02:10:45] [I] Calibration Profile Index: 0
+[10/05/2026-02:10:45] [I] Weight Streaming: Disabled
+[10/05/2026-02:10:45] [I] Runtime Platform: Same As Build
+[10/05/2026-02:10:45] [I] Debug Tensors: 
+[10/05/2026-02:10:45] [I] Input(s): fp16:chw
+[10/05/2026-02:10:45] [I] Output(s): fp16:chw
+[10/05/2026-02:10:45] [I] Input build shape (profile 0): input=1x7x1080x2592+1x7x1080x2592+1x7x1080x2592
+[10/05/2026-02:10:45] [I] Input calibration shapes: model
+[10/05/2026-02:10:45] [I] === System Options ===
+[10/05/2026-02:10:45] [I] Device: 0
+[10/05/2026-02:10:45] [I] DLACore: 
+[10/05/2026-02:10:45] [I] Plugins:
+[10/05/2026-02:10:45] [I] setPluginsToSerialize:
+[10/05/2026-02:10:45] [I] dynamicPlugins:
+[10/05/2026-02:10:45] [I] ignoreParsedPluginLibs: 0
+[10/05/2026-02:10:45] [I] 
+[10/05/2026-02:10:45] [I] === Inference Options ===
+[10/05/2026-02:10:45] [I] Batch: Explicit
+[10/05/2026-02:10:45] [I] Input inference shape : input=1x7x1080x2592
+[10/05/2026-02:10:45] [I] Iterations: 10
+[10/05/2026-02:10:45] [I] Duration: 3s (+ 200ms warm up)
+[10/05/2026-02:10:45] [I] Sleep time: 0ms
+[10/05/2026-02:10:45] [I] Idle time: 0ms
+[10/05/2026-02:10:45] [I] Inference Streams: 1
+[10/05/2026-02:10:45] [I] ExposeDMA: Disabled
+[10/05/2026-02:10:45] [I] Data transfers: Disabled
+[10/05/2026-02:10:45] [I] Spin-wait: Disabled
+[10/05/2026-02:10:45] [I] Multithreading: Disabled
+[10/05/2026-02:10:45] [I] CUDA Graph: Enabled
+[10/05/2026-02:10:45] [I] Separate profiling: Disabled
+[10/05/2026-02:10:45] [I] Time Deserialize: Disabled
+[10/05/2026-02:10:45] [I] Time Refit: Disabled
+[10/05/2026-02:10:45] [I] NVTX verbosity: 0
+[10/05/2026-02:10:45] [I] Persistent Cache Ratio: 0
+[10/05/2026-02:10:45] [I] Optimization Profile Index: 0
+[10/05/2026-02:10:45] [I] Weight Streaming Budget: 100.000000%
+[10/05/2026-02:10:45] [I] Inputs:
+[10/05/2026-02:10:45] [I] Debug Tensor Save Destinations:
+[10/05/2026-02:10:45] [I] === Reporting Options ===
+[10/05/2026-02:10:45] [I] Verbose: Disabled
+[10/05/2026-02:10:45] [I] Averages: 10 inferences
+[10/05/2026-02:10:45] [I] Percentiles: 90,95,99
+[10/05/2026-02:10:45] [I] Dump refittable layers:Disabled
+[10/05/2026-02:10:45] [I] Dump output: Disabled
+[10/05/2026-02:10:45] [I] Profile: Disabled
+[10/05/2026-02:10:45] [I] Export timing to JSON file: 
+[10/05/2026-02:10:45] [I] Export output to JSON file: 
+[10/05/2026-02:10:45] [I] Export profile to JSON file: 
+[10/05/2026-02:10:45] [I] 
+[10/05/2026-02:10:45] [I] === Device Information ===
+[10/05/2026-02:10:45] [I] Available Devices: 
+[10/05/2026-02:10:45] [I]   Device 0: "NVIDIA GeForce RTX 3080 Ti" UUID: GPU-15c03600-9d96-1f57-a030-0cc9a9b0f8ae
+[10/05/2026-02:10:45] [I] Selected Device: NVIDIA GeForce RTX 3080 Ti
+[10/05/2026-02:10:45] [I] Selected Device ID: 0
+[10/05/2026-02:10:45] [I] Selected Device UUID: GPU-15c03600-9d96-1f57-a030-0cc9a9b0f8ae
+[10/05/2026-02:10:45] [I] Compute Capability: 8.6
+[10/05/2026-02:10:45] [I] SMs: 80
+[10/05/2026-02:10:45] [I] Device Global Memory: 12287 MiB
+[10/05/2026-02:10:45] [I] Shared Memory per SM: 100 KiB
+[10/05/2026-02:10:45] [I] Memory Bus Width: 384 bits (ECC disabled)
+[10/05/2026-02:10:45] [I] Application Compute Clock Rate: 1.695 GHz
+[10/05/2026-02:10:45] [I] Application Memory Clock Rate: 9.501 GHz
+[10/05/2026-02:10:45] [I] 
+[10/05/2026-02:10:45] [I] Note: The application clock rates do not reflect the actual clock rates that the GPU is currently running at.
+[10/05/2026-02:10:45] [I] 
+[10/05/2026-02:10:45] [I] TensorRT version: 10.9.0
+[10/05/2026-02:10:45] [I] Loading standard plugins
+[10/05/2026-02:10:45] [I] [TRT] [MemUsageChange] Init CUDA: CPU +3, GPU +0, now: CPU 7441, GPU 1189 (MiB)
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[10/05/2026-02:11:05] [I] [TRT] [MemUsageChange] Init builder kernel library: CPU +3938, GPU +414, now: CPU 11716, GPU 1603 (MiB)
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[10/05/2026-02:11:06] [I] Start parsing network model.
+[10/05/2026-02:11:06] [I] [TRT] ----------------------------------------------------------------
+[10/05/2026-02:11:06] [I] [TRT] Input filename:   //192.168.10.100/game/rife/runtime/vs-plugins\models\rife_v2\rife_v4.25_lite.onnx
+[10/05/2026-02:11:06] [I] [TRT] ONNX IR version:  0.0.8
+[10/05/2026-02:11:06] [I] [TRT] Opset version:    16
+[10/05/2026-02:11:06] [I] [TRT] Producer name:    pytorch
+[10/05/2026-02:11:06] [I] [TRT] Producer version: 2.2.0
+[10/05/2026-02:11:06] [I] [TRT] Domain:           
+[10/05/2026-02:11:06] [I] [TRT] Model version:    0
+[10/05/2026-02:11:06] [I] [TRT] Doc string:       
+[10/05/2026-02:11:06] [I] [TRT] ----------------------------------------------------------------
+[10/05/2026-02:11:06] [I] Finished parsing network model. Parse time: 0.109314
+[10/05/2026-02:11:06] [I] Set shape of input tensor input for optimization profile 0 to: MIN=1x7x1080x2592 OPT=1x7x1080x2592 MAX=1x7x1080x2592
+[10/05/2026-02:11:06] [I] Set layer /Cast_2 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Reciprocal to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Mul to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Cast_3 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Reciprocal_1 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Mul_1 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Cast_5 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_237 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Mul_8 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_239 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Sub_5 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Cast_7 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_273 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Mul_10 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_275 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer /Sub_6 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_355 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_359 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_403 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_407 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_451 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_455 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_499 to precision fp32
+[10/05/2026-02:11:06] [I] Set layer ONNXTRT_Broadcast_568 to precision fp32
+[10/05/2026-02:11:06] [I] Skipped setting precisions for some layers. Check verbose logs for more details.
+[10/05/2026-02:11:06] [W] [TRT] Could not read timing cache from: C:\Users\Administrator\AppData\Local\rife\engines\43e7e526.engine.cache. A new timing cache will be generated and written.
+[10/05/2026-02:11:06] [I] [TRT] Global timing cache in use. Profiling results in this builder pass will be stored.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+[10/05/2026-02:11:24] [I] [TRT] Compiler backend is used during engine build.
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -
+127.0.0.1 - "GET /api/state HTTP/1.1" 200 -

@@ -77,6 +77,31 @@ class PlaylistHelperTests(unittest.TestCase):
             saved = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(len(saved["items"]), 3)
 
+    def test_refresh_loads_external_protocol_item(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "playlist.json"
+            playlist = Playlist(path)
+            path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "external",
+                                "source": "https://example.com/video.mp4",
+                                "title": "video.mp4",
+                                "kind": "url",
+                            }
+                        ],
+                        "current_id": "external",
+                        "play_generation": 1,
+                        "settings": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            playlist.refresh()
+            self.assertEqual(playlist.current().id, "external")
+
     def test_skip_settings_persist_and_survive_clear(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "playlist.json"

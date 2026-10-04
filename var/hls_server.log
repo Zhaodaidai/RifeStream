@@ -8434,3 +8434,12 @@ Serving HLS from C:\Users\Administrator\AppData\Local\rife\hls
 192.168.10.163 - "GET /rife/seg13.ts HTTP/1.1" 200 -
 192.168.10.163 - "GET /rife/seg14.ts HTTP/1.1" 200 -
 192.168.10.163 - Request timed out: TimeoutError('timed out')
+Serving HLS from C:\Users\Administrator\AppData\Local\rife\hls
+Serving HLS from C:\Users\Administrator\AppData\Local\rife\hls
+Serving HLS from C:\Users\Administrator\AppData\Local\rife\hls
+192.168.10.163 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.163 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.163 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.163 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.163 - "GET /rife/index.m3u8 HTTP/1.1" 200 -
+192.168.10.163 - "GET /rife/index.m3u8 HTTP/1.1" 200 -

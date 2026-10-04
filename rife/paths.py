@@ -74,6 +74,7 @@ def cli_command(command: str, *args: str, unbuffered: bool = False) -> list[str]
 
 if os.name == "nt":
     PROCESS_FLAGS = subprocess.CREATE_NO_WINDOW
+    CONSOLE_FLAGS = subprocess.CREATE_NEW_CONSOLE
     DETACHED_FLAGS = (
         PROCESS_FLAGS
         | subprocess.CREATE_NEW_PROCESS_GROUP
@@ -81,6 +82,7 @@ if os.name == "nt":
     )
 else:
     PROCESS_FLAGS = 0
+    CONSOLE_FLAGS = 0
     DETACHED_FLAGS = 0
 HTTP_SCHEMES = {"http", "https"}
 HLS_PORT = 8888

@@ -79,11 +79,13 @@ class Playlist:
     def __init__(self, path: Path = PLAYLIST_FILE) -> None:
         self.path = path
         self._lock = threading.Lock()
+        self._mtime_ns: int | None = None
         self.state = PlayerState()
         self.load()
 
     def load(self) -> None:
         if not self.path.is_file():
+            self._mtime_ns = None
             return
         try:
             data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -108,6 +110,16 @@ class Playlist:
             int(data.get("play_generation") or 0),
             settings=parse_settings(data.get("settings")),
         )
+        self._mtime_ns = self.path.stat().st_mtime_ns
+
+    def refresh(self) -> None:
+        try:
+            mtime_ns = self.path.stat().st_mtime_ns
+        except OSError:
+            return
+        if mtime_ns == self._mtime_ns:
+            return
+        self.load()
 
     def save(self) -> None:
         payload = {
@@ -119,6 +131,7 @@ class Playlist:
         self.path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        self._mtime_ns = self.path.stat().st_mtime_ns
 
     def snapshot(
         self,
@@ -717,6 +730,7 @@ class WebHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def state_payload(self) -> dict[str, Any]:
+        PLAYLIST.refresh()
         settings = PLAYLIST.settings()
         current = PLAYLIST.current()
         running = stream_running()

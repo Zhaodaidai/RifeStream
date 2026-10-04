@@ -2,16 +2,19 @@ import base64
 from dataclasses import dataclass, field
 import gzip
 import io
+import json
 from pathlib import Path
 import shlex
 import subprocess
 import sys
+import uuid
 from urllib.parse import unquote, urlsplit
 
 from rife.paths import (
     CLI,
-    DETACHED_FLAGS,
+    CONSOLE_FLAGS,
     HTTP_SCHEMES,
+    PLAYLIST_FILE,
     PROTOCOL_LOG_FILE,
     ROOT,
     cli_command,
@@ -46,14 +49,6 @@ class MpvRequest:
     http_proxy: str | None = None
     ytdl_proxy: str | None = None
     ytdl_format: str | None = None
-
-
-def gui_python() -> Path:
-    interpreter = Path(sys.executable)
-    pythonw = interpreter.with_name("pythonw.exe")
-    if sys.platform == "win32" and pythonw.is_file():
-        return pythonw
-    return interpreter
 
 
 def decode_payload(payload: str) -> str:
@@ -166,8 +161,9 @@ def build_stream_command(request: MpvRequest) -> list[str]:
 
 
 def start_stream(request: MpvRequest) -> int:
+    register_playlist_item(request)
     command = build_stream_command(request)
-    command[0] = str(gui_python())
+    command[0] = str(console_python())
     ensure_var()
     with PROTOCOL_LOG_FILE.open("ab", buffering=0) as log:
         log.write(f"\nStart: {request.video}\n".encode())
@@ -175,12 +171,45 @@ def start_stream(request: MpvRequest) -> int:
             command,
             cwd=ROOT,
             stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            creationflags=DETACHED_FLAGS,
+            stdout=None,
+            stderr=None,
+            creationflags=CONSOLE_FLAGS,
             close_fds=True,
         )
     return 0
+
+
+def console_python() -> Path:
+    interpreter = Path(sys.executable)
+    python = interpreter.with_name("python.exe")
+    if sys.platform == "win32" and python.is_file():
+        return python
+    return interpreter
+
+
+def register_playlist_item(request: MpvRequest) -> None:
+    ensure_var()
+    try:
+        data = json.loads(PLAYLIST_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+    items = [item for item in data.get("items", []) if isinstance(item, dict)]
+    item = next((item for item in items if item.get("source") == request.video), None)
+    if item is None:
+        item = {
+            "id": str(uuid.uuid4()),
+            "source": request.video,
+            "title": request.title or request.video.rsplit("/", 1)[-1] or request.video,
+            "kind": "url",
+        }
+        items.append(item)
+    data["items"] = items
+    data["current_id"] = item["id"]
+    data["play_generation"] = int(data.get("play_generation") or 0) + 1
+    data.setdefault("settings", {})
+    PLAYLIST_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def report_error(message: str) -> None:
@@ -191,7 +220,7 @@ def report_error(message: str) -> None:
 
 
 def registry_command() -> str:
-    return f'"{gui_python()}" "{CLI}" protocol "%1"'
+    return f'"{console_python()}" "{CLI}" protocol "%1"'
 
 
 def install_protocol(force: bool) -> int:
