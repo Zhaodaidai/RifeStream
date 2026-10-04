@@ -11,11 +11,11 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from rife.paths import CLI, STREAM_CLI
+from rife.paths import CLI
 from rife.protocol import (
     MpvRequest,
     ProtocolError,
-    build_stream_command,
+    add_to_playlist,
     parse_mpv_command,
     parse_uri,
     register_playlist_item,
@@ -83,12 +83,7 @@ class MpvProtocolTests(unittest.TestCase):
         self.assertEqual(request.title, "Example title")
         self.assertEqual(request.start, 12.5)
 
-        invocation = build_stream_command(request)
-        self.assertEqual(Path(invocation[1]).resolve(), STREAM_CLI.resolve())
-        self.assertEqual(invocation[2], "stream")
-        self.assertIn("--audio-input", invocation)
-        self.assertEqual(invocation.count("--http-header-field"), 3)
-        self.assertIn("--start", invocation)
+        self.assertEqual(request.start, 12.5)
 
     def test_only_ush_mpv_is_accepted(self) -> None:
         uri = ush_uri('"https://example.com/video.mp4"')
@@ -124,12 +119,6 @@ class MpvProtocolTests(unittest.TestCase):
         with self.assertRaises(ProtocolError):
             parse_uri("ush://MPV?not-base64")
 
-    def test_start_is_forwarded_to_stream(self) -> None:
-        request = MpvRequest("https://example.com/video.mp4", start=42.5)
-        invocation = build_stream_command(request)
-
-        self.assertEqual(invocation[invocation.index("--start") + 1], "42.5")
-
     def test_protocol_item_is_registered_in_playlist(self) -> None:
         with tempfile.TemporaryDirectory() as folder:
             playlist = Path(folder) / "playlist.json"
@@ -138,6 +127,32 @@ class MpvProtocolTests(unittest.TestCase):
             data = json.loads(playlist.read_text(encoding="utf-8"))
             self.assertEqual(data["items"][0]["source"], "https://example.com/video.mp4")
             self.assertEqual(data["current_id"], data["items"][0]["id"])
+
+    def test_protocol_item_does_not_replace_current_item(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            playlist = Path(folder) / "playlist.json"
+            playlist.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "current",
+                                "source": "https://example.com/current.mp4",
+                                "title": "current.mp4",
+                                "kind": "url",
+                            }
+                        ],
+                        "current_id": "current",
+                        "play_generation": 0,
+                        "settings": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch("rife.protocol.PLAYLIST_FILE", playlist):
+                add_to_playlist(MpvRequest("https://example.com/video.mp4"))
+            data = json.loads(playlist.read_text(encoding="utf-8"))
+            self.assertEqual(data["current_id"], "current")
 
 
 if __name__ == "__main__":

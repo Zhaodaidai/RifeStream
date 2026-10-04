@@ -1,18 +1,18 @@
 {
   "items": [
     {
-      "id": "957b5d40-5e9e-4665-9e4e-b3310dc7b8ef",
-      "source": "https://omts.tc.qq.com///S_Cey8PB_339xLaSQ1zJ8kJrHbE10fD5ulLJKxC7lUTU2COFiFIsGXiHn5pGXgRZ6UH2QTan5ie_K9crCb3ibWahBSNeRmertfrlYpN3gRNwRZVbDbWUklrhahIQjPnZ-linWQaWOo5HGzOCLPJP7bgS8z8145di6q98QjmdqNmawbL25GEGt_Hdat15aNYgZ5p0uS1Torx1ElLItgeRLppGe284y0S3bqxJHq1QJ5OQhPOqC6QpZkYkgoEIW6sX/gzc_1000102_0b53g4ag6aaadmagktaqjzvman6dn45qa22a.f322157.ts.m3u8?ver=4",
+      "id": "27011801-042e-4ba1-bba5-c02d4e222fe8",
+      "source": "https://omts.tc.qq.com///DTrXGD5BcoC9IxvD0XEuQlbqS-xN3tdGynD9aHQc7-PUfcdk9Vzvxv-__P6GsnjtMIw3xUDRmMfrGqVc5jNNofsLe_Gc6X1Xb2wG8qh52F7fjcm2EW_h8wts2k1xXahjGAYvnHxXqcNgag-432AduNI9jOz5_LFRxOcjuAQr8E0mubFqNU38HLT6ui7oduY2KjKSdBm---QIEZrsll5HhzMsVfqNQ8Ud02xBjDFaADIULGSg_TXUvBEsgRnn330R/gzc_1000102_0b53g4ag6aaadmagktaqjzvman6dn45qa22a.f322157.ts.m3u8?ver=4",
       "title": "逐玉 第02集",
       "kind": "url"
     }
   ],
-  "current_id": "957b5d40-5e9e-4665-9e4e-b3310dc7b8ef",
-  "play_generation": 29,
+  "current_id": "27011801-042e-4ba1-bba5-c02d4e222fe8",
+  "play_generation": 33,
   "settings": {
-    "intro": 160.0,
+    "intro": 178.0,
     "outro": 0.0,
-    "skip_intro": false,
+    "skip_intro": true,
     "skip_outro": false,
     "anime4k": false
   }

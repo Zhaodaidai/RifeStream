@@ -5,19 +5,15 @@ import io
 import json
 from pathlib import Path
 import shlex
-import subprocess
 import sys
 import uuid
 from urllib.parse import unquote, urlsplit
 
 from rife.paths import (
     CLI,
-    CONSOLE_FLAGS,
     HTTP_SCHEMES,
     PLAYLIST_FILE,
     PROTOCOL_LOG_FILE,
-    ROOT,
-    cli_command,
     ensure_var,
 )
 
@@ -142,40 +138,12 @@ def parse_uri(uri: str) -> MpvRequest:
     return MpvRequest(video=validate_url(target, "video"))
 
 
-def build_stream_command(request: MpvRequest) -> list[str]:
-    command = cli_command("stream", request.video)
-    for header in request.headers:
-        command.extend(["--http-header-field", header])
-    options = {
-        "audio-input": request.audio,
-        "http-proxy": request.http_proxy,
-        "ytdl-proxy": request.ytdl_proxy,
-        "ytdl-format": request.ytdl_format,
-        "title": request.title,
-        "start": format(request.start, ".12g") if request.start else None,
-    }
-    for name, option in options.items():
-        if option:
-            command.extend([f"--{name}", option])
-    return command
-
-
-def start_stream(request: MpvRequest) -> int:
+def add_to_playlist(request: MpvRequest) -> int:
     register_playlist_item(request)
-    command = build_stream_command(request)
-    command[0] = str(console_python())
     ensure_var()
-    with PROTOCOL_LOG_FILE.open("ab", buffering=0) as log:
-        log.write(f"\nStart: {request.video}\n".encode())
-        subprocess.Popen(
-            command,
-            cwd=ROOT,
-            stdin=subprocess.DEVNULL,
-            stdout=None,
-            stderr=None,
-            creationflags=CONSOLE_FLAGS,
-            close_fds=True,
-        )
+    with PROTOCOL_LOG_FILE.open("a", encoding="utf-8") as log:
+        log.write(f"\nAdded to playlist: {request.video}\n")
+    print(f"Added to playlist: {request.video}", flush=True)
     return 0
 
 
@@ -204,7 +172,8 @@ def register_playlist_item(request: MpvRequest) -> None:
         }
         items.append(item)
     data["items"] = items
-    data["current_id"] = item["id"]
+    if not data.get("current_id"):
+        data["current_id"] = item["id"]
     data["play_generation"] = int(data.get("play_generation") or 0) + 1
     data.setdefault("settings", {})
     PLAYLIST_FILE.write_text(
@@ -370,7 +339,7 @@ def main() -> int:
         print(request)
         return 0
     try:
-        return start_stream(request)
+        return add_to_playlist(request)
     except OSError as exc:
         report_error(f"Could not start stream:\n{exc}\n\nLog: {PROTOCOL_LOG_FILE}")
         return 1
