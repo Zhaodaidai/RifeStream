@@ -1080,11 +1080,13 @@ def main() -> int:
     else:
         print("Subtitles  : none")
     print("Stop       : Ctrl+C", flush=True)
+    exit_code = 1
     try:
-        return run_pipeline(source, args)
+        exit_code = run_pipeline(source, args)
+        return exit_code
     finally:
         cleanup_subtitles(source)
-        if owns_stream_process():
+        if exit_code != 0 and owns_stream_process():
             clear_hls_output(Path(args.publish_url))
         STREAM_PID_FILE.unlink(missing_ok=True)
         STREAM_STATUS_FILE.unlink(missing_ok=True)
