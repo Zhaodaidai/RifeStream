@@ -4300,3 +4300,6 @@ ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
 192.168.10.163 - "GET /rife/index.m3u8?cookieCheck=1 HTTP/1.1" 200 -
 192.168.10.163 - "GET /rife/seg111.ts HTTP/1.1" 200 -
 192.168.10.163 - "GET /rife/seg112.ts HTTP/1.1" 200 -
+192.168.10.163 - "GET /rife/index.m3u8?cookieCheck=1 HTTP/1.1" 200 -
+192.168.10.163 - "GET /rife/seg113.ts HTTP/1.1" 200 -
+192.168.10.163 - "GET /rife/seg114.ts HTTP/1.1" 200 -
