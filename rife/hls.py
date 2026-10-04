@@ -50,10 +50,35 @@ def hls_muxer_flags() -> str:
     return HLS_MUXER_FLAGS
 
 
+def hls_output_files(playlist: Path) -> list[Path]:
+    folder = playlist.parent
+    temporary_playlist = playlist.with_name(playlist.name + ".tmp")
+    return [
+        path
+        for path in folder.iterdir()
+        if path in {playlist, temporary_playlist}
+        or is_hls_segment(path)
+    ]
+
+
+def is_hls_segment(path: Path) -> bool:
+    name = path.name
+    if not name.startswith("seg"):
+        return False
+    suffix = ".ts.tmp" if name.endswith(".ts.tmp") else ".ts"
+    number = name[3 : -len(suffix)]
+    return bool(number) and number.isdigit()
+
+
+def clear_hls_output(playlist: Path) -> None:
+    if not playlist.parent.is_dir():
+        return
+    for path in hls_output_files(playlist):
+        path.unlink(missing_ok=True)
+
+
 def reset_hls_output(playlist: Path) -> None:
     folder = playlist.parent
     folder.mkdir(parents=True, exist_ok=True)
-    for path in folder.iterdir():
-        if path.suffix.lower() in {".m3u8", ".ts", ".tmp"}:
-            path.unlink(missing_ok=True)
+    clear_hls_output(playlist)
     playlist.write_bytes(STUB_PLAYLIST)

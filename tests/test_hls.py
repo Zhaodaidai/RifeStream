@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rife.hls import (
     encoder_gop,
+    clear_hls_output,
     force_key_frames_expr,
     gop_frames,
     hls_muxer_flags,
@@ -22,6 +23,27 @@ from rife.paths import windows_hls_dir, windows_rife_dir
 
 
 class HlsTimingTests(unittest.TestCase):
+    def test_clear_hls_output_only_removes_rife_files(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "rife"
+            root.mkdir()
+            playlist = root / "index.m3u8"
+            playlist.write_bytes(b"playlist")
+            (root / "index.m3u8.tmp").write_bytes(b"temporary playlist")
+            (root / "seg0.ts").write_bytes(b"segment")
+            (root / "seg1.ts.tmp").write_bytes(b"temporary")
+            (root / "segment.ts").write_bytes(b"keep")
+            (root / "other.ts").write_bytes(b"keep")
+            (root / "cover.jpg").write_bytes(b"keep")
+            clear_hls_output(playlist)
+            self.assertFalse(playlist.exists())
+            self.assertFalse((root / "index.m3u8.tmp").exists())
+            self.assertFalse((root / "seg0.ts").exists())
+            self.assertFalse((root / "seg1.ts.tmp").exists())
+            self.assertTrue((root / "other.ts").exists())
+            self.assertTrue((root / "segment.ts").exists())
+            self.assertTrue((root / "cover.jpg").exists())
+
     def test_integer_fps_gop_is_exactly_two_seconds(self) -> None:
         self.assertEqual(gop_frames(Fraction(25), 2), 100)
         self.assertEqual(100 / 50, 2.0)

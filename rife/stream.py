@@ -15,6 +15,7 @@ from urllib.parse import urlsplit, urlunsplit
 from rife.hls import (
     HLS_MUXER_FLAGS,
     HLS_SEGMENT_SECONDS,
+    clear_hls_output,
     encoder_gop,
     force_key_frames_expr,
     hls_segment_pattern,
@@ -36,6 +37,7 @@ from rife.paths import (
     capture,
     ensure_var,
     is_http_source,
+    read_pid,
     replace_existing_stream,
     windows_rife_dir,
 )
@@ -948,6 +950,10 @@ def cleanup_subtitles(source: StreamInput | None) -> None:
     shutil.rmtree(source.subtitle_workdir, ignore_errors=True)
 
 
+def owns_stream_process() -> bool:
+    return read_pid(STREAM_PID_FILE) == os.getpid()
+
+
 def stop_process(process: subprocess.Popen[bytes] | None) -> None:
     if process is None or process.poll() is not None:
         return
@@ -1039,6 +1045,8 @@ def main() -> int:
     except (RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr, flush=True)
         cleanup_subtitles(source)
+        if owns_stream_process():
+            clear_hls_output(Path(args.publish_url))
         STREAM_PID_FILE.unlink(missing_ok=True)
         STREAM_STATUS_FILE.unlink(missing_ok=True)
         return 1
@@ -1077,6 +1085,8 @@ def main() -> int:
         return run_pipeline(source, args)
     finally:
         cleanup_subtitles(source)
+        if owns_stream_process():
+            clear_hls_output(Path(args.publish_url))
         STREAM_PID_FILE.unlink(missing_ok=True)
         STREAM_STATUS_FILE.unlink(missing_ok=True)
 

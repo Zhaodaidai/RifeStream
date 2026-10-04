@@ -1,18 +1,18 @@
 {
   "items": [
     {
-      "id": "27011801-042e-4ba1-bba5-c02d4e222fe8",
-      "source": "https://omts.tc.qq.com///DTrXGD5BcoC9IxvD0XEuQlbqS-xN3tdGynD9aHQc7-PUfcdk9Vzvxv-__P6GsnjtMIw3xUDRmMfrGqVc5jNNofsLe_Gc6X1Xb2wG8qh52F7fjcm2EW_h8wts2k1xXahjGAYvnHxXqcNgag-432AduNI9jOz5_LFRxOcjuAQr8E0mubFqNU38HLT6ui7oduY2KjKSdBm---QIEZrsll5HhzMsVfqNQ8Ud02xBjDFaADIULGSg_TXUvBEsgRnn330R/gzc_1000102_0b53g4ag6aaadmagktaqjzvman6dn45qa22a.f322157.ts.m3u8?ver=4",
-      "title": "逐玉 第02集",
+      "id": "154ed3e6-bbad-4fd6-a8d6-a09a9afb4381",
+      "source": "https://omts.tc.qq.com///iHKjHPpno8SgN9jjNXY3Kb_L0FG5jtNqNOHIZJFV9bjmHors96qiRLsyuR-gGj7KyzNuFPr1LTH-v1FzJpwapc-5L-4uONBiZMEzscxTL0rLbMrGqFT2CgDKxYIyHgIWZryrlFoY42DhA6R4e2je1QwpJj8gohZtVnEhKw-6n3SGW37nDhX2ZJnzg2S4gZ0XVmaE5_EbvnYZ6BJoKglvU1jVR77XR10Zl2YT80LrnetlWIG8vrjug1Q9pyukDmEg/gzc_1000102_0b53qmae6aaaoqafikck5jvmba6dj6hqas2a.f322157.ts.m3u8?ver=4",
+      "title": "逐玉 第03集",
       "kind": "url"
     }
   ],
-  "current_id": "27011801-042e-4ba1-bba5-c02d4e222fe8",
-  "play_generation": 33,
+  "current_id": "154ed3e6-bbad-4fd6-a8d6-a09a9afb4381",
+  "play_generation": 39,
   "settings": {
     "intro": 178.0,
     "outro": 0.0,
-    "skip_intro": true,
+    "skip_intro": false,
     "skip_outro": false,
     "anime4k": false
   }

@@ -17,11 +17,13 @@ from urllib.parse import unquote, urlsplit
 import uuid
 import time
 
+from rife.hls import clear_hls_output
 from rife.hls_server import ensure as ensure_hls_server
 from rife.paths import (
     DETACHED_FLAGS,
     HLS_PORT,
     HTTP_SCHEMES,
+    HLS_PLAYLIST,
     PLAYLIST_FILE,
     ROOT,
     STREAM_PID_FILE,
@@ -596,6 +598,7 @@ def spawn_stream(
 def stop_stream() -> None:
     PLAYBACK.spawned_at = None
     replace_existing_stream()
+    clear_hls_output(HLS_PLAYLIST)
 
 
 def read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:

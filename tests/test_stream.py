@@ -23,6 +23,7 @@ from rife.stream import (
     extract_embedded_subtitles_command,
     ffmpeg_input_options,
     normalize_headers,
+    owns_stream_process,
     parse_subtitle_tracks,
     pick_subtitle_stream,
     probe_media,
@@ -51,6 +52,12 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(info, MediaInfo(Fraction(25), 1920, 1080, 60.0))
         self.assertEqual(tracks, [SubtitleTrack(0, "ass", "chi", None, True)])
         capture.assert_called_once()
+
+    def test_old_stream_does_not_own_cleanup_after_replacement(self) -> None:
+        with mock.patch("rife.stream.read_pid", return_value=999999), mock.patch(
+            "rife.stream.os.getpid", return_value=1234
+        ):
+            self.assertFalse(owns_stream_process())
 
     def test_headers_are_deduplicated_case_insensitively(self) -> None:
         headers = normalize_headers(
