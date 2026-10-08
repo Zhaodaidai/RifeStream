@@ -311,7 +311,7 @@ class StreamInputTests(unittest.TestCase):
             ["-avoid_negative_ts", "make_zero"],
             ["-hls_list_size", "0"],
             ["-hls_segment_type", "mpegts"],
-            ["-hls_flags", "independent_segments+temp_file"],
+            ["-hls_flags", "temp_file"],
             ["-map_metadata", "-1"],
         ):
             index = command.index(option[0])

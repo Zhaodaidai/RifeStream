@@ -1,26 +1,14 @@
 {
   "items": [
     {
-      "id": "bf872eba-b727-4cc7-8a53-997048ed72b0",
-      "source": "https://omts.tc.qq.com///dAob390J31bxlbnjaqSO9oAaVhqFARbJF9GZ_kshlSenFeB4e7HRe6S3F4hKHgyPTi2vdpjqWHahsEXcKA0Q1ap5CUlEdlv4BsSQy8eky5qIG0jJrRyNUKUuOlrWk6-WJdvJlL-ybBE8wqtWA2Akq5IQkDgtnvUlHSoPJVKnrbZKRPFtOnzJMOco-5vs4j3xBScDELOncMI3zcwlEIwry5ydwHfQb8Fd2D6udLFf0BSOZlDSPr5QExIgTHgjaq3Y/gzc_1000102_0b53q4ahcaaauyan4ocl4vvmbb6dogfqa5ka.f322157001.ts.m3u8?ver=4",
-      "title": "逐玉 第20集",
-      "kind": "url"
-    },
-    {
-      "id": "f900199d-394e-41f1-9cff-b8098e90d01f",
-      "source": "https://omts.tc.qq.com///2__JGZe-y9FJaK8IJP7O4FxuAf_db_LsgKOpqELMIIkUWCuB9XUIhyyuY0f-cbxSYKj2lxf9WSZUTF0RSxA4tPIb-88Vf6ZENFKhf4pBOYiPMT2l4T04eqZ7qiINvzdAWN7kWcuAY8Tls23Ox6sBO2aJB4VXZiDMOOWcZW-iHi4mwOFobDeDjAzsPynaqeTYHvzV8VKfXJ2ujVJNOJZYJJgtubnAm51lSyQm5h39O0yX1WQ2qmk6nYxX5EmDnRqt/gzc_1000102_0b53mqajqaaagyaf72cnbnvmazgdtbuabhca.f322157.ts.m3u8?ver=4",
-      "title": "逐玉 第21集",
-      "kind": "url"
-    },
-    {
-      "id": "d6d06a00-3954-4e0c-ad44-313817215465",
-      "source": "https://omts.tc.qq.com///Dxydg3ZRlu0qDCxT7McJkAJZRNwb-IgbYEfmZ7Om3frSiskiV5wtnl4oZBHnJYQis-RkSIZWHt-PTbYt4mp11Om7qxYnTJ-LrFVzMIYZcCCW_VnVkgkma_Ku1mgsJot-ixA4raHO7k8GccBdc26mpmd8-eAtOOzGwozXoYRwQX3F3YZjIcKTQlD3lV--19Q1OfcOS4aFJPq3oaGAJxCO0eTtzOecHdTA4ioHQdYJBP3Kj9SeJx9cT-XqVITQw_wq/gzc_1000102_0b53kqalqaaaauah6jkn4rvmavgdxbmabpca.f322157.ts.m3u8?ver=4",
-      "title": "逐玉 第22集",
+      "id": "8e0c8096-36e3-4031-ba79-94e9fb1245cf",
+      "source": "https://omts.tc.qq.com///ff2JxBLoTwzadjSkgvJuLRXWLpaOyGHRJsAe4URUOrISQ3SjUo_R1-QcAS9Ec3MyXHBs2sIhCJDu64B_WA_7mb9hhbtyLjV4jkE6g6vUYjRdPX4N6g-WjVXGtl_eOBQCSTrs35eVmWjb_CeqyIYJGqNpOh8j1C_cTHlMovmUiBjLzN0tAVEaGxYXLlkLaLJl3dHLbwewqm--BTwyHXuEQVLS7QGfTyjpMsx1Ih7WP__PC7g-RIDH_bfd9Uhnvl1G/gzc_1000102_0b53umamwaaakyahii53ijvmbi6dzosqbt2a.f322157.ts.m3u8?ver=4",
+      "title": "大王饶命 第3季 第02话",
       "kind": "url"
     }
   ],
-  "current_id": "d6d06a00-3954-4e0c-ad44-313817215465",
-  "play_generation": 36,
+  "current_id": "8e0c8096-36e3-4031-ba79-94e9fb1245cf",
+  "play_generation": 71,
   "settings": {
     "intro": 178.0,
     "outro": 0.0,

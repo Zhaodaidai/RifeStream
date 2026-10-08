@@ -84,7 +84,7 @@ class HlsTimingTests(unittest.TestCase):
             self.assertEqual(wait_hls_bytes(path, timeout=2.0), b"tsdata")
 
     def test_hls_flags_write_complete_files_before_publish(self) -> None:
-        self.assertEqual(hls_muxer_flags(), "independent_segments+temp_file")
+        self.assertEqual(hls_muxer_flags(), "temp_file")
 
     def test_wait_hls_bytes_times_out_when_the_file_never_appears(self) -> None:
         with tempfile.TemporaryDirectory() as folder:

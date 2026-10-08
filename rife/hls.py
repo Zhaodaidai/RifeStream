@@ -17,7 +17,6 @@ STUB_PLAYLIST = (
     "#EXT-X-VERSION:3\n"
     f"#EXT-X-TARGETDURATION:{HLS_SEGMENT_SECONDS}\n"
     "#EXT-X-MEDIA-SEQUENCE:0\n"
-    "#EXT-X-INDEPENDENT-SEGMENTS\n"
 ).encode("ascii")
 
 
@@ -43,7 +42,7 @@ def hls_segment_pattern(playlist: Path) -> str:
     return str(playlist.with_name("seg%d.ts"))
 
 
-HLS_MUXER_FLAGS = "independent_segments+temp_file"
+HLS_MUXER_FLAGS = "temp_file"
 
 
 def hls_muxer_flags() -> str:
