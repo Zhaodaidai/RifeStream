@@ -175,9 +175,8 @@ function renderState(state) {
   document.getElementById("playerAddBtn").lastChild.textContent = current ? "播放所选媒体" : "添加媒体";
   document.querySelector("#playerAddBtn path").setAttribute("d", current ? "m9 5 11 7-11 7z" : "M12 5v14M5 12h14");
   paintSettings(state.settings);
-  nowPlaying.textContent = current
-    ? `${state.streaming ? "正在播放" : "已选择"}：${current.title}`
-    : "未选择媒体";
+  nowPlaying.textContent = current?.title || "未选择媒体";
+  nowPlaying.title = current?.title || "";
   streamStatus.textContent = state.streaming ? "转码中" : "待机";
   streamStatus.classList.toggle("live", Boolean(state.streaming));
   showError(state.last_error, true);

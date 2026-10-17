@@ -57,7 +57,7 @@ class PlayerLayoutTests(unittest.TestCase):
         viewer = html.split('<section class="viewer card"', 1)[1].split('</section>', 1)[0]
         for name in ['prevBtn', 'nextBtn', 'introSeconds', 'skipIntro', 'anime4k']:
             self.assertIn('id="' + name + '"', viewer)
-        stage = viewer.split('<div class="video-stage">', 1)[1].split('<div class="media-meta">', 1)[0]
+        stage = viewer.split('<div class="video-stage">', 1)[1].split('<div class="playback-controls"', 1)[0]
         self.assertIn('id="timeline"', stage)
         self.assertIn('id="episodeProgress"', stage)
         self.assertEqual(html.count('id="timeline"'), 1)
@@ -109,7 +109,7 @@ class PlyrIntegrationTests(unittest.TestCase):
         self.assertIn('this.hls = new window.Hls', script)
         self.assertIn('this.seek(seconds)', script)
         self.assertIn('this.state?.start', script)
-        self.assertIn('--plyr-color-main: var(--accent)', (root / 'web/styles.css').read_text())
+        self.assertNotIn('--plyr-color-main: var(--accent)', (root / 'web/styles.css').read_text())
 
 
 class EpisodeTimelineTests(unittest.TestCase):
@@ -130,3 +130,37 @@ class EpisodeTimelineTests(unittest.TestCase):
         self.assertIn('this.state?.start', script)
         self.assertIn('this.seek(seconds)', script)
         self.assertIn('aria-valuetext', script)
+
+
+class PlayerHeadingTests(unittest.TestCase):
+    def test_selected_title_is_only_in_viewer_header(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        header = html.split('<div class="viewer-head">', 1)[1].split('</div>', 1)[0]
+        self.assertIn('id="nowPlaying"', header)
+        self.assertEqual(html.count('id="nowPlaying"'), 1)
+        for obsolete in ['media-meta', 'section-kicker', 'format-tag', 'HLS STREAM']:
+            self.assertNotIn(obsolete, html)
+        script = (root / 'web/app.js').read_text()
+        self.assertIn('nowPlaying.textContent = current?.title', script)
+        self.assertIn('nowPlaying.title = current?.title', script)
+        self.assertNotIn('已选择', script)
+
+    def test_player_hint_follows_stop_in_same_group(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        group = html.split('<div class="stop-status">', 1)[1].split('</div>', 1)[0]
+        self.assertLess(group.index('id="stopBtn"'), group.index('id="playerHint"'))
+        self.assertEqual(html.count('id="playerHint"'), 1)
+        self.assertIn('role="status"', group)
+
+
+class NativePlyrStyleTests(unittest.TestCase):
+    def test_time_precedes_progress_and_theme_does_not_override_buttons(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        self.assertLess(html.index('id="playbackTime"'), html.index('id="timeline"'))
+        css = (root / 'web/styles.css').read_text()
+        for override in ['--plyr-control-radius:', '--plyr-video-control-color-hover:', '--plyr-menu-background:', '--plyr-color-main: var(--accent)', '.plyr__control--overlaid { color:']:
+            self.assertNotIn(override, css)
+        self.assertIn('grid-template-columns: auto minmax(0, 1fr)', css)
