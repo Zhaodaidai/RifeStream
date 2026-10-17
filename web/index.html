@@ -24,6 +24,13 @@
   </header>
 
   <main class="workspace">
+    <section class="viewer card" aria-label="内置播放器">
+      <video id="videoPlayer" controls playsinline preload="auto"></video>
+      <p id="playerHint" class="hint" role="status">选择一集后点击播放</p>
+      <label for="timeline">整集进度 <span id="playbackTime">0:00 / --:--</span></label>
+      <input id="timeline" type="range" min="0" max="0" step="0.25" value="0" disabled aria-label="整集播放进度">
+      <p class="hint">拖动整集进度条可跳转；未转码的位置需等待缓冲。视频内的进度条仅对应已生成的片段。</p>
+    </section>
     <section class="player card">
       <div class="panel-head">
         <h2>播放列表</h2>
@@ -70,6 +77,8 @@
       </div>
     </section>
   </main>
+  <script src="/vendor/hls.min.js"></script>
+  <script src="/player.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

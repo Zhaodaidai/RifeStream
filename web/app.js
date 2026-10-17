@@ -19,17 +19,31 @@ const anime4k = document.getElementById("anime4k");
 
 let savingSettings = false;
 let jumpInFlight = false;
+let stateVersion = 0;
+let requestsInFlight = 0;
+const embeddedPlayer = new EmbeddedPlayer({
+  video: document.getElementById("videoPlayer"),
+  timeline: document.getElementById("timeline"),
+  clock: document.getElementById("playbackTime"),
+  hint: document.getElementById("playerHint"),
+  formatTime,
+  seek: seekSeconds,
+});
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || response.statusText);
-  }
-  return data;
+  const modifying = options.method && options.method !== "GET";
+  if (modifying) { stateVersion++; requestsInFlight++; }
+  try {
+    const response = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || response.statusText);
+    }
+    return data;
+  } finally { if (modifying) requestsInFlight--; }
 }
 
 function showError(message) {
@@ -107,6 +121,7 @@ async function saveSettings() {
 }
 
 function renderState(state) {
+  embeddedPlayer.update(state);
   const current = state.current;
   paintSettings(state.settings);
   nowPlaying.textContent = current
@@ -159,7 +174,10 @@ function escapeHtml(value) {
 
 async function refresh() {
   try {
-    renderState(await api("/api/state"));
+    if (requestsInFlight) return;
+    const version = stateVersion;
+    const state = await api("/api/state");
+    if (version === stateVersion && !requestsInFlight) renderState(state);
   } catch (error) {
     showError(error.message);
   }
@@ -177,7 +195,9 @@ async function addSources(play) {
 }
 
 async function play(body) {
-  renderState(await api("/api/play", { method: "POST", body: JSON.stringify(body) }));
+  try {
+    renderState(await api("/api/play", { method: "POST", body: JSON.stringify(body) }));
+  } catch (error) { showError(error.message); }
 }
 
 async function jump() {
@@ -186,6 +206,11 @@ async function jump() {
     showError("请输入秒数，或 1:30 / 1:02:03 格式");
     return;
   }
+  await seekSeconds(seconds);
+}
+
+async function seekSeconds(seconds) {
+  if (jumpInFlight) return;
   jumpInFlight = true;
   jumpBtn.disabled = true;
   try {

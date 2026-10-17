@@ -472,6 +472,18 @@ def reset_playback() -> None:
     PLAYBACK.duration = None
 
 
+def hls_ready(spawned_at: float | None, has_current: bool) -> bool:
+    if not has_current:
+        return False
+    try:
+        return HLS_PLAYLIST.is_file() and (
+            spawned_at is None or HLS_PLAYLIST.stat().st_mtime >= spawned_at
+        )
+    except OSError:
+        # The transcoder can replace/clear the playlist during a state request.
+        return False
+
+
 _STATUS_UNSET = object()
 
 
@@ -510,6 +522,9 @@ def playback_snapshot(
         "duration": duration,
         "position": position,
         "start": start,
+        # A fixed HLS URL is reused across episodes and server-side seeks.
+        "playback_id": spawned_at,
+        "hls_ready": hls_ready(spawned_at, has_current),
         "seekable": has_current and duration is not None and duration > 0,
     }
 
@@ -795,9 +810,6 @@ def seek_to(seconds: float) -> PlaylistItem:
     if duration is None and status:
         duration = finite_seconds(status.get("duration"))
     seconds = clamp_seek(seconds, duration)
-    current_position = playback_snapshot(running, True, status=status)["position"]
-    if abs(seconds - current_position) < 2.0:
-        return item
     remember_playback(item.id, seconds)
     spawn_stream(
         item.source,

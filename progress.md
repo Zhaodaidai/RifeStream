@@ -9,3 +9,12 @@
 - 暂缓：NVENC、TensorRT 并发和 HLS 缓冲参数，等待可用 NVIDIA 环境进行真实性能基准。
 - 已完成：清理 HLS 清单的可选 `EXT-X-INDEPENDENT-SEGMENTS` 写法；保留 `temp_file`、H.264/AAC MPEG-TS、版本和时长等浏览器兼容所需内容；全量测试通过。
 - 已完成：清理 HLS 清单的可选 `EXT-X-INDEPENDENT-SEGMENTS` 写法；保留 `temp_file`、H.264/AAC MPEG-TS、版本和时长等浏览器兼容所需内容；全量 70 项测试通过。
+
+## 2026-10-17 内置播放器
+- 基线：python -m unittest discover -s tests，70 项通过。原文件备份在 /tmp/rife-player-transaction/baseline。
+
+- 复制项目进行回滚验证时，首次漏拷 vs/*.vpy 导致隔离副本测试失败（exit 1）；已将 VS 脚本加入副本后重新验证。实际工作区 73 项测试此前已通过。
+- 完成：73 项 Python 测试、Node 播放器状态测试、真实 Chromium 解码无 ENDLIST 的 live HLS（确认从首片播放）、切集、整集跳转、停止、390px 宽度检查。浏览器控制接口使用测试桩，未运行 NVIDIA/RIFE 真实转码。
+- 回滚副本恢复原始哈希、70 项原始测试通过；补丁重建后哈希与修改副本一致。四角色在 /tmp/rife-player-transaction；已重新打开校验。
+- 重复补丁验证首次复用了已打补丁的临时目录（exit 1）；修正为每次从干净基线重新创建验证副本。
+- 最终确认工作区源码和静态资源与已验证副本一致（排除测试生成的 var 日志）；补丁和回滚复验成功，四角色已重新打开。
