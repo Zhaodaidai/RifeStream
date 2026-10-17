@@ -1,0 +1,73 @@
+/* Theme source of truth. Components and Plyr share --accent. */
+:root {
+  color-scheme: dark;
+  --bg: #101214;
+  --panel: #181b1e;
+  --panel-2: #222629;
+  --line: #303539;
+  --text: #eceeec;
+  --muted: #a0a7aa;
+  --accent: #00b2ff;
+  --danger: #ff9c9c;
+  --button-hover: #303639;
+  --button-hover-border: #555e62;
+  --on-accent: #002b40;
+  --header-line: #282d30;
+  --header-bg: #15181a;
+  --brand-divider: #3c4346;
+  --status-text: #b7bfc1;
+  --status-dot: #838b8f;
+  --header-muted: #828b8f;
+  --badge-text: #8a9397;
+  --video-border: #2a2e30;
+  --video-stage-bg: #090b0c;
+  --video-bg: #080a0b;
+  --empty-bg: #0d1011;
+  --empty-icon-border: #244354;
+  --empty-icon-bg: #142632;
+  --empty-description: #939d9f;
+  --accent-outline: #286084;
+  --hint-dot: #8dabbc;
+  --input-bg: #111517;
+  --input-border: #3a4245;
+  --switch-border: #5b656a;
+  --switch-bg: #363e41;
+  --switch-thumb: #c1c8ca;
+  --count-bg: #2c3235;
+  --count-text: #c4ccce;
+  --accent-soft: #142b38;
+  --accent-soft-border: #28536b;
+  --list-caption: #919b9f;
+  --scrollbar-thumb: #41494b;
+  --list-hover: #22282a;
+  --selected-bg: #142c3b;
+  --selected-border: #285977;
+  --list-index: #8d999c;
+  --selected-text: #caedff;
+  --list-kind: #a5afb0;
+  --remove-text: #9ba5a8;
+  --danger-soft: #40282b;
+  --empty-list-accent: #8fcde9;
+  --empty-list-title: #d2d8d9;
+  --footer-muted: #929c9f;
+  --footer-dot: #7aa6bf;
+  --page-footer-text: #8a9497;
+  --footer-separator: #657074;
+  --dialog-border: #444d50;
+  --dialog-shadow: #0008;
+  --dialog-backdrop: #050708b8;
+  --dialog-icon-bg: #153347;
+  --input-placeholder: #778286;
+  --player-fallback-bg: #080a0be6;
+  --player-text: #fff;
+  --player-track: #ffffff40;
+  --plyr-color-main: var(--accent);
+  --radius: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+/* Derived accent states: changing --accent also updates hover and focus. */
+:root {
+  --accent-hover: color-mix(in srgb, var(--accent) 80%, white);
+  --focus-ring: color-mix(in srgb, var(--accent) 7%, transparent);
+}

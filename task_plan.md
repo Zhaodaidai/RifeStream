@@ -78,3 +78,8 @@
 - [x] 基线84项及Node通过，blue-before备份；仅改styles/index，Plyr原包不动。
 - [x] 强调色#00b2ff、状态、主按钮/hover、开关、列表选中、focus、空态、弹窗、品牌/favicon统一蓝色。
 - [x] 浏览器计算颜色、移动/桌面、回归与同四角色验证；84项通过。
+
+## 主题统一管理
+- [x] 基线84项和Node通过，备份theme-before/颜色计算快照。
+- [x] theme.css集中语义变量，Plyr共享accent，styles仅布局/变量；文档和防回归测试。
+- [x] 普通/hover/focus/弹窗颜色计算一致；accent联动、320–1920响应式/实际HLS/接口交互通过；85项Python和Node通过；同四角色重开、补丁重建/隔离回滚哈希一致。

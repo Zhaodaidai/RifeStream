@@ -164,3 +164,20 @@ class NativePlyrStyleTests(unittest.TestCase):
         for override in ['--plyr-control-radius:', '--plyr-video-control-color-hover:', '--plyr-menu-background:', '--plyr-color-main: var(--accent)', '.plyr__control--overlaid { color:']:
             self.assertNotIn(override, css)
         self.assertIn('grid-template-columns: auto minmax(0, 1fr)', css)
+
+
+class ThemeManagementTests(unittest.TestCase):
+    def test_colors_centralized_and_plyr_linked(self):
+        import re
+        root = Path(__file__).resolve().parent.parent
+        theme = (root / 'web/theme.css').read_text()
+        css = (root / 'web/styles.css').read_text()
+        html = (root / 'web/index.html').read_text()
+        self.assertLess(html.index('/theme.css'), html.index('/styles.css'))
+        self.assertIn('--accent: #00b2ff;', theme)
+        self.assertIn('--plyr-color-main: var(--accent)', theme)
+        self.assertFalse(re.search(r'#[0-9a-fA-F]{3,8}\b', css))
+        names = re.findall(r'(--[\w-]+)\s*:', theme)
+        self.assertEqual(len(names), len(set(names)))
+        used = set(re.findall(r'var\((--[\w-]+)', css))
+        self.assertFalse(used - set(names) - {'--episode-progress'})

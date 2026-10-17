@@ -131,3 +131,10 @@ runtime\python.exe -m unittest discover -s tests
 JS、CSS 和 SVG 图标均放在 `web/vendor/`，运行时不依赖第三方 CDN。Plyr 保留原有控件风格，少量适配浅绿色强调色和深色菜单。
 视频内提供播放/暂停、音量、播放速度、画中画（浏览器支持时）和全屏；整集进度直接集成在 Plyr 控制栏内（全屏同样可用），显示 `起播偏移 + video.currentTime / 整集时长`；已缓冲位置本地跳转，其他位置调用服务端重建转码。页面不再提供外部播放器地址或复制入口。
 切集、片头、Anime4K 和转码控制仍使用原有接口。桌面播放器与播放列表继续在首屏整体居中。
+
+### 主题统一管理
+
+- `web/theme.css`：唯一颜色变量入口，统一背景、文字、边框、主色及组件状态；`--accent` 是 WebUI 与 Plyr 共用主色。
+- `web/styles.css`：布局与组件规则，只引用主题变量，不散落颜色值。主色 hover/focus 自动派生。
+- Plyr 原版按钮、图标与圆角不覆盖，仅将官方 `--plyr-color-main` 连接到主色。
+- 浏览器 favicon 和 theme-color 属于独立浏览器元数据，位于 `web/index.html`；更换品牌配色时同步修改这两项，不通过运行时脚本改图标。
