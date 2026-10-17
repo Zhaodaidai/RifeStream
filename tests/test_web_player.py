@@ -38,3 +38,25 @@ class EmbeddedPlaybackTests(unittest.TestCase):
             with patch('rife.webui.PLAYLIST', playlist), patch('rife.webui.stream_running', return_value=True), patch('rife.webui.read_stream_status', return_value=None), patch('rife.webui.spawn_stream') as spawn, patch('rife.webui.playback_snapshot', return_value={'position': 500}):
                 seek_to(500)
                 self.assertEqual(spawn.call_args.args[2], 500)
+
+
+class PlayerLayoutTests(unittest.TestCase):
+    def test_manual_seek_controls_and_bindings_removed(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        script = (root / 'web/app.js').read_text()
+        for name in ['jumpTo', 'jumpBtn', 'jumpLabel']:
+            self.assertNotIn(name, html)
+            self.assertNotIn(name, script)
+        self.assertIn('async function seekSeconds', script)
+        self.assertIn('introSeconds.addEventListener', script)
+
+    def test_controls_above_timeline_and_playlist_separate_sidebar(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        viewer = html.split('<section class="viewer card"', 1)[1].split('</section>', 1)[0]
+        for name in ['prevBtn', 'nextBtn', 'introSeconds', 'skipIntro', 'anime4k']:
+            self.assertLess(viewer.index('id="' + name + '"'), viewer.index('id="timeline"'))
+        self.assertNotIn('id="playlist"', viewer)
+        sidebar = html.split('<aside class="sidebar card"', 1)[1].split('</aside>', 1)[0]
+        self.assertIn('id="playlist"', sidebar)

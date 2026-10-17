@@ -10,9 +10,6 @@ const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const playBtn = document.getElementById("playBtn");
 const stopBtn = document.getElementById("stopBtn");
-const jumpTo = document.getElementById("jumpTo");
-const jumpBtn = document.getElementById("jumpBtn");
-const jumpLabel = document.getElementById("jumpLabel");
 const introSeconds = document.getElementById("introSeconds");
 const skipIntro = document.getElementById("skipIntro");
 const anime4k = document.getElementById("anime4k");
@@ -133,9 +130,6 @@ function renderState(state) {
   prevBtn.disabled = !state.has_prev;
   nextBtn.disabled = !state.has_next;
   playBtn.disabled = !current;
-  jumpBtn.disabled = !state.seekable || jumpInFlight;
-  const duration = Number(state.duration) || 0;
-  jumpLabel.textContent = duration > 0 ? `跳转到（总长 ${formatTime(duration)}）` : "跳转到";
   showError(state.last_error);
 
   playlistEl.innerHTML = "";
@@ -200,19 +194,9 @@ async function play(body) {
   } catch (error) { showError(error.message); }
 }
 
-async function jump() {
-  const seconds = parseTimeSeconds(jumpTo.value);
-  if (!Number.isFinite(seconds)) {
-    showError("请输入秒数，或 1:30 / 1:02:03 格式");
-    return;
-  }
-  await seekSeconds(seconds);
-}
-
 async function seekSeconds(seconds) {
   if (jumpInFlight) return;
   jumpInFlight = true;
-  jumpBtn.disabled = true;
   try {
     renderState(await api("/api/seek", {
       method: "POST",
@@ -250,13 +234,6 @@ nextBtn.addEventListener("click", () => play({ offset: 1 }));
 playBtn.addEventListener("click", () => play({}));
 stopBtn.addEventListener("click", async () => {
   renderState(await api("/api/stop", { method: "POST", body: "{}" }));
-});
-jumpBtn.addEventListener("click", jump);
-jumpTo.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    event.preventDefault();
-    jump();
-  }
 });
 introSeconds.addEventListener("change", saveSettings);
 introSeconds.addEventListener("keydown", (event) => {

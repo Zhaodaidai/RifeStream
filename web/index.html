@@ -27,43 +27,40 @@
     <section class="viewer card" aria-label="内置播放器">
       <video id="videoPlayer" controls playsinline preload="auto"></video>
       <p id="playerHint" class="hint" role="status">选择一集后点击播放</p>
+      <div class="playback-controls" aria-label="播放控制与画面设置">
+        <div class="transport">
+          <button type="button" id="prevBtn">上一集</button>
+          <button type="button" id="playBtn" class="primary">播放</button>
+          <button type="button" id="nextBtn">下一集</button>
+          <button type="button" id="stopBtn">停止转码</button>
+        </div>
+        <div class="playback-settings">
+          <label class="field">
+            <span>片头设置</span>
+            <input type="text" id="introSeconds" value="0:00" placeholder="1:30" autocomplete="off">
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="skipIntro">
+            <span>跳过片头</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="anime4k">
+            <span>Anime4K</span>
+          </label>
+        </div>
+      </div>
       <label for="timeline">整集进度 <span id="playbackTime">0:00 / --:--</span></label>
       <input id="timeline" type="range" min="0" max="0" step="0.25" value="0" disabled aria-label="整集播放进度">
       <p class="hint">拖动整集进度条可跳转；未转码的位置需等待缓冲。视频内的进度条仅对应已生成的片段。</p>
+      <p class="error" id="errorBox" hidden></p>
     </section>
-    <section class="player card">
+    <aside class="sidebar card" aria-label="播放列表侧栏">
       <div class="panel-head">
         <h2>播放列表</h2>
         <button type="button" id="clearBtn" class="ghost">清空</button>
       </div>
       <ol class="playlist" id="playlist"></ol>
-      <div class="transport">
-        <button type="button" id="prevBtn">上一集</button>
-        <button type="button" id="playBtn" class="primary">播放</button>
-        <button type="button" id="nextBtn">下一集</button>
-        <button type="button" id="stopBtn">停止转码</button>
-      </div>
-      <div class="skip-settings">
-        <label class="field">
-          <span id="jumpLabel">跳转到</span>
-          <input type="text" id="jumpTo" placeholder="秒或 1:30" autocomplete="off">
-        </label>
-        <button type="button" id="jumpBtn" disabled>跳转</button>
-        <label class="field">
-          <span>片头设置</span>
-          <input type="text" id="introSeconds" value="0:00" placeholder="1:30" autocomplete="off">
-        </label>
-        <label class="switch">
-          <input type="checkbox" id="skipIntro">
-          <span>跳过片头</span>
-        </label>
-        <label class="switch anime4k-switch">
-          <input type="checkbox" id="anime4k">
-          <span>Anime4K</span>
-        </label>
-      </div>
-      <p class="error" id="errorBox" hidden></p>
-    </section>
+    </aside>
 
     <section class="sources card">
       <div class="panel-head">

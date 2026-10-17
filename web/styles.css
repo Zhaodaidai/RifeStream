@@ -40,7 +40,7 @@ html, body {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  max-width: 1280px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 14px 20px;
 }
@@ -140,11 +140,11 @@ h2 {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  grid-template-columns: minmax(0, 1fr) 320px;
   align-items: stretch;
   gap: 16px;
   width: 100%;
-  max-width: 1280px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 18px 20px 32px;
 }
@@ -239,71 +239,33 @@ h2 {
   gap: 8px;
 }
 
-.transport {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
-.skip-settings {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 10px 12px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-}
-
-.skip-settings .anime4k-switch {
-  grid-column: 1 / -1;
-  padding-top: 2px;
-}
-
-.skip-settings .field {
+.playback-controls {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
-.skip-settings .field span,
-.skip-settings .switch span {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.skip-settings input[type="number"],
-.skip-settings input[type="text"] {
-  width: 100%;
+.transport { flex-shrink: 0; }
+.playback-settings { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.playback-settings .field { display: flex; align-items: center; gap: 8px; }
+.playback-settings .field span, .playback-settings .switch span { color: var(--muted); font-size: 12px; }
+.playback-settings input[type="text"] {
+  width: 80px;
+  padding: 8px 10px;
   background: #10151f;
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 8px 10px;
   font: inherit;
 }
-
-.skip-settings input[type="number"]:focus,
-.skip-settings input[type="text"]:focus {
-  outline: none;
-  border-color: var(--accent-2);
-}
-
-.skip-settings #jumpBtn {
-  align-self: end;
-}
-
-.skip-settings .switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  cursor: pointer;
-  user-select: none;
-}
-
-.skip-settings .switch input {
+.playback-settings input[type="text"]:focus { outline: none; border-color: var(--accent-2); }
+.playback-settings .switch { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.playback-settings .switch input {
   appearance: none;
   width: 36px;
   height: 20px;
@@ -316,8 +278,7 @@ h2 {
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-
-.skip-settings .switch input::after {
+.playback-settings .switch input::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -328,16 +289,9 @@ h2 {
   background: var(--muted);
   transition: transform 0.15s ease, background 0.15s ease;
 }
-
-.skip-settings .switch input:checked {
-  background: #243652;
-  border-color: var(--accent-2);
-}
-
-.skip-settings .switch input:checked::after {
-  transform: translateX(16px);
-  background: var(--accent);
-}
+.playback-settings .switch input:checked { background: #243652; border-color: var(--accent-2); }
+.playback-settings .switch input:checked::after { transform: translateX(16px); background: var(--accent); }
+.playback-settings .switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .sources textarea {
   flex: 1;
@@ -435,13 +389,23 @@ button:disabled {
     min-height: 120px;
   }
 
-  .skip-settings {
-    grid-template-columns: 1fr auto;
-  }
 }
 
-/* The viewing area spans both playlist/source columns. */
-.viewer { grid-column: 1 / -1; min-width: 0; }
+/* Player and playlist share one row; long playlists scroll independently. */
+.viewer { min-width: 0; }
+.sidebar { min-width: 0; min-height: 0; overflow: hidden; }
+.sidebar .playlist { height: 0; min-height: 280px; max-height: none; flex: 1 1 auto; }
+.playlist .name { min-width: 0; }
+.sources { grid-column: 1 / -1; }
+.sources textarea { min-height: 100px; }
+@media (max-width: 860px) {
+  .sidebar .playlist { height: auto; min-height: 200px; max-height: 360px; flex: none; }
+  .playback-controls { gap: 14px; }
+  .transport { width: 100%; }
+  .transport button { flex: 1; padding: 8px; }
+  .playback-settings { gap: 12px; }
+}
+
 #videoPlayer { display: block; width: 100%; max-height: 70vh; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; }
 #timeline { width: 100%; margin: 12px 0; accent-color: var(--accent); }
 #playbackTime { font-variant-numeric: tabular-nums; margin-left: 10px; }
