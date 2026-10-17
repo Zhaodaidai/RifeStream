@@ -19,7 +19,8 @@ class Hls {
   on(n,f){this.events[n]=f;} loadSource(url){this.url=url;} attachMedia(){} destroy(){this.destroyed=true;}
 }
 class Plyr {
-  constructor(media,config){this.media=media;this.config=config;this.elements={controls:{querySelector:()=> 'volume',insertBefore:(node)=>{this.progress=node;}}};uiInstances.push(this);}
+  constructor(media,config){this.events={};this.fullscreen={active:false};this.media=media;this.config=config;this.elements={container:{classList:{toggle(n,v){this[n]=v;}},style:{setProperty(n,v){this[n]=v;},removeProperty(n){delete this[n];}}},controls:{querySelector:()=> 'volume',insertBefore:(node)=>{this.progress=node;}}};uiInstances.push(this);}
+  on(n,fn){this.events[n]=fn;}
 }
 const context = {window:{Plyr,Hls,location:{href:'http://localhost:10000',hostname:'localhost'}}, URL,
   setTimeout(fn, delay){const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout(id){timers.delete(id);}};
@@ -105,6 +106,36 @@ const flush = async()=>{await Promise.resolve();await Promise.resolve();};
   assert.ok(Math.abs((parseFloat(frame.style['--frame-width'])-2)/(parseFloat(frame.style['--frame-height'])-2)-2.4)<1e-6,'use actual media ratio, never crop');
   context.window.matchMedia=()=>({matches:false});player.fitFrame();
   assert.equal(frame.style['--frame-width'],undefined);assert.equal(frame.style['--frame-height'],undefined,'mobile returns to unmodified CSS');
+  // Fullscreen uses native landscape when allowed and rotates all web controls otherwise.
+  assert.equal(player.ui.config.fullscreen.container,'.video-stage');
+  assert.equal(player.ui.config.fullscreen.iosNative,false);
+  context.window.innerWidth=390;context.window.innerHeight=844;
+  context.window.matchMedia=()=>({matches:true});player.ui.fullscreen.active=true;
+  let locks=0,unlocks=0;
+  const orientation={lock:async value=>{assert.equal(value,'landscape');locks++;throw new Error('not supported');},unlock:()=>unlocks++};
+  context.window.screen={orientation};
+  await player.enterLandscapeFullscreen();
+  const surface=player.ui.elements.container;
+  assert.equal(locks,1);assert.equal(surface.classList['plyr--landscape-fallback'],true);
+  assert.equal(surface.style['--landscape-width'],'844px');assert.equal(surface.style['--landscape-height'],'390px');
+  context.window.innerWidth=844;context.window.innerHeight=390;player.syncFullscreenLayout();
+  assert.equal(surface.classList['plyr--landscape-fallback'],false,'physical landscape must not rotate twice');
+  player.ui.fullscreen.active=false;player.exitLandscapeFullscreen();assert.equal(unlocks,1);
+  assert.equal(surface.style['--landscape-width'],undefined);
+  context.window.innerWidth=390;context.window.innerHeight=844;player.ui.fullscreen.active=true;
+  delete context.window.screen.orientation;await player.enterLandscapeFullscreen();
+  assert.equal(surface.classList['plyr--landscape-fallback'],true,'missing API still gets landscape controls');
+  player.exitLandscapeFullscreen();
+  context.window.screen.orientation={lock:async value=>{assert.equal(value,'landscape');locks++;},unlock:()=>unlocks++};
+  await player.enterLandscapeFullscreen();assert.equal(surface.classList['plyr--landscape-fallback'],true);
+  player.exitLandscapeFullscreen();
+  let resolveLock;context.window.screen.orientation={lock:()=>new Promise(r=>{resolveLock=r;}),unlock:()=>unlocks++};
+  const lateLock=player.enterLandscapeFullscreen();player.ui.fullscreen.active=false;player.exitLandscapeFullscreen();
+  resolveLock();await lateLock;assert.equal(unlocks,4,'unlock a delayed native lock after exit');
+  assert.equal(surface.classList['plyr--landscape-fallback'],false);
+  context.window.matchMedia=()=>({matches:false});await player.enterLandscapeFullscreen();
+  assert.equal(player.mobileFullscreen,false,'desktop never locks or rotates');
+  console.log('PASS: mobile landscape lock/rejection/missing API, portrait fallback, physical rotation, exit/late-lock cleanup, desktop isolation');
   console.log('PASS: desktop1080p/4K/source ratio/short viewport fitting and mobile CSS restoration');
   console.log('PASS: Plyr reuse/local icons/full-episode timeline; polling no reload; start/switch/stop/finished encode');
   console.log('PASS: local/server seek preserves pause; failed seek restores session; retry resumes position; stale HLS/play promises ignored');

@@ -160,3 +160,35 @@ button[aria-busy="true"] { cursor: progress; }
 @media (max-width: 480px) {
   .stop-status { flex-basis: 100%; }
 }
+
+/* Fullscreen owns its viewport, never the desktop fitted-frame dimensions. */
+.video-stage:fullscreen,
+.video-stage.plyr--fullscreen-fallback {
+  width: 100%; height: 100%; max-width: none; max-height: none;
+  border: 0; border-radius: 0; aspect-ratio: auto;
+}
+.video-stage:fullscreen > .plyr,
+.video-stage.plyr--fullscreen-fallback > .plyr {
+  width: 100%; height: 100%; border-radius: 0;
+}
+.video-stage:fullscreen #videoPlayer,
+.video-stage.plyr--fullscreen-fallback #videoPlayer {
+  width: 100%; height: 100%; max-height: none;
+  aspect-ratio: auto; object-fit: contain;
+}
+.video-stage.plyr--fullscreen-fallback {
+  position: fixed; inset: 0; margin: 0; z-index: 10000000;
+}
+/* Rotate the inner surface, not the browser's native fullscreen element.
+   Controls and the full-episode timeline rotate together with the picture. */
+.video-stage:fullscreen > .plyr--landscape-fallback,
+.video-stage.plyr--fullscreen-fallback > .plyr--landscape-fallback {
+  position: absolute; left: 50%; top: 50%;
+  width: var(--landscape-width); height: var(--landscape-height);
+  max-width: none; max-height: none;
+  transform: translate(-50%, -50%) rotate(90deg);
+  transform-origin: center;
+}
+.video-stage:fullscreen .plyr__control .icon--exit-fullscreen { display: block; }
+.video-stage:fullscreen .plyr__control .icon--exit-fullscreen + svg { display: none; }
+.video-stage:fullscreen .plyr--hide-controls { cursor: none; }

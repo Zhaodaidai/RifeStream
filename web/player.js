@@ -22,6 +22,7 @@ class EmbeddedPlayer {
       controls: ["play-large", "play", "mute", "volume", "settings", "pip", "fullscreen"],
       settings: ["speed"],
       speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+      fullscreen: { enabled: true, fallback: true, iosNative: false, container: ".video-stage" },
       keyboard: { focused: true, global: false },
       tooltips: { controls: true, seek: false },
       i18n: {
@@ -38,6 +39,10 @@ class EmbeddedPlayer {
       const controls = this.ui.elements.controls;
       controls.insertBefore(progress, controls.querySelector('.plyr__volume'));
     }
+    this.orientationEpoch = 0;
+    this.mobileFullscreen = false;
+    this.ui?.on("enterfullscreen", () => this.enterLandscapeFullscreen());
+    this.ui?.on("exitfullscreen", () => this.exitLandscapeFullscreen());
     // Only desktop needs fitting: the mobile layout already follows the video's ratio.
     this.frame = video.closest?.(".video-stage");
     if (this.frame) {
@@ -48,10 +53,14 @@ class EmbeddedPlayer {
           this.fitFrame();
         });
       };
+      this.queueFrameFit = queueFit;
       this.frameObserver = new window.ResizeObserver(queueFit);
       this.frameObserver.observe(this.frame.parentElement);
       this.frameObserver.observe(this.frame.parentElement.querySelector(".playback-controls"));
-      window.addEventListener("resize", queueFit);
+      window.addEventListener("resize", () => {
+        this.syncFullscreenLayout();
+        queueFit();
+      });
       video.addEventListener("loadedmetadata", queueFit);
       video.addEventListener("resize", queueFit);
       queueFit();
@@ -94,9 +103,59 @@ class EmbeddedPlayer {
     });
   }
 
+  async enterLandscapeFullscreen() {
+    // Touch devices only: desktop fullscreen keeps its normal orientation.
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+    this.mobileFullscreen = true;
+    const epoch = ++this.orientationEpoch;
+    this.syncFullscreenLayout();
+    const orientation = window.screen?.orientation;
+    if (!orientation?.lock) return;
+    this.fullscreenOrientation = orientation;
+    try {
+      await orientation.lock("landscape");
+      // A late lock must not leave the phone locked after the user exits.
+      if (epoch !== this.orientationEpoch) {
+        if (!this.mobileFullscreen) this.unlockOrientation(orientation);
+        return;
+      }
+      this.syncFullscreenLayout();
+    } catch (_) {
+      // Safari and browsers without permission keep the rotated web controls.
+    }
+  }
+
+  unlockOrientation(orientation) {
+    try { orientation?.unlock?.(); } catch (_) { /* Optional platform capability. */ }
+  }
+
+  exitLandscapeFullscreen() {
+    this.mobileFullscreen = false;
+    ++this.orientationEpoch;
+    this.syncFullscreenLayout();
+    this.unlockOrientation(this.fullscreenOrientation);
+    this.fullscreenOrientation = null;
+    this.queueFrameFit?.();
+  }
+
+  syncFullscreenLayout() {
+    const surface = this.ui?.elements?.container;
+    if (!surface) return;
+    const rotated = this.mobileFullscreen && this.ui.fullscreen.active
+      && window.innerHeight > window.innerWidth;
+    surface.classList.toggle("plyr--landscape-fallback", Boolean(rotated));
+    if (rotated) {
+      surface.style.setProperty("--landscape-width", `${window.innerHeight}px`);
+      surface.style.setProperty("--landscape-height", `${window.innerWidth}px`);
+    } else {
+      surface.style.removeProperty("--landscape-width");
+      surface.style.removeProperty("--landscape-height");
+    }
+  }
+
   fitFrame() {
     const frame = this.frame;
-    if (!frame) return;
+    if (!frame || this.ui?.fullscreen?.active) return;
     if (!window.matchMedia("(min-width: 861px)").matches) {
       frame.style.removeProperty("--frame-width");
       frame.style.removeProperty("--frame-height");
