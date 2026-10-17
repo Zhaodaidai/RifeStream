@@ -44,3 +44,11 @@
 - 仅修改 web/styles.css 桌面媒体查询：隐藏介绍/页脚，main flex 垂直居中，workspace 自适应视口高度，video-stage 弹性分配并保持视频比例；移动端保持。
 - Chromium 1440×900、1920×1080、1366×768、1280×720、1024×768、861×700 无首屏滚动，播放器与列表整体在头部以下居中。移动端、HLS、切集、跳转、设置、弹窗、错误和键盘回归通过；77 项 Python 与 Node 测试通过。
 - 同四角色重新打开；初始 baseline 和 rollback 未有居中机制，modified 有；补丁重建一致，回滚恢复原始哈希。历史验证保存在 VERIFICATION-before-center.txt，本轮 center-browser-output.txt。
+
+## 真正 Plyr + 少量主题适配完成
+- 固定官方 Plyr 3.8.4，JS/CSS/SVG/MIT 许可证放在 web/vendor，字节与 npm 原包一致；本地字体，图标同源，blankVideo 内嵌，无外部资源请求。
+- EmbeddedPlayer.ui 创建一次，HLS 销毁/切集/seek/stop 不重建 UI；播放、音量、倍速、画中画（浏览器支持时）、全屏和中文提示；整集进度保持外部。
+- 少量 CSS 变量适配浅绿强调色、深色菜单与圆角；排除旧全局按钮样式冲突；保持 PC 首屏居中和移动布局。
+- 79 项 Python、Node 和语法检查通过；真实 Chromium HLS 解码 + Plyr 播放/暂停、静音/音量/方向键、倍速菜单、全屏、K 快捷键、切集、整集跳转、停止、列表滚动、添加/校验/错误/键盘回归通过。控制台和第三方资源请求均为零。画中画实际窗口与 GPU 转码未验证。
+- 真实 server :10000 加载新 UI 与所有资源 HTTP 200，1440x900 首屏不滚动；截图 plyr-live.png、plyr-desktop.png、plyr-fullscreen.png、plyr-mobile.png。
+- 同四角色更新并全部重新打开；补丁加入新资源和无末尾换行标记，重建哈希一致；rollback 恢复历史原始基线并通过70项测试，修改副本79项通过。原始 plyr-before 哈希未变。详细命令/输出/退出/哈希在 VERIFICATION.txt。

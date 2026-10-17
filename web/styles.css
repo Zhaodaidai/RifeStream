@@ -9,10 +9,10 @@
 body { margin: 0; background: var(--bg); color: var(--text); }
 button, input, textarea { font: inherit; }
 button, input, textarea, a { -webkit-tap-highlight-color: transparent; }
-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); cursor: pointer; transition: background 160ms, border-color 160ms, color 160ms, transform 160ms; }
-button:hover:not(:disabled) { background: #303639; border-color: #555e62; }
-button:active:not(:disabled) { transform: translateY(1px); }
-button:disabled { opacity: .38; cursor: not-allowed; }
+button:where(:not(.plyr__control)) { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); cursor: pointer; transition: background 160ms, border-color 160ms, color 160ms, transform 160ms; }
+button:where(:not(.plyr__control)):hover:not(:disabled) { background: #303639; border-color: #555e62; }
+button:where(:not(.plyr__control)):active:not(:disabled) { transform: translateY(1px); }
+button:where(:not(.plyr__control)):disabled { opacity: .38; cursor: not-allowed; }
 button.primary { background: var(--accent); color: #1b2b0d; border-color: var(--accent); font-weight: 650; }
 button.primary:hover:not(:disabled) { background: #c7f38f; border-color: #c7f38f; }
 button.ghost, button.quiet { background: transparent; border-color: transparent; color: var(--muted); }
@@ -124,4 +124,24 @@ button[aria-busy="true"] { cursor: progress; }
   #videoPlayer { height: 100%; max-height: none; aspect-ratio: auto; object-fit: contain; }
   .media-meta { padding: 12px 0; }
   .playback-controls { padding: 12px 0; }
+}
+
+/* Local Plyr: keep its control design, adapt only theme and workspace sizing. */
+.video-stage .plyr {
+  --plyr-color-main: var(--accent);
+  --plyr-font-family: inherit;
+  --plyr-control-radius: 6px;
+  --plyr-video-control-color-hover: #172410;
+  --plyr-menu-background: #222629;
+  --plyr-menu-color: var(--text);
+  --plyr-menu-radius: 8px;
+  --plyr-tooltip-background: #303539;
+  --plyr-tooltip-color: var(--text);
+  border-radius: inherit;
+}
+.video-stage .plyr__control--overlaid { color: #172410; }
+.video-stage .plyr__video-wrapper { height: 100%; }
+.player-empty { z-index: 4; }
+@media (min-width: 861px) {
+  .video-stage > .plyr { height: 100%; min-width: 0; }
 }

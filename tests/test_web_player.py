@@ -84,3 +84,25 @@ class AddLinksDialogTests(unittest.TestCase):
         self.assertIn('if (addingSources) return;', script)
         self.assertIn('addDialog.showModal()', script)
         self.assertNotIn('getElementById("addPlayBtn")', script)
+
+
+class PlyrIntegrationTests(unittest.TestCase):
+    def test_local_assets_and_load_order(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        self.assertLess(html.index('/vendor/plyr.css'), html.index('/styles.css'))
+        self.assertLess(html.index('/vendor/plyr.min.js'), html.index('/player.js'))
+        for name in ['plyr.min.js', 'plyr.css', 'plyr.svg', 'plyr.LICENSE']:
+            self.assertGreater((root / 'web/vendor' / name).stat().st_size, 100)
+        self.assertIn('MIT', (root / 'web/vendor/plyr.LICENSE').read_text())
+
+    def test_plyr_keeps_business_timeline_and_local_resources(self):
+        root = Path(__file__).resolve().parent.parent
+        script = (root / 'web/player.js').read_text()
+        self.assertIn('new window.Plyr(video', script)
+        self.assertIn('iconUrl: "/vendor/plyr.svg"', script)
+        self.assertIn('blankVideo: "data:video/mp4;base64,', script)
+        self.assertIn('this.hls = new window.Hls', script)
+        self.assertIn('this.seek(seconds)', script)
+        self.assertIn('this.state?.start', script)
+        self.assertIn('--plyr-color-main: var(--accent)', (root / 'web/styles.css').read_text())

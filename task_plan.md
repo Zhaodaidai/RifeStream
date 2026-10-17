@@ -49,3 +49,10 @@
 - 仅修改 web/styles.css 桌面媒体查询：隐藏介绍/页脚，main flex 垂直居中，workspace 自适应视口高度，video-stage 弹性分配并保持视频比例；移动端保持。
 - Chromium 1440×900、1920×1080、1366×768、1280×720、1024×768、861×700 无首屏滚动，播放器与列表整体在头部以下居中。移动端、HLS、切集、跳转、设置、弹窗、错误和键盘回归通过；77 项 Python 与 Node 测试通过。
 - 同四角色重新打开；初始 baseline 和 rollback 未有居中机制，modified 有；补丁重建一致，回滚恢复原始哈希。历史验证保存在 VERIFICATION-before-center.txt，本轮 center-browser-output.txt。
+
+## 引入真正的 Plyr + 少量主题适配
+- [x] 基线 77 项 Python 和 Node 测试通过；plyr-before 备份和 SHA 已记录。
+- [x] 下载固定 3.8.4 官方 npm 包；许可证名大小写错误（exit 1）已修正按实际 archive 名读取。
+- [x] 本地 UI 资源和图标、最少主题变量适配，保留 HLS/整集跳转。
+- [x] Chromium 实际 HLS 和 Plyr 控件/布局/键盘/切集回归。
+- [x] 复用同四角色并验证补丁/回滚。

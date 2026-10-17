@@ -19,12 +19,23 @@ class Hls {
   loadSource(url) { this.url = url; }
   attachMedia() {} destroy() { this.destroyed = true; }
 }
-const context = { window: { Hls, location: {href: 'http://localhost:10000', hostname: 'localhost'} }, URL, setTimeout, clearTimeout };
+const uiInstances = [];
+class Plyr {
+  constructor(media, config) { this.media = media; this.config = config; uiInstances.push(this); }
+}
+const context = { window: { Plyr, Hls, location: {href: 'http://localhost:10000', hostname: 'localhost'} }, URL, setTimeout, clearTimeout };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('web/player.js', 'utf8') + '\nthis.Player = EmbeddedPlayer;', context);
 const player = new context.Player({video, timeline, clock, hint, formatTime: String, seek: s => seeks.push(s)});
 const state = {current: {id: 'ep1'}, hls_ready: true, playback_id: 10, start: 0, duration: 1200, seekable: true, hls_url: 'http://192.168.1.8:8888/rife/index.m3u8'};
 (async () => {
+  assert.equal(uiInstances.length, 1);
+  assert.equal(uiInstances[0].media, video);
+  assert.equal(player.ui.config.iconUrl, "/vendor/plyr.svg");
+  assert.equal(player.ui.config.keyboard.global, false);
+  assert.equal(player.ui.config.controls.includes("progress"), false, "full-episode timeline remains external");
+  assert.equal(player.ui.config.settings.join(","), "speed");
+  assert.match(player.ui.config.blankVideo, /^data:video\/mp4;base64,/);
   player.update(state);
   assert.equal(instances.length, 1);
   assert.match(instances[0].url, /^http:\/\/localhost:8888/);
@@ -52,5 +63,7 @@ const state = {current: {id: 'ep1'}, hls_ready: true, playback_id: 10, start: 0,
   assert.equal(instances.length, 4, 'finished transcoding can still be watched');
   player.update({...state, current: null, hls_ready: false, streaming: false});
   assert.equal(player.key, null); assert.equal(instances[3].destroyed, true);
+  assert.equal(uiInstances.length, 1, 'switch/seek/stop reuse the same Plyr UI');
+  console.log('PASS: Plyr initialization/local icons/theme-independent controls/UI reuse;') ;
   console.log('PASS: start, polling, episode, seek, clock, local/server seek, autoplay, retry cancellation, finished stream, stop');
 })().catch(e => {console.error(e); process.exitCode = 1;});

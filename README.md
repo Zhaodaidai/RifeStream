@@ -124,3 +124,10 @@ runtime\python.exe run.py hls status
 runtime\python.exe run.py hls restart
 runtime\python.exe -m unittest discover -s tests
 ```
+
+### 内置播放器界面
+
+播放器采用本地自托管的 Plyr 3.8.4（MIT），仅负责播放控件；HLS 加载继续使用 hls.js。
+JS、CSS 和 SVG 图标均放在 `web/vendor/`，运行时不依赖第三方 CDN。Plyr 保留原有控件风格，少量适配浅绿色强调色和深色菜单。
+视频内提供播放/暂停、音量、播放速度、画中画（浏览器支持时）和全屏；整集进度继续使用视频下方的进度条，避免把当前 HLS 片段时间误认为整集时间。
+切集、片头、Anime4K 和转码控制仍使用原有接口。桌面播放器与播放列表继续在首屏整体居中。
