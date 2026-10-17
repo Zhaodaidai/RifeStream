@@ -181,4 +181,4 @@ class ThemeManagementTests(unittest.TestCase):
         names = re.findall(r'(--[\w-]+)\s*:', theme)
         self.assertEqual(len(names), len(set(names)))
         used = set(re.findall(r'var\((--[\w-]+)', css))
-        self.assertFalse(used - set(names) - {'--episode-progress'})
+        self.assertFalse(used - set(names) - {'--episode-progress', '--frame-width', '--frame-height'})

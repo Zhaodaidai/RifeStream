@@ -89,3 +89,9 @@
 - 状态轮询只读，skip_outro用实际ENDLIST/ended切集；准备/转码/完成状态分开。技术栈不变，新增依赖0。
 - 95项Python、两组Node、Chromium真实HLS跨至少3段、暂停后10:00远端跳转、真正播放ended切一次下一集、快速启停/旧seek拒绝、320–1920布局和真实API隔离回归均通过。预计注入的seek500之外无未预期控制台错误；未验证目标Windows GPU/TensorRT性能。
 - 历史BASELINE70/ROLLBACK70及原始哈希一致，MODIFIED95；四角色重开，完整补丁重建哈希一致。flow-before85项快照原字节哈希保留。现有10000旧Python进程及转发8888未强制重启，部署需在目标运行环境重启WebUI/HLS；未修改用户播放列表。
+
+## PC上下黑边修复交付
+- 只改web/player.js、styles.css及两个现有测试；手机CSS/业务/API/编码/Plyr vendor保持原字节。PC工作台自然高度，fitFrame以真实videoWidth/videoHeight和可用空间计算，桌面专用--frame-width/height，不使用cover。
+- 真实1080p/4K HLS浏览器解码：1440x900原上下额外留边合计93.609375px→0；1920x1080原158.109375px→0；短屏亚像素误差<0.006px。390/768全部已记录尺寸前后一致。截图已人工查看。
+- 95项Python和两组Node、原实际HLS跳转/暂停/失败恢复/全屏/拖动/键盘及320–1920布局回归通过，无未预期JS错误。原控制栏探针在隐藏状态测量失败，经实际hover唤出后所有边界断言通过；移动断点瞬态溢出通过桌面作用域变量修复。
+- 同四角色重开、完整补丁重建/隔离回滚哈希一致；BASELINE/ROLLBACK历史70项，当前MODIFIED95项。aspect-before原字节保留。10000服务实际player.js/styles.css与工作区SHA一致，前端刷新即可加载，无后端改动。

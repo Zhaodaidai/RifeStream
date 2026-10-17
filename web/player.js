@@ -38,6 +38,24 @@ class EmbeddedPlayer {
       const controls = this.ui.elements.controls;
       controls.insertBefore(progress, controls.querySelector('.plyr__volume'));
     }
+    // Only desktop needs fitting: the mobile layout already follows the video's ratio.
+    this.frame = video.closest?.(".video-stage");
+    if (this.frame) {
+      const queueFit = () => {
+        if (this.frameTask) return;
+        this.frameTask = window.requestAnimationFrame(() => {
+          this.frameTask = null;
+          this.fitFrame();
+        });
+      };
+      this.frameObserver = new window.ResizeObserver(queueFit);
+      this.frameObserver.observe(this.frame.parentElement);
+      this.frameObserver.observe(this.frame.parentElement.querySelector(".playback-controls"));
+      window.addEventListener("resize", queueFit);
+      video.addEventListener("loadedmetadata", queueFit);
+      video.addEventListener("resize", queueFit);
+      queueFit();
+    }
     timeline.addEventListener("keydown", (event) => event.stopPropagation());
     timeline.addEventListener("pointercancel", () => { this.dragging = false; this.paint(); });
     timeline.addEventListener("blur", () => { this.dragging = false; this.paint(); });
@@ -74,6 +92,37 @@ class EmbeddedPlayer {
     video.addEventListener("ended", () => {
       if (this.key && !this.reloading && !this.seeking) this.onEnded?.(this.state);
     });
+  }
+
+  fitFrame() {
+    const frame = this.frame;
+    if (!frame) return;
+    if (!window.matchMedia("(min-width: 861px)").matches) {
+      frame.style.removeProperty("--frame-width");
+      frame.style.removeProperty("--frame-height");
+      return;
+    }
+    const viewer = frame.parentElement;
+    const main = viewer.closest("main");
+    const styles = (element) => window.getComputedStyle(element);
+    const sum = (style, names) => names.reduce((total, name) => total + (parseFloat(style[name]) || 0), 0);
+    const horizontal = ["paddingLeft", "paddingRight"];
+    const vertical = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"];
+    const frameStyle = styles(frame);
+    const borderX = sum(frameStyle, ["borderLeftWidth", "borderRightWidth"]);
+    const borderY = sum(frameStyle, ["borderTopWidth", "borderBottomWidth"]);
+    const ratio = this.video.videoWidth > 0 && this.video.videoHeight > 0
+      ? this.video.videoWidth / this.video.videoHeight : 16 / 9;
+    const chrome = sum(styles(main), vertical) + sum(styles(viewer), vertical)
+      + main.ownerDocument.querySelector(".top").getBoundingClientRect().height
+      + viewer.querySelector(".viewer-head").getBoundingClientRect().height
+      + viewer.querySelector(".playback-controls").getBoundingClientRect().height;
+    const availableWidth = viewer.clientWidth - sum(styles(viewer), horizontal) - borderX;
+    const availableHeight = Math.max(120, window.innerHeight - chrome - borderY);
+    const width = Math.max(1, Math.min(availableWidth, availableHeight * ratio));
+    // Size the content box to the source ratio; include the stage border in its outer dimensions.
+    frame.style.setProperty("--frame-width", `${width + borderX}px`);
+    frame.style.setProperty("--frame-height", `${width / ratio + borderY}px`);
   }
 
   destroy() {

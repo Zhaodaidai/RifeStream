@@ -98,14 +98,14 @@ button[aria-busy="true"] { cursor: progress; }
   .workspace {
     flex: none;
     width: 100%;
-    height: min(900px, calc(100dvh - 132px));
-    min-height: 540px;
+    height: auto;
+    min-height: 0;
     grid-template-rows: minmax(0, 1fr);
   }
   .viewer { display: flex; flex-direction: column; min-height: 0; }
   .viewer > * { flex-shrink: 0; }
   .viewer-head { min-height: 48px; }
-  .video-stage { flex: 1 1 0; min-height: 120px; }
+  .video-stage { flex: none; align-self: center; width: min(100%, var(--frame-width, 100%)); height: var(--frame-height, auto); min-height: 0; aspect-ratio: 16 / 9; }
   #videoPlayer { height: 100%; max-height: none; aspect-ratio: auto; object-fit: contain; }
   .playback-controls { padding: 12px 0; }
 }
