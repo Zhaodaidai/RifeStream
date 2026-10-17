@@ -4,8 +4,8 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('web/app.js','utf8');
 const take = (from,to) => source.slice(source.indexOf(from),source.indexOf(to,source.indexOf(from)));
-const calls=[],painted=[],errors=[],timers=new Map();let id=0;
-const context={AbortController,Promise,Date,
+const calls=[],painted=[],errors=[],connections=[],timers=new Map();let id=0;
+const context={AbortController,Promise,Date,retryConnectionBtn:{},connectionNotice:{contains:()=>false},document:{},paintConnection:message=>connections.push(message||""),
   setTimeout(fn){timers.set(++id,fn);return id;},clearTimeout(n){timers.delete(n);},
   fetch(path,options){return new Promise((resolve,reject)=>{
     calls.push({path,options,resolve:data=>resolve({ok:true,json:async()=>data}),fail:reject});
@@ -25,11 +25,20 @@ const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
   const mutation=context.api('/api/seek',{method:'POST'});await flush();
   calls[2].resolve({stale:true});await poll;assert.equal(painted.length,0,'old poll ignored after mutation');
   calls[3].resolve({id:3});await mutation;
-  const fresh=context.refresh();calls[4].resolve({fresh:true});await fresh;assert.equal(painted[0].fresh,true);
+  assert.equal(connections.length,0,'stale poll cannot change connection feedback');
+  const fresh=context.refresh();calls[4].resolve({fresh:true});await fresh;assert.equal(painted[0].fresh,true);assert.equal(connections[0],'');assert.equal(context.retryConnectionBtn.disabled,false);
   const timeout=context.api('/api/play',{method:'POST'});const rejected=assert.rejects(timeout,/请求超时/);
   const after=context.api('/api/stop',{method:'POST'});await flush();assert.equal(calls.length,6);
   [...timers.values()][0]();await rejected;await flush();assert.equal(calls.length,7,'timeout does not poison queue');
   calls[6].resolve({stopped:true});await after;assert.equal(context.count(),0);assert.equal(timers.size,0);
+  const failedPoll=context.refresh();await flush();
+  calls.at(-1).fail(new Error('network down'));await failedPoll;
+  assert.equal(connections.at(-1),'network down');assert.equal(context.retryConnectionBtn.disabled,false);
+  const retry=context.refresh();context.refresh();await flush();
+  assert.equal(context.retryConnectionBtn.disabled,true);
+  calls.at(-1).resolve({recovered:true});await retry;
+  assert.equal(connections.at(-1),'');assert.equal(painted.at(-1).recovered,true);
+  assert.equal(context.retryConnectionBtn.textContent,'重新连接');
   // Production renderState must not revive an older session while Stop/another mutation is queued.
   const guard={};vm.createContext(guard);
   vm.runInContext(`let requestsInFlight=1,currentState='sentinel';${take('function renderState(state)', '\nfunction escapeHtml')}\nrenderState({});this.value=currentState;`,guard);
@@ -41,7 +50,9 @@ const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
   vm.createContext(recovery);
   vm.runInContext(`let pendingActions=new Set(),currentState={old:true};${take('async function performAction(', '\nfunction paintAvailability')}this.action=performAction;`,recovery);
   const button={setAttribute(){},removeAttribute(){}};
-  await recovery.action('play',button,async()=>{throw new Error('failed newer action');});
+  const rejectedAction=await recovery.action('play',button,async()=>{throw new Error('failed newer action');});
+  assert.equal(rejectedAction,false);
+  assert.equal(await recovery.action('play',button,async()=>{}),true);
   assert.equal(reconciles,1);assert.equal(button.disabled,false);
-  console.log('PASS: ordered mutations; single-flight polls; stale response ignored; queued-stop render barrier; timeout and queue recovery');
+  console.log('PASS: ordered mutations; single-flight polls; stale response ignored; queued-stop render barrier; timeout/queue recovery; connection failure/retry and stale-status isolation');
 })().catch(e=>{console.error(e);process.exitCode=1;});

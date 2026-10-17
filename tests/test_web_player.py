@@ -208,3 +208,26 @@ class ThemeManagementTests(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
         used = set(re.findall(r'var\((--[\w-]+)', css))
         self.assertFalse(used - set(names) - {'--episode-progress', '--frame-width', '--frame-height', '--landscape-width', '--landscape-height'})
+
+
+class WebUIPolishTests(unittest.TestCase):
+    def test_clear_requires_accessible_confirmation(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        js = (root / 'web/app.js').read_text()
+        self.assertIn('id="clearDialog" aria-labelledby="clearDialogTitle"', html)
+        self.assertIn('id="cancelClearBtn" autofocus', html)
+        self.assertIn('clearDialog.showModal()', js)
+        self.assertIn('if (success) clearDialog.close()', js)
+        self.assertIn('pendingActions.has("clear")', js)
+        self.assertIn('此操作不会删除源文件', html)
+
+    def test_polling_has_recoverable_connection_feedback(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        js = (root / 'web/app.js').read_text()
+        self.assertIn('id="connectionMessage" role="status"', html)
+        self.assertIn('retryConnectionBtn.addEventListener("click", refresh)', js)
+        self.assertIn('paintConnection(error.message)', js)
+        self.assertIn('connectionNotice.contains(document.activeElement)', js)
+        self.assertIn('if (refreshing || requestsInFlight) return', js)

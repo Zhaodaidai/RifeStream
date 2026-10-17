@@ -113,3 +113,5 @@
 恢复 Anime4K 手动开关已完成：默认关闭；开启/关闭分别控制所有输入分辨率的ACNet，不再受高度条件限制；恢复持久化、CLI和下一次播放/seek传参，720p/1080p/4K输出尺寸及Lanczos/RIFE/NVENC不变。实际本轮 BASELINE100项、MODIFIED99项、ROLLBACK100项通过（移除过时的功能删除测试并恢复/新增开关测试），两组Node与JS语法通过；Chromium以生产HTML/JS和隔离模拟API验证开/关请求及刷新回显，无pageerror。字节保真补丁重建与隔离回滚原始哈希一致。沿用四角色，回滚模式 --manual-anime4k-before。未实测Windows GPU；需重启WebUI并重新开始转码。不改同时进行的播放器导航任务。
 
 播放器导航：在真实Plyr控制栏播放按钮两侧插入同类按钮，has_prev/has_next决定hidden，仍调用现有/api/play offset±1；内部播放拦截仅在空闲时启动转码，已加载时保留Plyr本地暂停/恢复。请求busy覆盖三个入口，首末切换的焦点在完成后恢复。861窄桌面隐藏音量滑杆，手机压缩图标边距，保持进度条一行。独立Anime4K设置更新已保留。
+
+WebUI打磨：清空原先立即POST且停止转码；改为原生dialog默认保留列表，成功后关闭、失败内联重试，pending禁止重复提交/Escape。轮询失败独立连接提示不重置media，单航班刷新与版本屏障保留，恢复自动隐藏并避免隐藏控件残留焦点。仅复用现有主题token，移动列表操作40px触控；不改Plyr/转码业务。

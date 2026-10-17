@@ -7,6 +7,12 @@ const addForm = document.getElementById("addForm");
 const addError = document.getElementById("addError");
 const finishAddBtn = document.getElementById("finishAddBtn");
 let addingSources = false;
+const clearDialog = document.getElementById("clearDialog");
+const clearError = document.getElementById("clearError");
+const confirmClearBtn = document.getElementById("confirmClearBtn");
+const cancelClearBtn = document.getElementById("cancelClearBtn");
+const connectionNotice = document.getElementById("connectionNotice");
+const retryConnectionBtn = document.getElementById("retryConnectionBtn");
 const playlistEl = document.getElementById("playlist");
 const stopBtn = document.getElementById("stopBtn");
 const introSeconds = document.getElementById("introSeconds");
@@ -32,8 +38,8 @@ async function performAction(key, button, action) {
   button.disabled = true;
   button.setAttribute("aria-busy", "true");
   if (currentState) paintAvailability(currentState);
-  try { await action(); }
-  catch (error) { showError(error.message); await refresh(); }
+  try { await action(); return true; }
+  catch (error) { showError(error.message); await refresh(); return false; }
   finally {
     pendingActions.delete(key);
     button.disabled = false;
@@ -46,6 +52,9 @@ function paintAvailability(state) {
   embeddedPlayer.setActionState(pendingActions.has("play"));
   stopBtn.disabled = !state.streaming || pendingActions.has("stop");
   document.getElementById("clearBtn").disabled = !state.items.length || pendingActions.has("clear");
+  confirmClearBtn.disabled = !state.items.length || pendingActions.has("clear");
+  cancelClearBtn.disabled = pendingActions.has("clear");
+  document.getElementById("clearSummary").textContent = `共 ${state.items.length} 项媒体 · 清空后无法撤销`;
 }
 const embeddedPlayer = new EmbeddedPlayer({
   video: document.getElementById("videoPlayer"),
@@ -226,6 +235,7 @@ function renderState(state) {
       <button type="button" class="remove" title="删除此媒体" aria-label="删除 ${escapeHtml(item.title)}">×</button>
     `;
     li.querySelector(".name").title = item.title;
+    li.querySelector(".remove").setAttribute("aria-label", `移除 ${item.title}`);
     li.querySelector(".name").addEventListener("click", () => play({ id: item.id }));
     li.querySelector(".remove").addEventListener("click", async (event) => {
       event.stopPropagation();
@@ -251,16 +261,36 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function paintConnection(message = "", restoreFocus = false) {
+  if (!message && (connectionNotice.contains(document.activeElement)
+    || (restoreFocus && document.activeElement === document.body))) {
+    document.getElementById("openAddBtn").focus({ preventScroll: true });
+  }
+  connectionNotice.hidden = !message;
+  document.getElementById("connectionMessage").textContent = message
+    ? `${message}。页面会自动重连，已加载的视频不会因此停止。` : "";
+}
+
 async function refresh() {
   if (refreshing || requestsInFlight) return;
+  const restoreFocus = connectionNotice.contains(document.activeElement);
   refreshing = true;
+  retryConnectionBtn.disabled = true;
+  retryConnectionBtn.textContent = "连接中…";
   const version = stateVersion;
   try {
     const state = await api("/api/state");
-    if (version === stateVersion && !requestsInFlight) renderState(state);
+    if (version === stateVersion && !requestsInFlight) {
+      paintConnection("", restoreFocus);
+      renderState(state);
+    }
   } catch (error) {
-    if (version === stateVersion && !requestsInFlight) showError(error.message);
-  } finally { refreshing = false; }
+    if (version === stateVersion && !requestsInFlight) paintConnection(error.message);
+  } finally {
+    refreshing = false;
+    retryConnectionBtn.disabled = false;
+    retryConnectionBtn.textContent = "重新连接";
+  }
 }
 
 async function addSources(event) {
@@ -340,12 +370,37 @@ addDialog.addEventListener("cancel", (event) => {
   if (addingSources) event.preventDefault();
 });
 addForm.addEventListener("submit", addSources);
-document.getElementById("clearBtn").addEventListener("click", async () => {
-  await performAction("clear", document.getElementById("clearBtn"), async () => {
+document.getElementById("clearBtn").addEventListener("click", () => {
+  if (!currentState?.items.length || pendingActions.has("clear")) return;
+  clearError.hidden = true;
+  paintAvailability(currentState);
+  clearDialog.showModal();
+  cancelClearBtn.focus();
+});
+cancelClearBtn.addEventListener("click", () => clearDialog.close());
+clearDialog.addEventListener("cancel", (event) => {
+  if (pendingActions.has("clear")) event.preventDefault();
+});
+clearDialog.addEventListener("close", () => {
+  const button = document.getElementById("clearBtn");
+  (button.disabled ? document.getElementById("openAddBtn") : button).focus({ preventScroll: true });
+});
+document.getElementById("clearForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!currentState?.items.length || pendingActions.has("clear")) return;
+  clearError.hidden = true;
+  const success = await performAction("clear", confirmClearBtn, async () => {
     embeddedPlayer.suspend(false);
     renderState(await api("/api/clear", { method: "POST", body: "{}" }));
   });
+  if (success) clearDialog.close();
+  else {
+    clearError.textContent = errorBox.textContent || "清空失败，请稍后重试。";
+    clearError.hidden = false;
+    confirmClearBtn.focus();
+  }
 });
+retryConnectionBtn.addEventListener("click", refresh);
 stopBtn.addEventListener("click", async () => {
   await performAction("stop", stopBtn, async () => {
     embeddedPlayer.suspend(false);
