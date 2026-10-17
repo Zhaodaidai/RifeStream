@@ -29,3 +29,18 @@
 - 底部常驻添加区及添加并播放入口已移除。播放列表标题右侧新增添加，原生 dialog 提供批量链接输入、完成、取消、Escape；完成走 /api/items 且 play=false，防重复提交，错误保留输入。
 - 77 项 Python 测试、Node 播放器测试通过；Chromium 配合真实 /api/items 验证空白/无效链接、纠错、批量添加、持久化、取消和焦点恢复，无自动转码；320/390/860/1280 弹窗适配通过。原播放/切集/跳转/设置/长列表回归通过。
 - 同一组四角色已更新并重新打开，补丁重建哈希一致，回滚恢复最初基线（70 项测试），新增 dialog_probe 记录本轮修改前/修改后/回滚。
+
+## 整体 UI 优化完成
+- 修改 web/index.html、web/styles.css、web/app.js；保留原生前端、Python 服务和 hls.js，未添加项目依赖。
+- 统一石墨灰/浅绿色界面、空状态引导、响应式播放器和列表、原生弹窗、焦点与 reduced-motion。
+- renderState 列表签名缓存与焦点/滚动保留；performAction 错误/防重复；saveSettings 严格时间格式与保存反馈；状态按钮禁用、剪贴板反馈。
+- 修改前/修改后均 77 项 Python 测试通过，Node 播放器和语法检查通过；Chromium 320–1600px、真实添加/设置/删除/清空接口、真实 HLS 解码、切集跳转停止、错误恢复和键盘通过。GPU 真转码未验证。
+- 实际 python -m rife.webui --host 127.0.0.1 --port 10000 已运行，浏览器加载真实 API/静态资源 HTTP 200，无未捕获 JS 错误。
+- 复用 /tmp/rife-player-transaction 四角色并重新打开；补丁重建一致；ROLLBACK 在隔离副本恢复初始基线，70 项原始测试通过、哈希相同。ui-before 原始三文件及哈希保持。
+- ui_check 初始错误是浏览器 dialog 边界 Shift+Tab 假设；已改实际前后焦点遍历并通过。首次 playwright 导入失败已使用既有工具路径修正。
+- 截图：ui-live.png / ui-desktop.png / ui-mobile.png / ui-dialog.png；完整命令、stdout、stderr、exit、hash 在 VERIFICATION.txt。
+
+## PC 首屏垂直居中完成
+- 仅修改 web/styles.css 桌面媒体查询：隐藏介绍/页脚，main flex 垂直居中，workspace 自适应视口高度，video-stage 弹性分配并保持视频比例；移动端保持。
+- Chromium 1440×900、1920×1080、1366×768、1280×720、1024×768、861×700 无首屏滚动，播放器与列表整体在头部以下居中。移动端、HLS、切集、跳转、设置、弹窗、错误和键盘回归通过；77 项 Python 与 Node 测试通过。
+- 同四角色重新打开；初始 baseline 和 rollback 未有居中机制，modified 有；补丁重建一致，回滚恢复原始哈希。历史验证保存在 VERIFICATION-before-center.txt，本轮 center-browser-output.txt。

@@ -23,6 +23,38 @@ let savingSettings = false;
 let jumpInFlight = false;
 let stateVersion = 0;
 let requestsInFlight = 0;
+let playlistSignature = "";
+let currentState = null;
+let copyTimer;
+let errorVisibleUntil = 0;
+const pendingActions = new Set();
+const settingsStatus = document.getElementById("settingsStatus");
+const introError = document.getElementById("introError");
+
+async function performAction(key, button, action) {
+  if (pendingActions.has(key)) return;
+  pendingActions.add(key);
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  if (currentState) paintAvailability(currentState);
+  try { await action(); }
+  catch (error) { showError(error.message); }
+  finally {
+    pendingActions.delete(key);
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    if (currentState) paintAvailability(currentState);
+  }
+}
+
+function paintAvailability(state) {
+  prevBtn.disabled = !state.has_prev || pendingActions.has("play");
+  nextBtn.disabled = !state.has_next || pendingActions.has("play");
+  playBtn.disabled = !state.current || pendingActions.has("play");
+  stopBtn.disabled = !state.streaming || pendingActions.has("stop");
+  document.getElementById("clearBtn").disabled = !state.items.length || pendingActions.has("clear");
+  copyBtn.disabled = !state.hls_url;
+}
 const embeddedPlayer = new EmbeddedPlayer({
   video: document.getElementById("videoPlayer"),
   timeline: document.getElementById("timeline"),
@@ -44,11 +76,14 @@ async function api(path, options = {}) {
     if (!response.ok) {
       throw new Error(data.error || response.statusText);
     }
+    if (modifying) { errorVisibleUntil = 0; showError(""); }
     return data;
   } finally { if (modifying) requestsInFlight--; }
 }
 
-function showError(message) {
+function showError(message, fromState = false) {
+  if (fromState && !message && Date.now() < errorVisibleUntil) return;
+  if (message && !fromState) errorVisibleUntil = Date.now() + 6000;
   errorBox.hidden = !message;
   errorBox.textContent = message || "";
 }
@@ -70,16 +105,16 @@ function parseTimeSeconds(value) {
   if (!text) return NaN;
   if (/^\d+(\.\d+)?$/.test(text)) return Number(text);
   const parts = text.split(":");
-  if (parts.length < 2 || parts.length > 3) return NaN;
+  if (parts.length < 2 || parts.length > 3 || parts.some((part) => !/^\d+$/.test(part))) return NaN;
   const numbers = parts.map((part) => Number(part));
-  if (numbers.some((part) => !Number.isFinite(part) || part < 0)) return NaN;
+  if (numbers.some((part, index) => !Number.isFinite(part) || part < 0 || (index > 0 && part >= 60))) return NaN;
   if (parts.length === 2) return numbers[0] * 60 + numbers[1];
   return numbers[0] * 3600 + numbers[1] * 60 + numbers[2];
 }
 
 function paintSettings(settings) {
   if (!settings) return;
-  if (document.activeElement !== introSeconds) {
+  if (document.activeElement !== introSeconds && introSeconds.getAttribute("aria-invalid") !== "true") {
     introSeconds.value = formatTime(Number(settings.intro) || 0);
   }
   if (document.activeElement !== skipIntro) {
@@ -106,61 +141,94 @@ async function saveSettings() {
   if (savingSettings) return;
   const payload = settingsPayload();
   if (!payload) {
-    showError("片头请使用 1:30 或 1:02:03 格式");
+    introSeconds.setAttribute("aria-invalid", "true");
+    introError.textContent = "片头请使用秒数、1:30 或 1:02:03 格式";
+    introError.hidden = false;
+    settingsStatus.textContent = "";
     return;
   }
+  introSeconds.removeAttribute("aria-invalid");
+  introError.hidden = true;
   savingSettings = true;
+  settingsStatus.textContent = "正在保存设置…";
+  skipIntro.disabled = anime4k.disabled = introSeconds.disabled = true;
   try {
     renderState(await api("/api/settings", {
       method: "POST",
       body: JSON.stringify(payload),
     }));
+    settingsStatus.textContent = "设置已保存";
   } catch (error) {
+    settingsStatus.textContent = "保存失败，请重试";
     showError(error.message);
   } finally {
     savingSettings = false;
+    skipIntro.disabled = anime4k.disabled = introSeconds.disabled = false;
   }
 }
 
 function renderState(state) {
+  currentState = state;
   embeddedPlayer.update(state);
+  document.getElementById("playerEmpty").hidden = Boolean(state.hls_ready || state.streaming);
+  document.getElementById("playlistCount").textContent = state.items.length;
+  paintAvailability(state);
   const current = state.current;
+  document.querySelector("#playerEmpty h3").textContent = current ? "已就绪，开始播放吧" : "好画面，从这里开始";
+  document.querySelector("#playerEmpty p").textContent = current ? "点击播放，启动补帧与视频转码" : "添加媒体链接，开启流畅观影";
+  document.getElementById("playerAddBtn").lastChild.textContent = current ? "播放所选媒体" : "添加媒体";
+  document.querySelector("#playerAddBtn path").setAttribute("d", current ? "m9 5 11 7-11 7z" : "M12 5v14M5 12h14");
   paintSettings(state.settings);
   nowPlaying.textContent = current
-    ? `正在播放：${current.title}`
+    ? `${state.streaming ? "正在播放" : "已选择"}：${current.title}`
     : "未选择媒体";
   streamStatus.textContent = state.streaming ? "转码中" : "待机";
   streamStatus.classList.toggle("live", Boolean(state.streaming));
   hlsUrlEl.textContent = state.hls_url || "";
-  prevBtn.disabled = !state.has_prev;
-  nextBtn.disabled = !state.has_next;
-  playBtn.disabled = !current;
-  showError(state.last_error);
+  showError(state.last_error, true);
 
+  const signature = JSON.stringify([state.items, state.current_id]);
+  if (signature === playlistSignature) return;
+  playlistSignature = signature;
+  const focused = document.activeElement;
+  const focusRow = focused?.closest("li[data-id]")?.dataset.id;
+  const focusClass = focused?.className;
+  const scrollTop = playlistEl.scrollTop;
   playlistEl.innerHTML = "";
   if (!state.items.length) {
     const empty = document.createElement("li");
     empty.className = "empty";
-    empty.textContent = "列表为空，从右侧添加链接";
+    empty.innerHTML = '<span class="empty-list-icon" aria-hidden="true">＋</span><span class="empty-title">你的播放列表，等你填满</span><span class="empty-caption">添加媒体链接<br>喜欢的内容，一处收好</span>';
     playlistEl.appendChild(empty);
+    if (focusRow) document.getElementById("openAddBtn").focus({ preventScroll: true });
     return;
   }
   state.items.forEach((item, index) => {
     const li = document.createElement("li");
-    if (item.id === state.current_id) li.classList.add("current");
+    li.dataset.id = item.id;
+    if (item.id === state.current_id) { li.classList.add("current"); li.setAttribute("aria-current", "true"); }
     li.innerHTML = `
       <span class="index">${index + 1}</span>
       <button type="button" class="name">${escapeHtml(item.title)}</button>
       <span class="kind">${item.kind === "url" ? "链接" : "文件"}</span>
-      <button type="button" class="remove">删除</button>
+      <button type="button" class="remove" title="删除此媒体" aria-label="删除 ${escapeHtml(item.title)}">×</button>
     `;
+    li.querySelector(".name").title = item.title;
     li.querySelector(".name").addEventListener("click", () => play({ id: item.id }));
     li.querySelector(".remove").addEventListener("click", async (event) => {
       event.stopPropagation();
-      renderState(await api(`/api/items/${item.id}`, { method: "DELETE" }));
+      await performAction(`delete:${item.id}`, event.currentTarget, async () => {
+        renderState(await api(`/api/items/${item.id}`, { method: "DELETE" }));
+      });
     });
     playlistEl.appendChild(li);
   });
+  playlistEl.scrollTop = scrollTop;
+  if (focusRow) {
+    const row = Array.from(playlistEl.children).find((node) => node.dataset.id === focusRow);
+    const replacement = row?.querySelector(focusClass === "remove" ? ".remove" : ".name");
+    (replacement || document.getElementById("openAddBtn")).focus({ preventScroll: true });
+  }
 }
 
 function escapeHtml(value) {
@@ -193,7 +261,10 @@ async function addSources(event) {
     sourceInput.focus();
     return;
   }
+  sourceInput.removeAttribute("aria-invalid");
   addingSources = true;
+  sourceInput.readOnly = true;
+  addForm.setAttribute("aria-busy", "true");
   finishAddBtn.disabled = true;
   finishAddBtn.textContent = "添加中…";
   try {
@@ -205,19 +276,22 @@ async function addSources(event) {
     sourceInput.value = "";
     addDialog.close();
   } catch (error) {
+    sourceInput.setAttribute("aria-invalid", "true");
     addError.textContent = error.message;
     addError.hidden = false;
   } finally {
     addingSources = false;
+    sourceInput.readOnly = false;
+    addForm.removeAttribute("aria-busy");
     finishAddBtn.disabled = false;
     finishAddBtn.textContent = "完成";
   }
 }
 
 async function play(body) {
-  try {
+  await performAction("play", playBtn, async () => {
     renderState(await api("/api/play", { method: "POST", body: JSON.stringify(body) }));
-  } catch (error) { showError(error.message); }
+  });
 }
 
 async function seekSeconds(seconds) {
@@ -237,9 +311,11 @@ async function seekSeconds(seconds) {
 
 document.getElementById("openAddBtn").addEventListener("click", () => {
   addError.hidden = true;
+  sourceInput.removeAttribute("aria-invalid");
   addDialog.showModal();
   sourceInput.focus();
 });
+document.getElementById("playerAddBtn").addEventListener("click", () => currentState?.current ? play({}) : document.getElementById("openAddBtn").click());
 document.getElementById("cancelAddBtn").addEventListener("click", () => {
   if (!addingSources) addDialog.close();
 });
@@ -248,7 +324,9 @@ addDialog.addEventListener("cancel", (event) => {
 });
 addForm.addEventListener("submit", addSources);
 document.getElementById("clearBtn").addEventListener("click", async () => {
-  renderState(await api("/api/clear", { method: "POST", body: "{}" }));
+  await performAction("clear", document.getElementById("clearBtn"), async () => {
+    renderState(await api("/api/clear", { method: "POST", body: "{}" }));
+  });
 });
 copyBtn.addEventListener("click", async () => {
   const url = hlsUrlEl.textContent;
@@ -257,9 +335,10 @@ copyBtn.addEventListener("click", async () => {
     await navigator.clipboard.writeText(url);
     copyBtn.classList.add("copied");
     hlsHint.textContent = "已复制";
-    setTimeout(() => {
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => {
       copyBtn.classList.remove("copied");
-      hlsHint.textContent = "HLS";
+      hlsHint.textContent = "复制 HLS";
     }, 1200);
   } catch {
     showError("无法复制，请手动选择地址");
@@ -269,7 +348,9 @@ prevBtn.addEventListener("click", () => play({ offset: -1 }));
 nextBtn.addEventListener("click", () => play({ offset: 1 }));
 playBtn.addEventListener("click", () => play({}));
 stopBtn.addEventListener("click", async () => {
-  renderState(await api("/api/stop", { method: "POST", body: "{}" }));
+  await performAction("stop", stopBtn, async () => {
+    renderState(await api("/api/stop", { method: "POST", body: "{}" }));
+  });
 });
 introSeconds.addEventListener("change", saveSettings);
 introSeconds.addEventListener("keydown", (event) => {
