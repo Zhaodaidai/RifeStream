@@ -1,7 +1,7 @@
 /* HLS session lifecycle is separate from playlist rendering and its polling clock. */
 class EmbeddedPlayer {
-  constructor({ video, progress, timeline, clock, hint, formatTime, seek, onEnded }) {
-    Object.assign(this, { video, progress, timeline, clock, hint, formatTime, seek, onEnded });
+  constructor({ video, progress, timeline, clock, hint, formatTime, seek, onEnded, onNavigate, onPlayRequest }) {
+    Object.assign(this, { video, progress, timeline, clock, hint, formatTime, seek, onEnded, onNavigate, onPlayRequest });
     this.key = null;
     this.state = null;
     this.hls = null;
@@ -23,6 +23,7 @@ class EmbeddedPlayer {
       settings: ["speed"],
       speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
       fullscreen: { enabled: true, fallback: true, iosNative: false, container: ".video-stage" },
+      listeners: { play: () => this.handlePlayRequest() },
       keyboard: { focused: true, global: false },
       tooltips: { controls: true, seek: false },
       i18n: {
@@ -38,6 +39,28 @@ class EmbeddedPlayer {
     if (this.ui?.elements?.controls) {
       const controls = this.ui.elements.controls;
       controls.insertBefore(progress, controls.querySelector('.plyr__volume'));
+      const playButton = controls.querySelector('[data-plyr="play"]');
+      if (playButton) {
+        const createNavigation = (offset, label, path) => {
+          const button = video.ownerDocument.createElement("button");
+          button.type = "button";
+          button.className = "plyr__controls__item plyr__control episode-nav";
+          button.dataset.episode = offset < 0 ? "previous" : "next";
+          button.setAttribute("aria-label", label);
+          button.hidden = true;
+          button.innerHTML = `<svg aria-hidden="true" focusable="false" viewBox="0 0 18 18"><path d="${path}"/></svg><span class="plyr__tooltip" role="tooltip">${label}</span>`;
+          button.addEventListener("click", () => {
+            const available = offset < 0 ? this.state?.has_prev : this.state?.has_next;
+            if (available && !this.actionPending) this.onNavigate?.(offset);
+          });
+          return button;
+        };
+        this.previousButton = createNavigation(-1, "上一集", "M2 2h2v14H2zm13 0v14L5 9z");
+        this.nextButton = createNavigation(1, "下一集", "M14 2h2v14h-2zM3 2l10 7-10 7z");
+        controls.insertBefore(this.previousButton, playButton);
+        controls.insertBefore(this.nextButton, playButton.nextSibling);
+      }
+      this.setActionState(false);
     }
     this.orientationEpoch = 0;
     this.mobileFullscreen = false;
@@ -101,6 +124,35 @@ class EmbeddedPlayer {
     video.addEventListener("ended", () => {
       if (this.key && !this.reloading && !this.seeking) this.onEnded?.(this.state);
     });
+  }
+
+  handlePlayRequest() {
+    if (!this.state?.current || this.actionPending) return false;
+    // Play/pause a loaded episode locally; start transcoding only from an idle session.
+    if (this.key) return true;
+    if (!this.state.streaming && !this.state.hls_ready) this.onPlayRequest?.();
+    return false;
+  }
+
+  setActionState(pending) {
+    this.actionPending = pending;
+    const playButtons = this.ui?.elements?.buttons?.play || [];
+    for (const button of playButtons) {
+      button.disabled = !this.state?.current || pending;
+      if (pending) button.setAttribute("aria-busy", "true");
+      else button.removeAttribute("aria-busy");
+    }
+    for (const [button, available] of [[this.previousButton, this.state?.has_prev], [this.nextButton, this.state?.has_next]]) {
+      if (!button) continue;
+      const hidden = !this.state?.current || !available;
+      if (hidden && button.ownerDocument.activeElement === button) {
+        this.ui.elements.controls.querySelector('[data-plyr="play"]').focus({ preventScroll: true });
+      }
+      button.hidden = hidden;
+      button.disabled = pending;
+      if (pending) button.setAttribute("aria-busy", "true");
+      else button.removeAttribute("aria-busy");
+    }
   }
 
   async enterLandscapeFullscreen() {
@@ -212,6 +264,7 @@ class EmbeddedPlayer {
       this.session = session;
     }
     this.state = state;
+    this.setActionState(Boolean(this.actionPending));
     if (this.ui) this.ui.config.title = state.current?.title || "RIFE 视频播放器";
     const key = state.current && state.hls_ready
       ? JSON.stringify([state.current.id, state.playback_id, state.start, state.hls_url]) : null;

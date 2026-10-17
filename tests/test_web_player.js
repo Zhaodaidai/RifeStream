@@ -2,8 +2,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const events = {}, rangeEvents = {}, instances = [], seeks = [], timers = new Map();
-let timerId = 0, plays = 0, failSeek = false, resolveSeek, ends = 0;
+let timerId = 0, plays = 0, failSeek = false, resolveSeek, ends = 0, starts = 0;
+const navigations = [];
+const document = {activeElement:null,createElement(){return {ownerDocument:this,dataset:{},events:{},setAttribute(n,v){this[n]=v;},removeAttribute(n){delete this[n];},addEventListener(n,f){this.events[n]=f;},focus(){document.activeElement=this;}};}};
 const video = {
+  ownerDocument: document,
   currentTime: 0, seekable: {length: 0}, pauses: 0, ended: false,
   addEventListener: (n, fn) => { events[n] = fn; },
   pause() { this.pauses++; events.pause?.(); }, load() { this.currentTime = 0; },
@@ -19,7 +22,16 @@ class Hls {
   on(n,f){this.events[n]=f;} loadSource(url){this.url=url;} attachMedia(){} destroy(){this.destroyed=true;}
 }
 class Plyr {
-  constructor(media,config){this.events={};this.fullscreen={active:false};this.media=media;this.config=config;this.elements={container:{classList:{toggle(n,v){this[n]=v;}},style:{setProperty(n,v){this[n]=v;},removeProperty(n){delete this[n];}}},controls:{querySelector:()=> 'volume',insertBefore:(node)=>{this.progress=node;}}};uiInstances.push(this);}
+  constructor(media,config){
+    this.events={};this.fullscreen={active:false};this.media=media;this.config=config;
+    const play=document.createElement('button'),volume={};
+    const children=[play,volume];
+    Object.defineProperty(play,'nextSibling',{get:()=>children[children.indexOf(play)+1]});
+    this.elements={buttons:{play:[play]},container:{classList:{toggle(n,v){this[n]=v;}},style:{setProperty(n,v){this[n]=v;},removeProperty(n){delete this[n];}}},controls:{children,
+      querySelector:s=>s==='.plyr__volume'?volume:play,
+      insertBefore:(node,before)=>{children.splice(children.indexOf(before),0,node);if(node===progress)this.progress=node;}}};
+    uiInstances.push(this);
+  }
   on(n,fn){this.events[n]=fn;}
 }
 const context = {window:{Plyr,Hls,location:{href:'http://localhost:10000',hostname:'localhost'}}, URL,
@@ -27,7 +39,7 @@ const context = {window:{Plyr,Hls,location:{href:'http://localhost:10000',hostna
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('web/player.js','utf8')+'\nthis.Player=EmbeddedPlayer;',context);
 let player;
-player = new context.Player({video,progress,timeline,clock,hint,formatTime:String,onEnded:()=>ends++, seek:async seconds=>{
+player = new context.Player({video,progress,timeline,clock,hint,formatTime:String,onNavigate:offset=>navigations.push(offset),onPlayRequest:()=>starts++,onEnded:()=>ends++, seek:async seconds=>{
   seeks.push(seconds);
   if(failSeek)throw new Error('seek failure');
   if(resolveSeek === null)await new Promise(resolve=>{resolveSeek=resolve;});
@@ -135,6 +147,32 @@ const flush = async()=>{await Promise.resolve();await Promise.resolve();};
   assert.equal(surface.classList['plyr--landscape-fallback'],false);
   context.window.matchMedia=()=>({matches:false});await player.enterLandscapeFullscreen();
   assert.equal(player.mobileFullscreen,false,'desktop never locks or rotates');
+  // Neighbour buttons flank only the control-bar Play button, never the large overlay.
+  const controls=player.ui.elements.controls,playButton=player.ui.elements.buttons.play[0];
+  assert.equal(controls.children.indexOf(player.previousButton)+1,controls.children.indexOf(playButton));
+  assert.equal(controls.children.indexOf(playButton)+1,controls.children.indexOf(player.nextButton));
+  player.update({...base,has_prev:false,has_next:true});
+  assert.equal(player.previousButton.hidden,true);assert.equal(player.nextButton.hidden,false);
+  player.previousButton.events.click();assert.deepEqual(navigations,[]);
+  player.nextButton.events.click();assert.deepEqual(navigations,[1]);
+  player.setActionState(true);player.nextButton.events.click();
+  assert.deepEqual(navigations,[1]);assert.equal(playButton.disabled,true);assert.equal(player.nextButton['aria-busy'],'true');
+  player.update({...base,has_prev:true,has_next:true});assert.equal(player.previousButton.disabled,true,'poll does not clear pending switch');
+  player.setActionState(false);assert.equal(playButton.disabled,false);assert.equal(player.nextButton['aria-busy'],undefined);
+  player.previousButton.events.click();assert.deepEqual(navigations,[1,-1]);
+  document.activeElement=player.nextButton;player.update({...base,has_prev:true,has_next:false});
+  assert.equal(player.previousButton.hidden,false);assert.equal(player.nextButton.hidden,true);
+  assert.equal(document.activeElement,playButton,'boundary removal restores keyboard focus');
+  assert.equal(player.ui.config.listeners.play(),true,'loaded Play/Pause stays local');assert.equal(starts,0);
+  player.update({...base,hls_ready:false,streaming:false,has_prev:false,has_next:false});
+  assert.equal(player.ui.config.listeners.play(),false);assert.equal(starts,1,'idle Play starts server transcode');
+  player.setActionState(true);player.ui.config.listeners.play();assert.equal(starts,1,'pending click cannot start twice');
+  player.setActionState(false);player.update({...base,hls_ready:false,streaming:true});
+  player.ui.config.listeners.play();assert.equal(starts,1,'waiting for HLS cannot restart transcode');
+  player.update({...base,current:null,hls_ready:false,has_prev:false,has_next:false});
+  assert.equal(player.previousButton.hidden,true);assert.equal(player.nextButton.hidden,true);assert.equal(playButton.disabled,true);
+  assert.equal(player.ui.config.listeners.play(),false);assert.equal(starts,1);
+  console.log('PASS: previous/play/next order, first/middle/last/single/empty visibility, offsets, pending isolation, focus recovery, idle start/local pause');
   console.log('PASS: mobile landscape lock/rejection/missing API, portrait fallback, physical rotation, exit/late-lock cleanup, desktop isolation');
   console.log('PASS: desktop1080p/4K/source ratio/short viewport fitting and mobile CSS restoration');
   console.log('PASS: Plyr reuse/local icons/full-episode timeline; polling no reload; start/switch/stop/finished encode');

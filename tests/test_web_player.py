@@ -56,10 +56,10 @@ class PlayerLayoutTests(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         html = (root / 'web/index.html').read_text()
         viewer = html.split('<section class="viewer card"', 1)[1].split('</section>', 1)[0]
-        for name in ['prevBtn', 'nextBtn', 'introSeconds', 'skipIntro']:
+        for name in ['prevBtn', 'nextBtn', 'introSeconds', 'skipIntro', 'anime4k']:
             self.assertIn('id="' + name + '"', viewer)
-        self.assertNotIn('id="anime4k"', html)
-        self.assertNotIn('anime4k', (root / 'web/app.js').read_text())
+        self.assertIn('anime4k.addEventListener("change", saveSettings)', (root / 'web/app.js').read_text())
+        self.assertNotIn('id="anime4k" checked', html)
         stage = viewer.split('<div class="video-stage">', 1)[1].split('<div class="playback-controls"', 1)[0]
         self.assertIn('id="timeline"', stage)
         self.assertIn('id="episodeProgress"', stage)

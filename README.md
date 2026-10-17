@@ -89,7 +89,9 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 - 浏览器禁止有声自动播放时，点击视频中的播放按钮继续；暂停仅暂停观看，「停止转码」会停止后端
 - 顶部仍可复制 HLS 地址给外部播放器；hls.js 已随项目本地提供，无需访问 CDN
 - **缩放**：高于输出上限的片源通过 CUDA Lanczos 直接缩小；默认最高 1080p。
-- **分辨率**：720p 保持 720p，1080p 保持 1080p，4K 默认缩至 1080p；不做往返超分，已移除 Anime4K 手动开关。
+- **分辨率**：720p 保持 720p，1080p 保持 1080p，4K 默认缩至 1080p。
+- **Anime4K**：保留手动开关，默认关闭；动漫可手动开启，真人剧集可关闭。不按分辨率自动开启或强制跳过。开启时 ACNet 2× 放大后缩回管线尺寸，再送入 RIFE，不改变最终输出尺寸；设置从下一次播放或重新转码生效，并会保存。
+- CLI 可加 `--anime4k` 启用；不加则关闭。只有开启时才需要 `runtime\vs-plugins\ac_filter_avs_vs.dll`（Anime4KCPP）插件。
 
 ```bat
 runtime\python.exe run.py webui

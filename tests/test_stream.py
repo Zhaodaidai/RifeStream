@@ -225,7 +225,7 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(environment["RIFE_GPU_THREADS"], "3")
         self.assertEqual(environment["RIFE_ANIME4K"], "0")
 
-    def test_anime4k_bypasses_native_1080p_without_changing_pipe_size(self) -> None:
+    def test_anime4k_enables_native_1080p_without_changing_pipe_size(self) -> None:
         source = StreamInput(
             "/tmp/video.mkv",
             None,
@@ -247,33 +247,54 @@ class StreamInputTests(unittest.TestCase):
         )
 
         environment = build_environment(source, args)
-        self.assertEqual(environment["RIFE_ANIME4K"], "0")
+        self.assertEqual(environment["RIFE_ANIME4K"], "1")
         self.assertEqual(environment["RIFE_PIPE_WIDTH"], "1920")
         self.assertEqual(environment["RIFE_PIPE_HEIGHT"], "1080")
 
-    def test_no_super_resolution_for_any_input(self) -> None:
-        for width, height, expected in [(1280, 720, (1280, 720)),
-                                        (1920, 1080, (1920, 1080)),
-                                        (3840, 2160, (1920, 1080))]:
-            with self.subTest(height=height):
+    def test_anime4k_resolution_policy(self) -> None:
+        from rife.stream import anime4k_enabled
+        for height, cap, requested, expected in [
+            (2160, 1080, True, True), (1080, 1080, True, True),
+            (720, 1080, True, True), (720, 1080, False, False),
+            (720, 0, True, True), (1080, 720, True, True),
+            (2160, 1080, False, False), (1080, 1080, False, False),
+        ]:
+            with self.subTest(height=height, cap=cap, requested=requested):
                 source = StreamInput("fixture.mkv", None, [], None,
-                                     MediaInfo(Fraction(25), width, height, 10), Fraction(25))
-                args = argparse.Namespace(factor=2, max_height=1080, gpu=0,
-                    gpu_threads=3, scene_mode=1, workspace_mib=0, start=0,
-                    duration=0, anime4k=True)
-                with mock.patch.dict("os.environ", {"RIFE_ANIME4K": "1"}):
-                    self.assertEqual(build_environment(source, args)["RIFE_ANIME4K"], "0")
-                self.assertEqual(video_size(source.info, 1080), expected)
-        script = (Path(__file__).resolve().parent.parent / "vs/rife_stream.vpy").read_text()
-        self.assertNotIn("ACUpscale", script)
-        self.assertNotIn("RIFE_ANIME4K", script)
+                                     MediaInfo(Fraction(25), height * 16 // 9, height, 10),
+                                     Fraction(25))
+                args = argparse.Namespace(anime4k=requested, max_height=cap)
+                self.assertEqual(anime4k_enabled(source, args), expected)
 
-    def test_anime4k_cli_option_is_removed(self) -> None:
+    def test_anime4k_cli_defaults_off_and_can_enable(self) -> None:
         from rife.stream import parse_args
-        with mock.patch.object(sys, "argv", ["stream", "fixture.mkv", "--anime4k"]):
-            with mock.patch("sys.stderr"), self.assertRaises(SystemExit) as error:
-                parse_args()
-        self.assertEqual(error.exception.code, 2)
+        for switches, expected in [([], False), (["--anime4k"], True)]:
+            with mock.patch.object(sys, "argv", ["stream", "fixture.mkv", *switches]):
+                self.assertEqual(parse_args().anime4k, expected)
+
+    def test_anime4k_vs_stage_follows_manual_switch(self) -> None:
+        import ast
+        from types import SimpleNamespace
+        script = (Path(__file__).resolve().parent.parent / "vs/rife_stream.vpy").read_text()
+        tree = ast.parse(script)
+        block = next(node for node in tree.body if isinstance(node, ast.If)
+                     and "RIFE_ANIME4K" in ast.unparse(node.test))
+        for enabled in [0, 1]:
+            with self.subTest(enabled=enabled):
+                core = SimpleNamespace(anime4kcpp=SimpleNamespace(ACUpscale=mock.Mock(return_value="upscaled")),
+                                       resize=SimpleNamespace(Lanczos=mock.Mock(return_value="restored_size")))
+                scope = dict(core=core, env_value=lambda name, default: enabled,
+                             clip="original", gpu=0, pipe_width=1280, pipe_height=720)
+                exec(compile(ast.Module(body=[block], type_ignores=[]), "anime4k_stage", "exec"), scope)
+                if enabled:
+                    core.anime4kcpp.ACUpscale.assert_called_once_with("original", factor=2.0,
+                        processor="cuda", device=0, model="acnet-hdn0")
+                    core.resize.Lanczos.assert_called_once_with("upscaled", width=1280, height=720)
+                    self.assertEqual(scope["clip"], "restored_size")
+                else:
+                    core.anime4kcpp.ACUpscale.assert_not_called()
+                    core.resize.Lanczos.assert_not_called()
+                    self.assertEqual(scope["clip"], "original")
 
     def test_nonstandard_1080p_width_reuses_1920_engine(self) -> None:
         self.assertEqual(
