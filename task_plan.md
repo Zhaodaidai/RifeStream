@@ -100,3 +100,9 @@
 - [x] 检查真实Plyr容器/事件及95项基线，备份landscape-before。
 - [x] 原生方向锁定与整套控件横向兼容，退出清理。
 - [x] Chromium原生/兼容全屏，缺失/拒绝/延迟方向锁、旋转/退出/控件；1080p/4K与320–1920响应式回归；同四角色补丁重建及历史/本轮隔离回滚哈希一致。
+
+## 2026-10-17 1080p 缩放链路修改（用户授权覆盖旧画质约束）
+已完成：CUDA 缩放改 Lanczos；输入高度达到输出上限或不设高度上限时跳过 ACNet，日志与环境变量一致；低清保留手动开关及原输出尺寸。编码/RIFE不变。BASELINE95、MODIFIED96、ROLLBACK95、部署96项通过，回滚哈希一致，字节保真补丁重建一致。混合换行导致的首次补丁失败已保留并修正。四角色沿用 /tmp/rife-player-transaction/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；本轮回滚模式 --scale-before。未实测 Windows NVIDIA GPU 的画质、吞吐及实时播放。
+
+## 2026-10-17 移除手动 Anime4K 与往返超分
+用户不要求低清升分辨率。已移除UI开关、设置字段、CLI参数、VS ACNet阶段和插件必需检查；历史设置被忽略，继承环境变量强制置0。不改720p输出尺寸，不改RIFE/NVENC，保留Lanczos缩小。BASELINE96、MODIFIED98、ROLLBACK96，Node两组/JS语法检查通过，字节保真补丁重建和回滚原始哈希一致。沿用原四角色；本轮回滚 --no-anime4k-before。未实测Windows GPU；需重启WebUI并重新开始转码。

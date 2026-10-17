@@ -88,19 +88,12 @@ TensorRT 需要构建引擎；后续运行复用 `runtime\vs-plugins\models\rife
 - 视频自带的进度条仅对应当前转码会话已生成的片段；观看进度按视频实际播放时间计算
 - 浏览器禁止有声自动播放时，点击视频中的播放按钮继续；暂停仅暂停观看，「停止转码」会停止后端
 - 顶部仍可复制 HLS 地址给外部播放器；hls.js 已随项目本地提供，无需访问 CDN
-- **Anime4K**：开后先 2× 升到约 4K，再缩回输出分辨率，然后 RIFE；下次播放生效
+- **缩放**：高于输出上限的片源通过 CUDA Lanczos 直接缩小；默认最高 1080p。
+- **分辨率**：720p 保持 720p，1080p 保持 1080p，4K 默认缩至 1080p；不做往返超分，已移除 Anime4K 手动开关。
 
 ```bat
 runtime\python.exe run.py webui
 ```
-
-也可在 CLI 直接启用：
-
-```bat
-runtime\python.exe run.py stream "D:\video\input.mkv" --anime4k
-```
-
-需要 `runtime\vs-plugins\ac_filter_avs_vs.dll`（Anime4KCPP v3.2 VS 插件）。
 
 Web UI 会在需要时启动 HLS 服务。切集时会替换当前转码进程，与协议入口相同。
 
@@ -130,7 +123,7 @@ runtime\python.exe -m unittest discover -s tests
 播放器采用本地自托管的 Plyr 3.8.4（MIT），仅负责播放控件；HLS 加载继续使用 hls.js。
 JS、CSS 和 SVG 图标均放在 `web/vendor/`，运行时不依赖第三方 CDN。Plyr 保留原有控件风格，少量适配浅绿色强调色和深色菜单。
 视频内提供播放/暂停、音量、播放速度、画中画（浏览器支持时）和全屏；整集进度直接集成在 Plyr 控制栏内（全屏同样可用），显示 `起播偏移 + video.currentTime / 整集时长`；已缓冲位置本地跳转，其他位置调用服务端重建转码。页面不再提供外部播放器地址或复制入口。
-切集、片头、Anime4K 和转码控制仍使用原有接口。桌面播放器与播放列表继续在首屏整体居中。
+切集、片头和转码控制仍使用原有接口。桌面播放器与播放列表继续在首屏整体居中。
 
 ### 主题统一管理
 

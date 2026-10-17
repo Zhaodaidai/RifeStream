@@ -198,15 +198,6 @@ if engine_dir:
 
     vsmlrt.BackendV2.TRT = staticmethod(trt_with_local_engines)
 
-if int(env_value("RIFE_ANIME4K", 0)):
-    # 1080 → 2×(4K) → downscale → 1080, then RIFE.
-    if not hasattr(core, "anime4kcpp"):
-        raise vs.Error("Anime4K enabled but anime4kcpp plugin is missing")
-    clip = core.anime4kcpp.ACUpscale(
-        clip, factor=2.0, processor="cuda", device=int(gpu), model="acnet-hdn0"
-    )
-    clip = core.resize.Lanczos(clip, width=pipe_width, height=pipe_height)
-
 clip = k7f.RIFE_NV(
     clip,
     model=4251,

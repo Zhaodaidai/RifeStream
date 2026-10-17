@@ -14,7 +14,6 @@ const playBtn = document.getElementById("playBtn");
 const stopBtn = document.getElementById("stopBtn");
 const introSeconds = document.getElementById("introSeconds");
 const skipIntro = document.getElementById("skipIntro");
-const anime4k = document.getElementById("anime4k");
 
 let savingSettings = false;
 let jumpInFlight = false;
@@ -134,9 +133,6 @@ function paintSettings(settings) {
   if (document.activeElement !== skipIntro) {
     skipIntro.checked = Boolean(settings.skip_intro);
   }
-  if (document.activeElement !== anime4k) {
-    anime4k.checked = Boolean(settings.anime4k);
-  }
 }
 
 function settingsPayload() {
@@ -147,7 +143,6 @@ function settingsPayload() {
     intro,
     skip_intro: skipIntro.checked,
     skip_outro: false,
-    anime4k: anime4k.checked,
   };
 }
 
@@ -165,7 +160,7 @@ async function saveSettings() {
   introError.hidden = true;
   savingSettings = true;
   settingsStatus.textContent = "正在保存设置…";
-  skipIntro.disabled = anime4k.disabled = introSeconds.disabled = true;
+  skipIntro.disabled = introSeconds.disabled = true;
   try {
     renderState(await api("/api/settings", {
       method: "POST",
@@ -177,7 +172,7 @@ async function saveSettings() {
     showError(error.message);
   } finally {
     savingSettings = false;
-    skipIntro.disabled = anime4k.disabled = introSeconds.disabled = false;
+    skipIntro.disabled = introSeconds.disabled = false;
   }
 }
 
@@ -365,7 +360,6 @@ introSeconds.addEventListener("keydown", (event) => {
   }
 });
 skipIntro.addEventListener("change", saveSettings);
-anime4k.addEventListener("change", saveSettings);
 
 refresh();
 setInterval(refresh, 1500);

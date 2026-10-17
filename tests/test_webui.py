@@ -118,7 +118,7 @@ class PlaylistHelperTests(unittest.TestCase):
             saved = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(saved["settings"]["intro"], 90)
             self.assertTrue(saved["settings"]["skip_intro"])
-            self.assertTrue(saved["settings"]["anime4k"])
+            self.assertNotIn("anime4k", saved["settings"])
 
             first = Path(folder) / "a.mkv"
             first.write_bytes(b"")
@@ -127,13 +127,26 @@ class PlaylistHelperTests(unittest.TestCase):
             self.assertEqual(playlist.settings().intro, 90)
             self.assertEqual(playlist.settings().outro, 75)
             self.assertTrue(playlist.settings().skip_outro)
-            self.assertTrue(playlist.settings().anime4k)
+            self.assertFalse(hasattr(playlist.settings(), "anime4k"))
             self.assertEqual(playlist.snapshot()["items"], [])
 
             reloaded = Playlist(path)
             self.assertEqual(reloaded.settings().intro, 90)
             self.assertTrue(reloaded.settings().skip_intro)
-            self.assertTrue(reloaded.settings().anime4k)
+            self.assertFalse(hasattr(reloaded.settings(), "anime4k"))
+
+    def test_legacy_anime4k_setting_is_ignored_on_load(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "playlist.json"
+            playlist = Playlist(path)
+            playlist.update_settings({"intro": 90, "skip_intro": True})
+            saved = json.loads(path.read_text())
+            saved["settings"]["anime4k"] = True
+            path.write_text(json.dumps(saved))
+            reloaded = Playlist(path)
+            self.assertEqual(reloaded.settings().intro, 90)
+            self.assertTrue(reloaded.settings().skip_intro)
+            self.assertFalse(hasattr(reloaded.settings(), "anime4k"))
 
     def test_parse_settings_rejects_negative_when_strict(self) -> None:
         with self.assertRaises(ValueError):
@@ -178,10 +191,6 @@ class PlaybackTests(unittest.TestCase):
         self.assertNotIn("--start", stream_command("https://example.com/v.mp4", None, 0))
         timed = stream_command("https://example.com/v.mp4", None, 10, 500)
         self.assertEqual(timed[timed.index("--duration") + 1], "500")
-        with_anime4k = stream_command(
-            "https://example.com/v.mp4", None, anime4k=True
-        )
-        self.assertIn("--anime4k", with_anime4k)
         self.assertNotIn(
             "--anime4k", stream_command("https://example.com/v.mp4", None)
         )

@@ -145,7 +145,7 @@ class StreamInputTests(unittest.TestCase):
             decoder_scale_filter(info, 1080, Fraction(25)),
         )
         self.assertIn(
-            "scale_cuda=1920:1080:format=yuv420p:interp_algo=bilinear,"
+            "scale_cuda=1920:1080:format=yuv420p:interp_algo=lanczos,"
             "hwdownload,format=yuv420p,fps=25/1",
             command,
         )
@@ -225,7 +225,7 @@ class StreamInputTests(unittest.TestCase):
         self.assertEqual(environment["RIFE_GPU_THREADS"], "3")
         self.assertEqual(environment["RIFE_ANIME4K"], "0")
 
-    def test_anime4k_sets_env_without_changing_pipe_size(self) -> None:
+    def test_anime4k_bypasses_native_1080p_without_changing_pipe_size(self) -> None:
         source = StreamInput(
             "/tmp/video.mkv",
             None,
@@ -247,9 +247,33 @@ class StreamInputTests(unittest.TestCase):
         )
 
         environment = build_environment(source, args)
-        self.assertEqual(environment["RIFE_ANIME4K"], "1")
+        self.assertEqual(environment["RIFE_ANIME4K"], "0")
         self.assertEqual(environment["RIFE_PIPE_WIDTH"], "1920")
         self.assertEqual(environment["RIFE_PIPE_HEIGHT"], "1080")
+
+    def test_no_super_resolution_for_any_input(self) -> None:
+        for width, height, expected in [(1280, 720, (1280, 720)),
+                                        (1920, 1080, (1920, 1080)),
+                                        (3840, 2160, (1920, 1080))]:
+            with self.subTest(height=height):
+                source = StreamInput("fixture.mkv", None, [], None,
+                                     MediaInfo(Fraction(25), width, height, 10), Fraction(25))
+                args = argparse.Namespace(factor=2, max_height=1080, gpu=0,
+                    gpu_threads=3, scene_mode=1, workspace_mib=0, start=0,
+                    duration=0, anime4k=True)
+                with mock.patch.dict("os.environ", {"RIFE_ANIME4K": "1"}):
+                    self.assertEqual(build_environment(source, args)["RIFE_ANIME4K"], "0")
+                self.assertEqual(video_size(source.info, 1080), expected)
+        script = (Path(__file__).resolve().parent.parent / "vs/rife_stream.vpy").read_text()
+        self.assertNotIn("ACUpscale", script)
+        self.assertNotIn("RIFE_ANIME4K", script)
+
+    def test_anime4k_cli_option_is_removed(self) -> None:
+        from rife.stream import parse_args
+        with mock.patch.object(sys, "argv", ["stream", "fixture.mkv", "--anime4k"]):
+            with mock.patch("sys.stderr"), self.assertRaises(SystemExit) as error:
+                parse_args()
+        self.assertEqual(error.exception.code, 2)
 
     def test_nonstandard_1080p_width_reuses_1920_engine(self) -> None:
         self.assertEqual(
@@ -264,7 +288,7 @@ class StreamInputTests(unittest.TestCase):
             decoder_scale_filter(
                 MediaInfo(Fraction(24), 1910, 1080, 60), 1080, Fraction(24)
             ),
-            "scale_cuda=1910:1080:format=yuv420p:interp_algo=bilinear,"
+            "scale_cuda=1910:1080:format=yuv420p:interp_algo=lanczos,"
             "hwdownload,format=yuv420p,pad=1920:1080:0:0,fps=24/1",
         )
 

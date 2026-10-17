@@ -25,7 +25,6 @@ def main() -> int:
     model = RUNTIME / "vs-plugins" / "models" / "rife_v2" / "rife_v4.25_lite.onnx"
     trt = RUNTIME / "vs-plugins" / "vstrt.dll"
     vsmlrt = RUNTIME / "vs-plugins" / "vsmlrt.py"
-    anime4k = RUNTIME / "vs-plugins" / "ac_filter_avs_vs.dll"
     mpv_files = (RUNTIME / "mpv.exe", RUNTIME / "mpv.com")
 
     required = {
@@ -39,13 +38,6 @@ def main() -> int:
         "MPV protocol receiver": PROTOCOL_CLI,
     }
     results = [check(name, path.is_file(), str(path)) for name, path in required.items()]
-    results.append(
-        check(
-            "Anime4KCPP",
-            anime4k.is_file(),
-            str(anime4k),
-        )
-    )
     results.append(
         check(
             "mpv removed",
