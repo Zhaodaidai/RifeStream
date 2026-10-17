@@ -60,3 +60,27 @@ class PlayerLayoutTests(unittest.TestCase):
         self.assertNotIn('id="playlist"', viewer)
         sidebar = html.split('<aside class="sidebar card"', 1)[1].split('</aside>', 1)[0]
         self.assertIn('id="playlist"', sidebar)
+
+
+class AddLinksDialogTests(unittest.TestCase):
+    def test_add_links_form_is_only_inside_dialog(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        self.assertNotIn('class="sources card"', html)
+        self.assertNotIn('id="addPlayBtn"', html)
+        sidebar = html.split('<aside class="sidebar card"', 1)[1].split('</aside>', 1)[0]
+        self.assertIn('id="openAddBtn"', sidebar)
+        self.assertIn('id="clearBtn"', sidebar)
+        dialog = html.split('<dialog id="addDialog"', 1)[1].split('</dialog>', 1)[0]
+        for name in ['sourceInput', 'addForm', 'finishAddBtn', 'cancelAddBtn', 'addError']:
+            self.assertIn('id="' + name + '"', dialog)
+        self.assertEqual(html.count('id="sourceInput"'), 1)
+
+    def test_dialog_submits_without_starting_playback(self):
+        root = Path(__file__).resolve().parent.parent
+        script = (root / 'web/app.js').read_text()
+        self.assertIn('JSON.stringify({ sources, play: false })', script)
+        self.assertIn('addForm.addEventListener("submit", addSources)', script)
+        self.assertIn('if (addingSources) return;', script)
+        self.assertIn('addDialog.showModal()', script)
+        self.assertNotIn('getElementById("addPlayBtn")', script)

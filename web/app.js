@@ -2,6 +2,11 @@ const nowPlaying = document.getElementById("nowPlaying");
 const streamStatus = document.getElementById("streamStatus");
 const errorBox = document.getElementById("errorBox");
 const sourceInput = document.getElementById("sourceInput");
+const addDialog = document.getElementById("addDialog");
+const addForm = document.getElementById("addForm");
+const addError = document.getElementById("addError");
+const finishAddBtn = document.getElementById("finishAddBtn");
+let addingSources = false;
 const playlistEl = document.getElementById("playlist");
 const hlsUrlEl = document.getElementById("hlsUrl");
 const hlsHint = document.getElementById("hlsHint");
@@ -177,15 +182,36 @@ async function refresh() {
   }
 }
 
-async function addSources(play) {
-  const sources = sourceInput.value;
-  if (!sources.trim()) return;
-  const state = await api("/api/items", {
-    method: "POST",
-    body: JSON.stringify({ sources, play }),
-  });
-  sourceInput.value = "";
-  renderState(state);
+async function addSources(event) {
+  event.preventDefault();
+  if (addingSources) return;
+  const sources = sourceInput.value.trim();
+  addError.hidden = true;
+  if (!sources) {
+    addError.textContent = "请输入至少一个链接";
+    addError.hidden = false;
+    sourceInput.focus();
+    return;
+  }
+  addingSources = true;
+  finishAddBtn.disabled = true;
+  finishAddBtn.textContent = "添加中…";
+  try {
+    const state = await api("/api/items", {
+      method: "POST",
+      body: JSON.stringify({ sources, play: false }),
+    });
+    renderState(state);
+    sourceInput.value = "";
+    addDialog.close();
+  } catch (error) {
+    addError.textContent = error.message;
+    addError.hidden = false;
+  } finally {
+    addingSources = false;
+    finishAddBtn.disabled = false;
+    finishAddBtn.textContent = "完成";
+  }
 }
 
 async function play(body) {
@@ -209,8 +235,18 @@ async function seekSeconds(seconds) {
   }
 }
 
-document.getElementById("addBtn").addEventListener("click", () => addSources(false));
-document.getElementById("addPlayBtn").addEventListener("click", () => addSources(true));
+document.getElementById("openAddBtn").addEventListener("click", () => {
+  addError.hidden = true;
+  addDialog.showModal();
+  sourceInput.focus();
+});
+document.getElementById("cancelAddBtn").addEventListener("click", () => {
+  if (!addingSources) addDialog.close();
+});
+addDialog.addEventListener("cancel", (event) => {
+  if (addingSources) event.preventDefault();
+});
+addForm.addEventListener("submit", addSources);
 document.getElementById("clearBtn").addEventListener("click", async () => {
   renderState(await api("/api/clear", { method: "POST", body: "{}" }));
 });

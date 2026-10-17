@@ -233,7 +233,7 @@ h2 {
   opacity: 0.8;
 }
 
-.transport, .row {
+.transport, .playlist-actions, .dialog-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -293,12 +293,6 @@ h2 {
 .playback-settings .switch input:checked::after { transform: translateX(16px); background: var(--accent); }
 .playback-settings .switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-.sources textarea {
-  flex: 1;
-  min-height: 180px;
-  margin-bottom: 0;
-}
-
 .hint {
   margin: 10px 0 12px;
   color: var(--muted);
@@ -348,10 +342,6 @@ button:disabled {
   cursor: default;
 }
 
-.row button {
-  flex: 1;
-}
-
 .error {
   color: var(--danger);
   margin: 10px 0 0;
@@ -385,9 +375,6 @@ button:disabled {
     min-height: 200px;
   }
 
-  .sources textarea {
-    min-height: 120px;
-  }
 
 }
 
@@ -396,8 +383,6 @@ button:disabled {
 .sidebar { min-width: 0; min-height: 0; overflow: hidden; }
 .sidebar .playlist { height: 0; min-height: 280px; max-height: none; flex: 1 1 auto; }
 .playlist .name { min-width: 0; }
-.sources { grid-column: 1 / -1; }
-.sources textarea { min-height: 100px; }
 @media (max-width: 860px) {
   .sidebar .playlist { height: auto; min-height: 200px; max-height: 360px; flex: none; }
   .playback-controls { gap: 14px; }
@@ -409,3 +394,22 @@ button:disabled {
 #videoPlayer { display: block; width: 100%; max-height: 70vh; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; }
 #timeline { width: 100%; margin: 12px 0; accent-color: var(--accent); }
 #playbackTime { font-variant-numeric: tabular-nums; margin-left: 10px; }
+
+#addDialog {
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 24px;
+  overflow: auto;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+#addDialog::backdrop { background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); }
+#addForm { display: flex; flex-direction: column; gap: 16px; }
+#addForm .hint, #addForm .error { margin: 0; }
+#addForm h2 { color: var(--text); font-size: 16px; }
+#sourceInput { min-height: 160px; max-height: 40dvh; }
+.dialog-actions { justify-content: flex-end; }
+.dialog-actions button { min-width: 80px; }

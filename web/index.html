@@ -57,23 +57,27 @@
     <aside class="sidebar card" aria-label="播放列表侧栏">
       <div class="panel-head">
         <h2>播放列表</h2>
-        <button type="button" id="clearBtn" class="ghost">清空</button>
+        <div class="playlist-actions">
+          <button type="button" id="openAddBtn" class="primary" aria-haspopup="dialog" aria-controls="addDialog">添加</button>
+          <button type="button" id="clearBtn" class="ghost">清空</button>
+        </div>
       </div>
       <ol class="playlist" id="playlist"></ol>
     </aside>
 
-    <section class="sources card">
-      <div class="panel-head">
-        <h2>添加链接</h2>
-      </div>
-      <textarea id="sourceInput" rows="6" placeholder="每行一个 HTTP/HTTPS 链接"></textarea>
-      <p class="hint">支持直链与本地路径，粘贴后可先加入列表或立刻开播。</p>
-      <div class="row">
-        <button type="button" id="addBtn">添加到列表</button>
-        <button type="button" id="addPlayBtn" class="primary">添加并播放</button>
-      </div>
-    </section>
   </main>
+  <dialog id="addDialog" aria-labelledby="addDialogTitle">
+    <form id="addForm">
+      <h2 id="addDialogTitle">添加链接</h2>
+      <label for="sourceInput" class="hint">每行一个 HTTP/HTTPS 链接，支持批量添加</label>
+      <textarea id="sourceInput" rows="6" placeholder="https://example.com/video.m3u8" autofocus required></textarea>
+      <p id="addError" class="error" role="alert" hidden></p>
+      <div class="dialog-actions">
+        <button type="button" id="cancelAddBtn">取消</button>
+        <button type="submit" id="finishAddBtn" class="primary">完成</button>
+      </div>
+    </form>
+  </dialog>
   <script src="/vendor/hls.min.js"></script>
   <script src="/player.js"></script>
   <script src="/app.js"></script>
