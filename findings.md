@@ -32,3 +32,11 @@
 - 使用官方 CSS variables 微调浅绿色/深色菜单/圆角；全局按钮样式排除 Plyr 控件，Plyr wrapper 接入既有自适应/居中布局。
 - 本地 iconUrl，blankVideo 用内嵌微型黑色视频，防止默认第三方 blank.mp4 请求。
 - 下载许可证初次用错 LICENSE 文件名（exit 1），实际 LICENSE.md 已复制；浏览器探针初次假设 SVG 插入 DOM，实际使用外部同源 use；settings 控件和子菜单共用 data-plyr，测试选择器已限定 aria-controls。
+
+## 整集进度移入 Plyr，移除外部地址
+- 用户追加要求：不单开一行，按 Plyr 同一控制栏布局。使用官方 plyr__progress / plyr__progress__container 和原控件样式，插入播放按钮与音量组之间；不启用原生片段 seek，整集时长与偏移由 EmbeddedPlayer 驱动。
+- 页面 external player/URL/copy、app 事件和旧 CSS 已移除；hls_url 仅供内部 HLS 加载，未破坏播放接口。
+- range input 拖动预览与 change 提交；键盘事件阻止误触发 Plyr 片段快进；未知时长禁用；远端 seek 忙碌期间不被轮询覆盖，失败恢复真实位置。
+- 窄屏保留同一行，隐藏音量滑条和画中画入口以保留可操作空间（静音/音量按钮、设置、全屏保留）。
+- 浏览器初次布局探针在控件隐藏动画中读到过渡位置，改 reduced-motion + 等待布局稳定；注入 seek HTTP500 产生预期控制台错误，断言改为仅允许这条错误。
+- 同行插入首次错误：mute 按钮位于 volume 子元素，insertBefore 要求直接子元素（真实 DOMException，启动播放超时exit1）；已改以直接 volume 容器为锚点。

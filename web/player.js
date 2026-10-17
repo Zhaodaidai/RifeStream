@@ -1,13 +1,14 @@
 /* HLS session lifecycle is separate from playlist rendering and its polling clock. */
 class EmbeddedPlayer {
-  constructor({ video, timeline, clock, hint, formatTime, seek }) {
-    Object.assign(this, { video, timeline, clock, hint, formatTime, seek });
+  constructor({ video, progress, timeline, clock, hint, formatTime, seek }) {
+    Object.assign(this, { video, progress, timeline, clock, hint, formatTime, seek });
     this.key = null;
     this.state = null;
     this.hls = null;
     this.retry = null;
     this.failures = 0;
     this.dragging = false;
+    this.seeking = false;
     // Plyr owns controls only. HLS sessions and the full-episode clock stay here.
     this.ui = window.Plyr ? new window.Plyr(video, {
       iconUrl: "/vendor/plyr.svg",
@@ -21,10 +22,19 @@ class EmbeddedPlayer {
         play: "播放", pause: "暂停", mute: "静音", unmute: "取消静音", volume: "音量",
         settings: "设置", speed: "播放速度", normal: "正常", pip: "画中画",
         enterFullscreen: "进入全屏", exitFullscreen: "退出全屏", menuBack: "返回上一级",
-        seek: "片段进度", seekLabel: "{currentTime} / {duration}",
-        currentTime: "当前片段时间", duration: "片段时长", buffered: "已缓冲", played: "已播放",
+        seek: "整集进度", seekLabel: "{currentTime} / {duration}",
+        currentTime: "整集播放时间", duration: "整集时长", buffered: "已缓冲", played: "已播放",
       },
     }) : null;
+    // Move the real episode timeline into Plyr's controls (also inside fullscreen).
+    // Do not use Plyr's native seek input: its clock only knows the HLS segment window.
+    if (this.ui?.elements?.controls) {
+      const controls = this.ui.elements.controls;
+      controls.insertBefore(progress, controls.querySelector('.plyr__volume'));
+    }
+    timeline.addEventListener("keydown", (event) => event.stopPropagation());
+    timeline.addEventListener("pointercancel", () => { this.dragging = false; this.paint(); });
+    timeline.addEventListener("blur", () => { this.dragging = false; this.paint(); });
     timeline.addEventListener("input", () => {
       this.dragging = true;
       this.paintTime(Number(timeline.value));
@@ -67,7 +77,7 @@ class EmbeddedPlayer {
       if (key) this.load(key);
     }
     if (!key) this.hint.textContent = state.streaming ? "等待新一集 / 跳转位置生成分片…" : "选择一集后点击播放";
-    this.timeline.disabled = !state.seekable;
+    this.timeline.disabled = this.seeking || !state.seekable || !(Number(state.duration) > 0);
     this.timeline.max = Number(state.duration) || 0;
     this.paint();
   }
@@ -99,7 +109,7 @@ class EmbeddedPlayer {
       this.video.src = url.href;
       this.video.load();
     } else {
-      this.hint.textContent = "此浏览器不支持 HLS，请换用支持的浏览器或复制顶部 HLS 地址。";
+      this.hint.textContent = "此浏览器不支持 HLS，请换用支持 HLS 的浏览器。";
     }
   }
 
@@ -129,18 +139,23 @@ class EmbeddedPlayer {
   }
 
   paintTime(position) {
-    this.clock.textContent = `${this.formatTime(position)} / ${this.state?.duration ? this.formatTime(this.state.duration) : "--:--"}`;
+    const time = this.formatTime(position);
+    const duration = this.state?.duration ? this.formatTime(this.state.duration) : "--:--";
+    this.clock.textContent = `${time} / ${duration}`;
+    this.timeline.setAttribute("aria-valuetext", `${time} / ${duration}`);
+    this.timeline.style.setProperty("--episode-progress", `${Math.min(100, Math.max(0, position / (Number(this.state?.duration) || 1) * 100))}%`);
   }
 
   paint() {
-    if (this.dragging) return;
+    if (this.dragging || this.seeking) return;
     const position = this.position();
     this.timeline.value = position;
     this.paintTime(position);
   }
 
   async jump(seconds) {
-    if (!this.state?.seekable) return;
+    if (!this.state?.seekable || this.seeking || !(Number(this.state.duration) > 0) || !Number.isFinite(seconds)) return;
+    seconds = Math.min(Number(this.state.duration), Math.max(0, seconds));
     const local = seconds - (Number(this.state.start) || 0);
     const ranges = this.video.seekable;
     for (let i = 0; this.key && i < ranges.length; i++) {
@@ -151,6 +166,16 @@ class EmbeddedPlayer {
       }
     }
     this.hint.textContent = "正在跳转，等待重新生成分片…";
-    await this.seek(seconds);
+    this.seeking = true;
+    this.timeline.disabled = true;
+    this.progress.setAttribute("aria-busy", "true");
+    this.paintTime(seconds);
+    try { await this.seek(seconds); }
+    finally {
+      this.seeking = false;
+      this.progress.removeAttribute("aria-busy");
+      this.timeline.disabled = !this.state?.seekable || !(Number(this.state?.duration) > 0);
+      this.paint();
+    }
   }
 }

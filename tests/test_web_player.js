@@ -9,7 +9,12 @@ const video = {
   removeAttribute() {}, play() { return Promise.reject(new Error('blocked')); },
 };
 const rangeEvents = {};
-const timeline = {addEventListener: (n, fn) => { rangeEvents[n] = fn; }};
+const timeline = {
+  addEventListener: (n, fn) => { rangeEvents[n] = fn; },
+  setAttribute(n, value) { this[n] = value; },
+  style: { setProperty() {} },
+};
+const progress = { setAttribute() {}, removeAttribute() {} };
 const clock = {}, hint = {}, instances = [], seeks = [];
 class Hls {
   static Events = { ERROR: 'error', MANIFEST_PARSED: 'manifest' };
@@ -21,19 +26,20 @@ class Hls {
 }
 const uiInstances = [];
 class Plyr {
-  constructor(media, config) { this.media = media; this.config = config; uiInstances.push(this); }
+  constructor(media, config) { this.media = media; this.config = config; this.elements = {controls: {querySelector: () => "mute", insertBefore: (node, anchor) => { this.progress = node; this.anchor = anchor; }}}; uiInstances.push(this); }
 }
 const context = { window: { Plyr, Hls, location: {href: 'http://localhost:10000', hostname: 'localhost'} }, URL, setTimeout, clearTimeout };
 vm.createContext(context);
 vm.runInContext(fs.readFileSync('web/player.js', 'utf8') + '\nthis.Player = EmbeddedPlayer;', context);
-const player = new context.Player({video, timeline, clock, hint, formatTime: String, seek: s => seeks.push(s)});
+const player = new context.Player({video, progress, timeline, clock, hint, formatTime: String, seek: s => seeks.push(s)});
 const state = {current: {id: 'ep1'}, hls_ready: true, playback_id: 10, start: 0, duration: 1200, seekable: true, hls_url: 'http://192.168.1.8:8888/rife/index.m3u8'};
 (async () => {
   assert.equal(uiInstances.length, 1);
   assert.equal(uiInstances[0].media, video);
+  assert.equal(player.ui.progress, progress, "episode timeline moved into Plyr controls");
   assert.equal(player.ui.config.iconUrl, "/vendor/plyr.svg");
   assert.equal(player.ui.config.keyboard.global, false);
-  assert.equal(player.ui.config.controls.includes("progress"), false, "full-episode timeline remains external");
+  assert.equal(player.ui.config.controls.includes("progress"), false, "native segment timeline must not compete with episode timeline");
   assert.equal(player.ui.config.settings.join(","), "speed");
   assert.match(player.ui.config.blankVideo, /^data:video\/mp4;base64,/);
   player.update(state);
@@ -64,6 +70,27 @@ const state = {current: {id: 'ep1'}, hls_ready: true, playback_id: 10, start: 0,
   player.update({...state, current: null, hls_ready: false, streaming: false});
   assert.equal(player.key, null); assert.equal(instances[3].destroyed, true);
   assert.equal(uiInstances.length, 1, 'switch/seek/stop reuse the same Plyr UI');
+  player.update({...state, start: 300, playback_id: 100});
+  video.currentTime = 8;
+  timeline.value = 700; rangeEvents.input();
+  assert.equal(clock.textContent, '700 / 1200', 'drag previews full episode position');
+  player.paint(); assert.equal(clock.textContent, '700 / 1200', 'timeupdate does not overwrite drag');
+  rangeEvents.pointercancel(); assert.equal(clock.textContent, '308 / 1200');
+  let stopped = false; rangeEvents.keydown({stopPropagation() {stopped=true;}}); assert.ok(stopped);
+  const oldSeek = player.seek;
+  let resolveSeek;
+  player.seek = () => new Promise(resolve => {resolveSeek=resolve;});
+  const pending = player.jump(900);
+  assert.equal(timeline.disabled, true);
+  assert.equal(clock.textContent, '900 / 1200');
+  player.update({...state, start: 300, playback_id: 100});
+  assert.equal(clock.textContent, '900 / 1200', 'polling must not overwrite pending seek preview');
+  resolveSeek(); await pending; assert.equal(timeline.disabled, false);
+  player.seek = async () => {throw new Error('seek failure');};
+  await assert.rejects(player.jump(900), /seek failure/); assert.equal(timeline.disabled, false);
+  player.seek = oldSeek;
+  player.update({...state, seekable:false, duration:0}); assert.equal(timeline.disabled,true);
+  console.log('PASS: embedded episode timeline/drag/keyboard isolation/pending seek/failure/disabled state');
   console.log('PASS: Plyr initialization/local icons/theme-independent controls/UI reuse;') ;
   console.log('PASS: start, polling, episode, seek, clock, local/server seek, autoplay, retry cancellation, finished stream, stop');
 })().catch(e => {console.error(e); process.exitCode = 1;});

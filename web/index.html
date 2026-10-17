@@ -24,6 +24,14 @@
         <div class="viewer-head"><span class="section-kicker">播放器</span><span class="format-tag">HLS STREAM</span></div>
         <div class="video-stage">
           <video id="videoPlayer" controls playsinline preload="auto" aria-label="视频播放器"></video>
+          <div id="episodeProgress" class="episode-progress plyr__progress__container" role="group" aria-label="整集播放进度">
+            <label for="timeline" class="plyr__sr-only">整集进度</label>
+            <div class="plyr__progress">
+              <input id="timeline" type="range" min="0" max="0" step="0.25" value="0" disabled aria-label="整集播放进度" aria-describedby="timelineHelp">
+            </div>
+            <span id="playbackTime" class="episode-clock plyr__time">0:00 / --:--</span>
+            <span id="timelineHelp" class="plyr__sr-only">拖动跳转至整集任意位置，未转码的片段需要等待缓冲。</span>
+          </div>
           <div class="player-empty" id="playerEmpty"><span class="empty-video-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 9 5 3-5 3z"/></svg></span><h3>好画面，从这里开始</h3><p>添加媒体链接，开启流畅观影</p><button type="button" id="playerAddBtn" class="empty-add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>添加媒体</button></div>
         </div>
         <div class="media-meta"><p class="now" id="nowPlaying">未选择媒体</p><p id="playerHint" class="hint" role="status">选择一集后点击播放</p></div>
@@ -41,11 +49,7 @@
           </div>
         </div>
         <div class="settings-feedback"><p id="introError" class="error" role="alert" hidden></p><span id="settingsStatus" role="status"></span></div>
-        <div class="timeline-label"><label for="timeline">整集进度</label><span id="playbackTime">0:00 / --:--</span></div>
-        <input id="timeline" type="range" min="0" max="0" step="0.25" value="0" disabled aria-label="整集播放进度">
-        <p class="timeline-help">拖动跳转至任意位置 · 未转码的片段需要短暂缓冲</p>
         <p class="error" id="errorBox" role="alert" hidden></p>
-        <div class="stream-address"><div class="stream-address-label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 13 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 3 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg><span>外部播放器</span></div><button type="button" id="copyBtn" class="hls" title="复制 HLS 地址"><span class="hls-url" id="hlsUrl"></span><span class="hls-k" id="hlsHint">复制 HLS</span></button></div>
       </section>
       <aside class="sidebar card" aria-label="播放列表侧栏">
         <div class="panel-head"><div class="panel-title"><h2>播放列表</h2><span id="playlistCount" class="count">0</span></div><div class="playlist-actions"><button type="button" id="clearBtn" class="ghost">清空</button><button type="button" id="openAddBtn" class="small-add" aria-haspopup="dialog" aria-controls="addDialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>添加</button></div></div>

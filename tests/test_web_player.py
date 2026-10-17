@@ -51,12 +51,16 @@ class PlayerLayoutTests(unittest.TestCase):
         self.assertIn('async function seekSeconds', script)
         self.assertIn('introSeconds.addEventListener', script)
 
-    def test_controls_above_timeline_and_playlist_separate_sidebar(self):
+    def test_timeline_inside_video_stage_and_playlist_separate_sidebar(self):
         root = Path(__file__).resolve().parent.parent
         html = (root / 'web/index.html').read_text()
         viewer = html.split('<section class="viewer card"', 1)[1].split('</section>', 1)[0]
         for name in ['prevBtn', 'nextBtn', 'introSeconds', 'skipIntro', 'anime4k']:
-            self.assertLess(viewer.index('id="' + name + '"'), viewer.index('id="timeline"'))
+            self.assertIn('id="' + name + '"', viewer)
+        stage = viewer.split('<div class="video-stage">', 1)[1].split('<div class="media-meta">', 1)[0]
+        self.assertIn('id="timeline"', stage)
+        self.assertIn('id="episodeProgress"', stage)
+        self.assertEqual(html.count('id="timeline"'), 1)
         self.assertNotIn('id="playlist"', viewer)
         sidebar = html.split('<aside class="sidebar card"', 1)[1].split('</aside>', 1)[0]
         self.assertIn('id="playlist"', sidebar)
@@ -106,3 +110,23 @@ class PlyrIntegrationTests(unittest.TestCase):
         self.assertIn('this.seek(seconds)', script)
         self.assertIn('this.state?.start', script)
         self.assertIn('--plyr-color-main: var(--accent)', (root / 'web/styles.css').read_text())
+
+
+class EpisodeTimelineTests(unittest.TestCase):
+    def test_external_player_ui_and_copy_bindings_removed(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        script = (root / 'web/app.js').read_text()
+        css = (root / 'web/styles.css').read_text()
+        for name in ['copyBtn', 'hlsUrl', 'hlsHint', 'stream-address', 'navigator.clipboard']:
+            self.assertNotIn(name, html + script + css)
+        self.assertNotIn('外部播放器', html)
+        self.assertNotIn('timeline-label', html + css)
+
+    def test_episode_clock_remains_business_driven_inside_plyr(self):
+        root = Path(__file__).resolve().parent.parent
+        script = (root / 'web/player.js').read_text()
+        self.assertIn('controls.insertBefore(progress, controls.querySelector', script)
+        self.assertIn('this.state?.start', script)
+        self.assertIn('this.seek(seconds)', script)
+        self.assertIn('aria-valuetext', script)

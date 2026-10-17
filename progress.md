@@ -52,3 +52,12 @@
 - 79 项 Python、Node 和语法检查通过；真实 Chromium HLS 解码 + Plyr 播放/暂停、静音/音量/方向键、倍速菜单、全屏、K 快捷键、切集、整集跳转、停止、列表滚动、添加/校验/错误/键盘回归通过。控制台和第三方资源请求均为零。画中画实际窗口与 GPU 转码未验证。
 - 真实 server :10000 加载新 UI 与所有资源 HTTP 200，1440x900 首屏不滚动；截图 plyr-live.png、plyr-desktop.png、plyr-fullscreen.png、plyr-mobile.png。
 - 同四角色更新并全部重新打开；补丁加入新资源和无末尾换行标记，重建哈希一致；rollback 恢复历史原始基线并通过70项测试，修改副本79项通过。原始 plyr-before 哈希未变。详细命令/输出/退出/哈希在 VERIFICATION.txt。
+
+## 整集进度单行集成到 Plyr 完成
+- 移除外部播放器地址/复制和外置整集进度；内部 HLS URL 仅供播放，接口不变。
+- 用户追加要求不独立一行：使用 Plyr 官方 progress 类，插在 play 与 volume 组之间，取消换行；手机隐藏音量滑条/PiP入口，保留静音、速度和全屏。
+- 全屏同样显示真实整集 currentTime+start/duration；未生成位置服务端 seek，缓冲内本地 seek；忙碌、拖动、键盘、失败恢复完善。
+- 81项Python、Node、语法、diff检查通过；Chromium实际HLS、20min整集/12sec片段区分、seek600/900、全屏、失败、真实鼠标一次提交、键盘、切集、320–1920同一行布局/桌面居中、真实添加/设置/清空/删除接口回归通过。注入错误仅有预期HTTP500日志，无非预期JS异常。
+- 实际服务 :10000 页面新UI通过，生产列表未修改；GPU转码未验证。
+- 同四角色已更新/重开；补丁重建一致、隔离回滚原始哈希一致（70项通过），新增 timeline-before 原文件备份与79项基线记录，历史完整审计保留。
+- 截图 timeline-desktop.png / timeline-mobile.png / timeline-fullscreen.png / timeline-live.png。

@@ -8,9 +8,6 @@ const addError = document.getElementById("addError");
 const finishAddBtn = document.getElementById("finishAddBtn");
 let addingSources = false;
 const playlistEl = document.getElementById("playlist");
-const hlsUrlEl = document.getElementById("hlsUrl");
-const hlsHint = document.getElementById("hlsHint");
-const copyBtn = document.getElementById("copyBtn");
 const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const playBtn = document.getElementById("playBtn");
@@ -25,7 +22,6 @@ let stateVersion = 0;
 let requestsInFlight = 0;
 let playlistSignature = "";
 let currentState = null;
-let copyTimer;
 let errorVisibleUntil = 0;
 const pendingActions = new Set();
 const settingsStatus = document.getElementById("settingsStatus");
@@ -53,10 +49,10 @@ function paintAvailability(state) {
   playBtn.disabled = !state.current || pendingActions.has("play");
   stopBtn.disabled = !state.streaming || pendingActions.has("stop");
   document.getElementById("clearBtn").disabled = !state.items.length || pendingActions.has("clear");
-  copyBtn.disabled = !state.hls_url;
 }
 const embeddedPlayer = new EmbeddedPlayer({
   video: document.getElementById("videoPlayer"),
+  progress: document.getElementById("episodeProgress"),
   timeline: document.getElementById("timeline"),
   clock: document.getElementById("playbackTime"),
   hint: document.getElementById("playerHint"),
@@ -184,7 +180,6 @@ function renderState(state) {
     : "未选择媒体";
   streamStatus.textContent = state.streaming ? "转码中" : "待机";
   streamStatus.classList.toggle("live", Boolean(state.streaming));
-  hlsUrlEl.textContent = state.hls_url || "";
   showError(state.last_error, true);
 
   const signature = JSON.stringify([state.items, state.current_id]);
@@ -327,22 +322,6 @@ document.getElementById("clearBtn").addEventListener("click", async () => {
   await performAction("clear", document.getElementById("clearBtn"), async () => {
     renderState(await api("/api/clear", { method: "POST", body: "{}" }));
   });
-});
-copyBtn.addEventListener("click", async () => {
-  const url = hlsUrlEl.textContent;
-  if (!url) return;
-  try {
-    await navigator.clipboard.writeText(url);
-    copyBtn.classList.add("copied");
-    hlsHint.textContent = "已复制";
-    clearTimeout(copyTimer);
-    copyTimer = setTimeout(() => {
-      copyBtn.classList.remove("copied");
-      hlsHint.textContent = "复制 HLS";
-    }, 1200);
-  } catch {
-    showError("无法复制，请手动选择地址");
-  }
 });
 prevBtn.addEventListener("click", () => play({ offset: -1 }));
 nextBtn.addEventListener("click", () => play({ offset: 1 }));
