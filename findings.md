@@ -61,3 +61,26 @@
 - web/theme.css 集中颜色/字体/基础圆角，--accent:#00b2ff，--plyr-color-main共享变量，hover/focus派生；styles仅引用变量，index按vendor/theme/styles加载；README与防回归测试补齐。
 - 浏览器RGBA规范化比较普通/hover/focus/弹窗颜色与圆角均一致；仅改accent可联动主按钮/品牌/开关/Plyr hover。320–1920无溢出、HLS跳转/全屏/键盘/拖动/失败恢复和隔离真实API通过。
 - 85项Python和Node通过，四角色路径保持不变并重开；历史70项基线/回滚哈希一致，补丁可重建修改。当前工作区保留新主题，生产播放列表未改。
+
+## 播放链路发现
+- hls_ready仅判mtime，空stub也会被当成可播放；切集/seek复用seg0.ts可能串旧缓存。
+- player loadedmetadata自动播放不区分暂停意图；异步play拒绝可能覆盖新会话提示，重载回退到片段开头；seek期间旧流仍可继续播放。
+- setInterval轮询可能重叠，多个修改响应缺少全局顺序；服务端ThreadingHTTPServer控制/快照无统一锁，转码进程启动窗口stop遗漏。
+
+- 已修复：首片完整才ready；转码会话切片唯一命名、.ts禁缓存；服务端RLock串行事务并跟踪启动期子进程，旧进程仅可清理自己的PID/status；客户端修改请求排队、轮询单飞/超时、暂停意图/回调epoch、seek失败恢复和重试保留位置。
+- 删除GET状态轮询按墙钟自动切片尾的副作用，改为播放器真实ended后按原skip_outro设置衔接下一集，避免转码快于播放时截断当前流。
+- 首次回归exit1：旧用例仍假设seg%d.ts和空EXTM3U已ready；Node假seek不回传新会话。补充真实状态协议用例，替换失效预期，不放宽功能断言。
+
+- 浏览器native旧断言两次exit1：seek请求增加playback_id；stop现立即解绑，等待条件需同时确认请求结束/服务端停止，而非只等key=null。已按新协议调整探针。
+- diff检查exit2暴露原文件混合CRLF/LF，新行CR被视为尾空格；保留原有未改行字节，新改行LF；重新检查。日志管道读完增加close，消除实际子进程测试的ResourceWarning。
+
+- 四角色首次复验exit1：历史probe仅mock position，优化后seek使用统一playback_snapshot.duration导致KeyError；补全probe模拟的既有duration字段，同一输入分别重测baseline/modified/rollback。
+
+- 最终复核补强：控制请求失败/超时后先立即refresh服务端真实状态，再恢复媒体，避免较早成功响应被队列隔离后却用更旧currentState恢复。新增确定性断言禁止失败动作直接复活旧媒体。
+
+## 播放链路交付完成
+- 前端请求顺序队列、单飞轮询、20秒超时/过期响应隔离；失败先同步服务端真实状态，不用旧currentState复活媒体。player按会话/epoch隔离回调，暂停意图、seek失败/停止竞态和重试位置恢复均覆盖。
+- 服务端控制/快照RLock、跟踪启动子进程并等待停止；首片非空才ready；seek验证playback_id并复用已校验duration；唯一切片名和.ts no-store；按worker归属释放状态，保留正常完成的视频。
+- 状态轮询只读，skip_outro用实际ENDLIST/ended切集；准备/转码/完成状态分开。技术栈不变，新增依赖0。
+- 95项Python、两组Node、Chromium真实HLS跨至少3段、暂停后10:00远端跳转、真正播放ended切一次下一集、快速启停/旧seek拒绝、320–1920布局和真实API隔离回归均通过。预计注入的seek500之外无未预期控制台错误；未验证目标Windows GPU/TensorRT性能。
+- 历史BASELINE70/ROLLBACK70及原始哈希一致，MODIFIED95；四角色重开，完整补丁重建哈希一致。flow-before85项快照原字节哈希保留。现有10000旧Python进程及转发8888未强制重启，部署需在目标运行环境重启WebUI/HLS；未修改用户播放列表。

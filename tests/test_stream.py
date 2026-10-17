@@ -319,7 +319,7 @@ class StreamInputTests(unittest.TestCase):
         hls_time = command.index("-hls_time")
         self.assertEqual(command[hls_time - 2 : hls_time], ["-f", "hls"])
         self.assertTrue(command[-1].endswith("index.m3u8"))
-        self.assertIn("seg%d.ts", command[command.index("-hls_segment_filename") + 1])
+        self.assertRegex(command[command.index("-hls_segment_filename") + 1], r"seg_[0-9a-f]{32}_%d\.ts$")
         video_input = command.index("-i")
         self.assertEqual(command[video_input - 2 : video_input + 2],
                          ["-f", "yuv4mpegpipe", "-i", "pipe:0"])

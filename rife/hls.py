@@ -10,6 +10,8 @@ FFmpeg ``temp_file`` publishes complete playlist and segment files.
 
 from pathlib import Path
 from fractions import Fraction
+import re
+import uuid
 
 HLS_SEGMENT_SECONDS = 2
 STUB_PLAYLIST = (
@@ -39,7 +41,7 @@ def encoder_gop(source_rate: Fraction, factor: int, requested: int) -> int:
 
 
 def hls_segment_pattern(playlist: Path) -> str:
-    return str(playlist.with_name("seg%d.ts"))
+    return str(playlist.with_name(f"seg_{uuid.uuid4().hex}_%d.ts"))
 
 
 HLS_MUXER_FLAGS = "temp_file"
@@ -61,12 +63,7 @@ def hls_output_files(playlist: Path) -> list[Path]:
 
 
 def is_hls_segment(path: Path) -> bool:
-    name = path.name
-    if not name.startswith("seg"):
-        return False
-    suffix = ".ts.tmp" if name.endswith(".ts.tmp") else ".ts"
-    number = name[3 : -len(suffix)]
-    return bool(number) and number.isdigit()
+    return bool(re.fullmatch(r"seg(?:[0-9]+|_[0-9a-f]{32}_[0-9]+)\.ts(?:\.tmp)?", path.name))
 
 
 def clear_hls_output(playlist: Path) -> None:

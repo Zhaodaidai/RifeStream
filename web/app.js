@@ -20,6 +20,8 @@ let savingSettings = false;
 let jumpInFlight = false;
 let stateVersion = 0;
 let requestsInFlight = 0;
+let mutationQueue = Promise.resolve();
+let refreshing = false;
 let playlistSignature = "";
 let currentState = null;
 let errorVisibleUntil = 0;
@@ -34,7 +36,7 @@ async function performAction(key, button, action) {
   button.setAttribute("aria-busy", "true");
   if (currentState) paintAvailability(currentState);
   try { await action(); }
-  catch (error) { showError(error.message); }
+  catch (error) { showError(error.message); await refresh(); }
   finally {
     pendingActions.delete(key);
     button.disabled = false;
@@ -58,23 +60,39 @@ const embeddedPlayer = new EmbeddedPlayer({
   hint: document.getElementById("playerHint"),
   formatTime,
   seek: seekSeconds,
+  onEnded: (state) => {
+    if (state === currentState && state.settings?.skip_outro && state.has_next) play({ offset: 1 });
+  },
 });
 
 async function api(path, options = {}) {
   const modifying = options.method && options.method !== "GET";
-  if (modifying) { stateVersion++; requestsInFlight++; }
-  try {
-    const response = await fetch(path, {
-      headers: { "Content-Type": "application/json" },
-      ...options,
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || response.statusText);
-    }
-    if (modifying) { errorVisibleUntil = 0; showError(""); }
-    return data;
-  } finally { if (modifying) requestsInFlight--; }
+  const request = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(path, {
+        headers: { "Content-Type": "application/json" },
+        ...options,
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || response.statusText);
+      if (modifying) { errorVisibleUntil = 0; showError(""); }
+      return data;
+    } catch (error) {
+      if (error.name === "AbortError") throw new Error("请求超时，请检查连接和当前播放状态后重试");
+      throw error;
+    } finally { clearTimeout(timeout); }
+  };
+  if (!modifying) return request();
+  // Queue all mutations, not only identical buttons. Polls cannot repaint an older session.
+  stateVersion++;
+  requestsInFlight++;
+  const pending = mutationQueue.then(request);
+  mutationQueue = pending.catch(() => {});
+  try { return await pending; }
+  finally { requestsInFlight--; }
 }
 
 function showError(message, fromState = false) {
@@ -164,6 +182,7 @@ async function saveSettings() {
 }
 
 function renderState(state) {
+  if (requestsInFlight) return; // A queued newer mutation will return the authoritative complete state.
   currentState = state;
   embeddedPlayer.update(state);
   document.getElementById("playerEmpty").hidden = Boolean(state.hls_ready || state.streaming);
@@ -177,7 +196,7 @@ function renderState(state) {
   paintSettings(state.settings);
   nowPlaying.textContent = current?.title || "未选择媒体";
   nowPlaying.title = current?.title || "";
-  streamStatus.textContent = state.streaming ? "转码中" : "待机";
+  streamStatus.textContent = state.streaming ? (state.hls_ready ? "转码中" : "准备视频") : state.hls_ready ? "转码完成" : "待机";
   streamStatus.classList.toggle("live", Boolean(state.streaming));
   showError(state.last_error, true);
 
@@ -234,14 +253,15 @@ function escapeHtml(value) {
 }
 
 async function refresh() {
+  if (refreshing || requestsInFlight) return;
+  refreshing = true;
+  const version = stateVersion;
   try {
-    if (requestsInFlight) return;
-    const version = stateVersion;
     const state = await api("/api/state");
     if (version === stateVersion && !requestsInFlight) renderState(state);
   } catch (error) {
-    showError(error.message);
-  }
+    if (version === stateVersion && !requestsInFlight) showError(error.message);
+  } finally { refreshing = false; }
 }
 
 async function addSources(event) {
@@ -284,6 +304,8 @@ async function addSources(event) {
 
 async function play(body) {
   await performAction("play", playBtn, async () => {
+    embeddedPlayer.suspend(true);
+    document.getElementById("playerHint").textContent = "正在启动转码…";
     renderState(await api("/api/play", { method: "POST", body: JSON.stringify(body) }));
   });
 }
@@ -294,10 +316,12 @@ async function seekSeconds(seconds) {
   try {
     renderState(await api("/api/seek", {
       method: "POST",
-      body: JSON.stringify({ seconds }),
+      body: JSON.stringify({ seconds, playback_id: currentState?.playback_id }),
     }));
   } catch (error) {
     showError(error.message);
+    await refresh(); // Reconcile server truth before recovering a rejected or timed-out seek.
+    throw error;
   } finally {
     jumpInFlight = false;
   }
@@ -319,6 +343,7 @@ addDialog.addEventListener("cancel", (event) => {
 addForm.addEventListener("submit", addSources);
 document.getElementById("clearBtn").addEventListener("click", async () => {
   await performAction("clear", document.getElementById("clearBtn"), async () => {
+    embeddedPlayer.suspend(false);
     renderState(await api("/api/clear", { method: "POST", body: "{}" }));
   });
 });
@@ -327,6 +352,8 @@ nextBtn.addEventListener("click", () => play({ offset: 1 }));
 playBtn.addEventListener("click", () => play({}));
 stopBtn.addEventListener("click", async () => {
   await performAction("stop", stopBtn, async () => {
+    embeddedPlayer.suspend(false);
+    document.getElementById("playerHint").textContent = "正在停止转码…";
     renderState(await api("/api/stop", { method: "POST", body: "{}" }));
   });
 });

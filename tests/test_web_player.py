@@ -16,7 +16,8 @@ class EmbeddedPlaybackTests(unittest.TestCase):
             playlist = Path(folder) / 'index.m3u8'
             with patch('rife.webui.HLS_PLAYLIST', playlist):
                 self.assertFalse(hls_ready(100, True))
-                playlist.write_text('#EXTM3U')
+                playlist.write_text('#EXTM3U\n#EXTINF:2,\nseg0.ts\n')
+                (playlist.parent / 'seg0.ts').write_bytes(b'complete')
                 os.utime(playlist, (90, 90))
                 self.assertFalse(hls_ready(100, True))
                 os.utime(playlist, (110, 110))
@@ -35,7 +36,7 @@ class EmbeddedPlaybackTests(unittest.TestCase):
             playlist = Playlist(Path(folder) / 'playlist.json')
             playlist.add_sources(['https://example.com/ep1.mp4'])
             PLAYBACK.duration = 1000
-            with patch('rife.webui.PLAYLIST', playlist), patch('rife.webui.stream_running', return_value=True), patch('rife.webui.read_stream_status', return_value=None), patch('rife.webui.spawn_stream') as spawn, patch('rife.webui.playback_snapshot', return_value={'position': 500}):
+            with patch('rife.webui.PLAYLIST', playlist), patch('rife.webui.stream_running', return_value=True), patch('rife.webui.read_stream_status', return_value=None), patch('rife.webui.spawn_stream') as spawn, patch('rife.webui.playback_snapshot', return_value={'position': 500, 'duration': 1000}):
                 seek_to(500)
                 self.assertEqual(spawn.call_args.args[2], 500)
 

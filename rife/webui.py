@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+from functools import wraps
+import signal
 from dataclasses import asdict, dataclass, field, replace
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -36,6 +38,7 @@ from rife.paths import (
     pid_is_running,
     read_pid,
     replace_existing_stream,
+    stop_pid_tree,
 )
 
 
@@ -48,6 +51,18 @@ class Playback:
 
 
 PLAYBACK = Playback()
+# The HTTP server is threaded: selection, process replacement and snapshots form one transaction.
+CONTROL_LOCK = threading.RLock()
+STREAM_PROCESS: subprocess.Popen | None = None
+
+
+def serialized_control(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with CONTROL_LOCK:
+            return function(*args, **kwargs)
+    return wrapped
+
 FILE_SCHEMES = {"file"}
 
 
@@ -347,6 +362,8 @@ def normalize_playlist_source(source: str) -> str:
 
 
 def stream_running() -> bool:
+    if STREAM_PROCESS is not None and STREAM_PROCESS.poll() is None:
+        return True  # Includes probing/startup before the child publishes its PID.
     pid = read_pid(STREAM_PID_FILE)
     return pid is not None and pid_is_running(pid)
 
@@ -476,12 +493,22 @@ def hls_ready(spawned_at: float | None, has_current: bool) -> bool:
     if not has_current:
         return False
     try:
-        return HLS_PLAYLIST.is_file() and (
-            spawned_at is None or HLS_PLAYLIST.stat().st_mtime >= spawned_at
-        )
-    except OSError:
-        # The transcoder can replace/clear the playlist during a state request.
-        return False
+        if spawned_at is not None and HLS_PLAYLIST.stat().st_mtime < spawned_at:
+            return False
+        with HLS_PLAYLIST.open(encoding="utf-8") as manifest:
+            if manifest.readline().strip() != "#EXTM3U":
+                return False
+            has_duration = False
+            for line in manifest:
+                line = line.strip()
+                if line.startswith("#EXTINF:"):
+                    has_duration = True
+                elif has_duration and line and not line.startswith("#"):
+                    segment = HLS_PLAYLIST.parent / line
+                    return segment.is_file() and segment.stat().st_size > 0
+        return False  # The initial stub has no complete media segment yet.
+    except (OSError, UnicodeError):
+        return False  # FFmpeg can replace/clear output during a state request.
 
 
 _STATUS_UNSET = object()
@@ -552,7 +579,7 @@ def stream_command(
     return command
 
 
-def relay_stream_output(pipe: Any, header: str) -> None:
+def relay_stream_output(pipe: Any, header: str, process: Any = None) -> None:
     WEBUI_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with WEBUI_LOG_FILE.open("a", encoding="utf-8", errors="replace") as log:
         log.write(header)
@@ -561,19 +588,24 @@ def relay_stream_output(pipe: Any, header: str) -> None:
         sys.stderr.flush()
         if pipe is None:
             return
-        while True:
-            line = pipe.readline()
-            if line == "":
-                break
-            if not line.endswith("\n"):
-                line += "\n"
-            log.write(line)
-            log.flush()
-            sys.stderr.write(line)
-            sys.stderr.flush()
-            stripped = line.strip()
-            if stripped.startswith(PLAYBACK_ERROR_PREFIXES):
-                PLAYLIST.set_error(stripped)
+        try:
+            while True:
+                line = pipe.readline()
+                if line == "":
+                    break
+                if not line.endswith("\n"):
+                    line += "\n"
+                log.write(line)
+                log.flush()
+                sys.stderr.write(line)
+                sys.stderr.flush()
+                stripped = line.strip()
+                if stripped.startswith(PLAYBACK_ERROR_PREFIXES):
+                    with CONTROL_LOCK:
+                        if process is None or process is STREAM_PROCESS:
+                            PLAYLIST.set_error(stripped)
+        finally:
+            pipe.close()
 
 
 def spawn_stream(
@@ -584,6 +616,8 @@ def spawn_stream(
     *,
     anime4k: bool = False,
 ) -> None:
+    global STREAM_PROCESS
+    stop_stream()  # Stop even a child still probing, before it has written stream.pid.
     command = stream_command(source, title, start, duration, anime4k=anime4k)
     extra: dict[str, Any] = {}
     if os.name != "nt":
@@ -602,15 +636,39 @@ def spawn_stream(
         bufsize=1,
         **extra,
     )
+    STREAM_PROCESS = process
     threading.Thread(
         target=relay_stream_output,
-        args=(process.stdout, f"\nPlay: {source} start={start}\n"),
+        args=(process.stdout, f"\nPlay: {source} start={start}\n", process),
         daemon=True,
         name="rife-stream-log",
     ).start()
 
 
+@serialized_control
 def stop_stream() -> None:
+    global STREAM_PROCESS
+    process = STREAM_PROCESS
+    STREAM_PROCESS = None
+    if process is not None and process.poll() is None:
+        if os.name == "nt":
+            stop_pid_tree(process.pid)
+        else:
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            if os.name == "nt":
+                process.kill()
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            process.wait(timeout=5)
     PLAYBACK.spawned_at = None
     replace_existing_stream()
     clear_hls_output(HLS_PLAYLIST)
@@ -659,6 +717,7 @@ class WebHandler(BaseHTTPRequestHandler):
             return
         self.serve_static(path)
 
+    @serialized_control
     def do_POST(self) -> None:
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
@@ -691,6 +750,10 @@ class WebHandler(BaseHTTPRequestHandler):
                 seconds = finite_seconds(body.get("seconds"))
                 if seconds is None:
                     raise ValueError("Seek position is required")
+                if "playback_id" in body:
+                    active = playback_snapshot(stream_running(), PLAYLIST.current() is not None)["playback_id"]
+                    if body["playback_id"] != active:
+                        raise ValueError("Playback session changed; refresh before seeking")
                 item = seek_to(seconds)
                 self.send_json({"seeking": asdict(item), **self.state_payload()})
                 return
@@ -711,8 +774,12 @@ class WebHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self.send_json({"error": str(exc)}, 400)
             return
+        except OSError as exc:
+            self.send_json({"error": f"Unable to start playback: {exc}"}, 500)
+            return
         self.send_json({"error": "Not found"}, 404)
 
+    @serialized_control
     def do_DELETE(self) -> None:
         parsed = urlsplit(self.path)
         path = unquote(parsed.path)
@@ -747,24 +814,12 @@ class WebHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    @serialized_control
     def state_payload(self) -> dict[str, Any]:
         PLAYLIST.refresh()
-        settings = PLAYLIST.settings()
         current = PLAYLIST.current()
         running = stream_running()
         playback = playback_snapshot(running, current is not None)
-        if (
-            settings.skip_outro
-            and settings.outro > 0
-            and running
-            and current is not None
-            and outro_reached(playback["position"], playback["duration"], settings)
-        ):
-            try:
-                start_item(None, offset=1)
-            except ValueError:
-                stop_stream()
-            return PLAYLIST.snapshot()
         return PLAYLIST.snapshot(streaming=running, playback=playback)
 
     def send_json(self, payload: dict[str, Any], status: int = 200) -> None:
@@ -783,12 +838,12 @@ class WebHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+@serialized_control
 def start_item(item_id: str | None, offset: int = 0, start: float = 0.0) -> PlaylistItem:
     item = PLAYLIST.select(item_id, offset)
     settings = PLAYLIST.settings()
     duration = PLAYBACK.duration if PLAYBACK.item_id == item.id else None
     start = clamp_seek(effective_start(start, settings), duration)
-    remember_playback(item.id, start)
     spawn_stream(
         item.source,
         item.title,
@@ -796,21 +851,18 @@ def start_item(item_id: str | None, offset: int = 0, start: float = 0.0) -> Play
         encode_duration(start, duration, settings),
         anime4k=settings.anime4k,
     )
+    remember_playback(item.id, start)
     return item
 
 
+@serialized_control
 def seek_to(seconds: float) -> PlaylistItem:
     item = PLAYLIST.current()
     if item is None:
         raise ValueError("No media selected")
     settings = PLAYLIST.settings()
-    running = stream_running()
-    status = read_stream_status()
-    duration = PLAYBACK.duration
-    if duration is None and status:
-        duration = finite_seconds(status.get("duration"))
+    duration = playback_snapshot(stream_running(), True)["duration"]
     seconds = clamp_seek(seconds, duration)
-    remember_playback(item.id, seconds)
     spawn_stream(
         item.source,
         item.title,
@@ -818,6 +870,7 @@ def seek_to(seconds: float) -> PlaylistItem:
         encode_duration(seconds, duration, settings),
         anime4k=settings.anime4k,
     )
+    remember_playback(item.id, seconds)
     return item
 
 

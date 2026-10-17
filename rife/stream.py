@@ -953,6 +953,16 @@ def owns_stream_process() -> bool:
     return read_pid(STREAM_PID_FILE) == os.getpid()
 
 
+def release_stream_files(playlist: Path, *, failed: bool) -> None:
+    """An old worker must never clear a successor's media or ownership files."""
+    if not owns_stream_process():
+        return
+    if failed:
+        clear_hls_output(playlist)
+    STREAM_PID_FILE.unlink(missing_ok=True)
+    STREAM_STATUS_FILE.unlink(missing_ok=True)
+
+
 def stop_process(process: subprocess.Popen[bytes] | None) -> None:
     if process is None or process.poll() is not None:
         return
@@ -1044,10 +1054,7 @@ def main() -> int:
     except (RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr, flush=True)
         cleanup_subtitles(source)
-        if owns_stream_process():
-            clear_hls_output(Path(args.publish_url))
-        STREAM_PID_FILE.unlink(missing_ok=True)
-        STREAM_STATUS_FILE.unlink(missing_ok=True)
+        release_stream_files(Path(args.publish_url), failed=True)
         return 1
     write_stream_status(source, args.start)
 
@@ -1086,10 +1093,7 @@ def main() -> int:
         return exit_code
     finally:
         cleanup_subtitles(source)
-        if exit_code != 0 and owns_stream_process():
-            clear_hls_output(Path(args.publish_url))
-        STREAM_PID_FILE.unlink(missing_ok=True)
-        STREAM_STATUS_FILE.unlink(missing_ok=True)
+        release_stream_files(Path(args.publish_url), failed=exit_code != 0)
 
 
 if __name__ == "__main__":

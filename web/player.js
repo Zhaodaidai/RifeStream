@@ -1,7 +1,7 @@
 /* HLS session lifecycle is separate from playlist rendering and its polling clock. */
 class EmbeddedPlayer {
-  constructor({ video, progress, timeline, clock, hint, formatTime, seek }) {
-    Object.assign(this, { video, progress, timeline, clock, hint, formatTime, seek });
+  constructor({ video, progress, timeline, clock, hint, formatTime, seek, onEnded }) {
+    Object.assign(this, { video, progress, timeline, clock, hint, formatTime, seek, onEnded });
     this.key = null;
     this.state = null;
     this.hls = null;
@@ -9,6 +9,12 @@ class EmbeddedPlayer {
     this.failures = 0;
     this.dragging = false;
     this.seeking = false;
+    this.session = null;
+    this.epoch = 0;
+    this.resumeAt = 0;
+    this.wantsPlayback = true;
+    this.reloading = false;
+    this.autoplayEpoch = -1;
     // Plyr owns controls only. HLS sessions and the full-episode clock stay here.
     this.ui = window.Plyr ? new window.Plyr(video, {
       iconUrl: "/vendor/plyr.svg",
@@ -41,21 +47,38 @@ class EmbeddedPlayer {
     });
     timeline.addEventListener("change", () => {
       this.dragging = false;
-      this.jump(Number(timeline.value));
+      this.jump(Number(timeline.value)).catch((error) => { hint.textContent = `跳转失败：${error.message}`; });
     });
     video.addEventListener("timeupdate", () => this.paint());
+    video.addEventListener("play", () => { if (this.key) this.wantsPlayback = true; });
+    video.addEventListener("pause", () => {
+      if (this.key && !this.reloading && !video.ended) this.wantsPlayback = false;
+    });
     video.addEventListener("playing", () => {
+      if (!this.key) return;
       hint.textContent = "网页播放中";
       this.failures = 0;
     });
-    video.addEventListener("waiting", () => { hint.textContent = "等待转码 / 缓冲中…"; });
+    video.addEventListener("waiting", () => {
+      if (this.key && this.wantsPlayback) hint.textContent = "等待转码 / 缓冲中…";
+    });
     video.addEventListener("error", () => {
       if (!this.hls && this.key) this.retryLoad(this.key);
     });
-    video.addEventListener("loadedmetadata", () => this.autoplay());
+    video.addEventListener("loadedmetadata", () => {
+      if (!this.key) return;
+      if (!this.hls && this.resumeAt > 0) video.currentTime = this.resumeAt;
+      this.reloading = false;
+      this.autoplay();
+    });
+    video.addEventListener("ended", () => {
+      if (this.key && !this.reloading && !this.seeking) this.onEnded?.(this.state);
+    });
   }
 
   destroy() {
+    this.epoch++;
+    this.reloading = true;
     clearTimeout(this.retry);
     this.retry = null;
     if (this.hls) this.hls.destroy();
@@ -65,7 +88,21 @@ class EmbeddedPlayer {
     this.video.load();
   }
 
+  suspend(autoplay = this.wantsPlayback) {
+    this.resumeAt = Number(this.video.currentTime) || 0;
+    this.wantsPlayback = autoplay;
+    this.key = null;  // Invalidate old HLS callbacks before destroying their media.
+    this.destroy();
+  }
+
   update(state) {
+    const session = state.current ? JSON.stringify([state.current.id, state.playback_id, state.start]) : null;
+    if (session !== this.session) {
+      if (state.current?.id !== this.state?.current?.id) this.wantsPlayback = true;
+      this.resumeAt = 0;
+      this.dragging = false;
+      this.session = session;
+    }
     this.state = state;
     if (this.ui) this.ui.config.title = state.current?.title || "RIFE 视频播放器";
     const key = state.current && state.hls_ready
@@ -74,7 +111,7 @@ class EmbeddedPlayer {
       this.key = key;
       this.destroy();
       this.failures = 0;
-      if (key) this.load(key);
+      if (key) this.load(key, this.resumeAt);
     }
     if (!key) this.hint.textContent = state.streaming ? "等待新一集 / 跳转位置生成分片…" : "选择一集后点击播放";
     this.timeline.disabled = this.seeking || !state.seekable || !(Number(state.duration) > 0);
@@ -82,8 +119,10 @@ class EmbeddedPlayer {
     this.paint();
   }
 
-  load(key) {
+  load(key, position = 0) {
     if (this.key !== key) return;
+    const epoch = this.epoch;
+    this.resumeAt = position;
     const url = new URL(this.state.hls_url, window.location.href);
     // Use the browser's host, not a server-selected LAN adapter (localhost/VPN).
     url.hostname = window.location.hostname;
@@ -91,17 +130,17 @@ class EmbeddedPlayer {
     this.hint.textContent = "正在加载转码视频…";
     if (window.Hls && window.Hls.isSupported()) {
       const hls = this.hls = new window.Hls({
-        startPosition: 0,
+        startPosition: position,
         liveSyncDurationCount: 1000000,
         liveMaxLatencyDurationCount: Infinity,
         maxBufferLength: 30,
         backBufferLength: 60,
       });
       hls.on(window.Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal && this.key === key) this.retryLoad(key);
+        if (data.fatal && this.key === key && this.hls === hls) this.retryLoad(key);
       });
       hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
-        if (this.key === key) this.autoplay();
+        if (this.key === key && this.hls === hls && this.epoch === epoch) this.autoplay();
       });
       hls.loadSource(url.href);
       hls.attachMedia(this.video);
@@ -122,14 +161,19 @@ class EmbeddedPlayer {
     this.hint.textContent = "等待转码分片，正在重试…";
     this.retry = setTimeout(() => {
       if (this.key !== key) return;
+      const position = Number(this.video.currentTime) || this.resumeAt;
       this.destroy();
-      this.load(key);
-    }, 2000);
+      this.load(key, position);
+    }, Math.min(8000, 1000 * 2 ** (this.failures - 1)));
   }
 
   autoplay() {
+    if (!this.key || !this.wantsPlayback || this.autoplayEpoch === this.epoch) return;
+    const epoch = this.epoch;
+    this.autoplayEpoch = epoch;
     const result = this.video.play();
     if (result && result.catch) result.catch(() => {
+      if (this.epoch !== epoch || !this.key || !this.wantsPlayback) return;
       this.hint.textContent = "浏览器未允许自动播放，请点击视频中的播放按钮。";
     });
   }
@@ -165,13 +209,19 @@ class EmbeddedPlayer {
         return;
       }
     }
+    this.suspend();
+    const seekEpoch = this.epoch;
     this.hint.textContent = "正在跳转，等待重新生成分片…";
     this.seeking = true;
     this.timeline.disabled = true;
     this.progress.setAttribute("aria-busy", "true");
     this.paintTime(seconds);
     try { await this.seek(seconds); }
-    finally {
+    catch (error) {
+      // A rejected seek leaves the server session unchanged; resume its previous buffered position.
+      if (this.state && this.epoch === seekEpoch) this.update(this.state);
+      throw error;
+    } finally {
       this.seeking = false;
       this.progress.removeAttribute("aria-busy");
       this.timeline.disabled = !this.state?.seekable || !(Number(this.state?.duration) > 0);

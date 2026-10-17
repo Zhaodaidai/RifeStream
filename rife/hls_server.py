@@ -80,7 +80,7 @@ class HlsHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
-        if urlsplit(self.path).path.endswith(".m3u8"):
+        if urlsplit(self.path).path.endswith((".m3u8", ".ts")):
             self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
