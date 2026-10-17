@@ -37,10 +37,7 @@
         </div>
         <div class="playback-controls" aria-label="播放控制与画面设置">
           <div class="transport">
-            <button type="button" id="prevBtn" class="icon-button" title="上一集" aria-label="上一集"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5v14m13-14L8 12l11 7z"/></svg></button>
-            <button type="button" id="playBtn" class="primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 11 7-11 7z"/></svg><span>播放</span></button>
-            <button type="button" id="nextBtn" class="icon-button" title="下一集" aria-label="下一集"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 5v14M5 5l11 7-11 7z"/></svg></button>
-            <span class="control-divider"></span><div class="stop-status"><button type="button" id="stopBtn" class="quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg><span>停止转码</span></button><p id="playerHint" class="hint" role="status">选择一集后点击播放</p></div>
+            <div class="stop-status"><button type="button" id="stopBtn" class="quiet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg><span>停止转码</span></button><p id="playerHint" class="hint" role="status">选择一集后点击播放</p></div>
           </div>
           <div class="playback-settings">
             <label class="field"><span>片头</span><input type="text" id="introSeconds" value="0:00" placeholder="1:30" autocomplete="off" aria-label="片头时长" aria-describedby="introError" inputmode="text"></label>

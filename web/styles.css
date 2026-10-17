@@ -195,3 +195,12 @@ button[aria-busy="true"] { cursor: progress; }
 
 /* Episode navigation shares the real Plyr button states and single control row. */
 .video-stage .plyr__controls > .episode-nav { flex: none; margin-right: 0; }
+@media (max-width: 1100px) {
+  .video-stage .plyr__volume { min-width: 0; width: auto; flex: none; }
+  .video-stage .plyr__volume input { display: none; }
+}
+@media (max-width: 480px) {
+  .video-stage .plyr__controls .plyr__control { padding: 4px; }
+  .video-stage .plyr__controls .plyr__control svg { width: 16px; height: 16px; }
+  .video-stage .plyr__controls .plyr__controls__item { margin-left: 1px; }
+}

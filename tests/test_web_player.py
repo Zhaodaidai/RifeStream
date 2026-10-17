@@ -56,7 +56,7 @@ class PlayerLayoutTests(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         html = (root / 'web/index.html').read_text()
         viewer = html.split('<section class="viewer card"', 1)[1].split('</section>', 1)[0]
-        for name in ['prevBtn', 'nextBtn', 'introSeconds', 'skipIntro', 'anime4k']:
+        for name in ['introSeconds', 'skipIntro', 'anime4k']:
             self.assertIn('id="' + name + '"', viewer)
         self.assertIn('anime4k.addEventListener("change", saveSettings)', (root / 'web/app.js').read_text())
         self.assertNotIn('id="anime4k" checked', html)
@@ -113,6 +113,30 @@ class PlyrIntegrationTests(unittest.TestCase):
         self.assertIn('this.seek(seconds)', script)
         self.assertIn('this.state?.start', script)
         self.assertNotIn('--plyr-color-main: var(--accent)', (root / 'web/styles.css').read_text())
+
+
+class EpisodeNavigationTests(unittest.TestCase):
+    def test_external_transport_removed(self):
+        root = Path(__file__).resolve().parent.parent
+        html = (root / 'web/index.html').read_text()
+        script = (root / 'web/app.js').read_text()
+        for name in ['prevBtn', 'nextBtn', 'playBtn']:
+            self.assertNotIn('id="' + name + '"', html)
+            self.assertNotIn('getElementById("' + name + '")', script)
+        self.assertIn('id="stopBtn"', html)
+        self.assertIn('onNavigate: (offset) => play({ offset })', script)
+        self.assertIn('onPlayRequest: () => play({})', script)
+
+    def test_navigation_uses_plyr_controls_and_server_availability(self):
+        root = Path(__file__).resolve().parent.parent
+        script = (root / 'web/player.js').read_text()
+        self.assertIn('controls.insertBefore(this.previousButton, playButton)', script)
+        self.assertIn('controls.insertBefore(this.nextButton, playButton.nextSibling)', script)
+        self.assertIn('this.state?.has_prev', script)
+        self.assertIn('this.state?.has_next', script)
+        self.assertIn('button.hidden = hidden', script)
+        self.assertIn('this.onNavigate?.(offset)', script)
+        self.assertIn('play: () => this.handlePlayRequest()', script)
 
 
 class EpisodeTimelineTests(unittest.TestCase):

@@ -8,9 +8,6 @@ const addError = document.getElementById("addError");
 const finishAddBtn = document.getElementById("finishAddBtn");
 let addingSources = false;
 const playlistEl = document.getElementById("playlist");
-const prevBtn = document.getElementById("prevBtn");
-const nextBtn = document.getElementById("nextBtn");
-const playBtn = document.getElementById("playBtn");
 const stopBtn = document.getElementById("stopBtn");
 const introSeconds = document.getElementById("introSeconds");
 const skipIntro = document.getElementById("skipIntro");
@@ -46,9 +43,7 @@ async function performAction(key, button, action) {
 }
 
 function paintAvailability(state) {
-  prevBtn.disabled = !state.has_prev || pendingActions.has("play");
-  nextBtn.disabled = !state.has_next || pendingActions.has("play");
-  playBtn.disabled = !state.current || pendingActions.has("play");
+  embeddedPlayer.setActionState(pendingActions.has("play"));
   stopBtn.disabled = !state.streaming || pendingActions.has("stop");
   document.getElementById("clearBtn").disabled = !state.items.length || pendingActions.has("clear");
 }
@@ -60,10 +55,14 @@ const embeddedPlayer = new EmbeddedPlayer({
   hint: document.getElementById("playerHint"),
   formatTime,
   seek: seekSeconds,
+  onNavigate: (offset) => play({ offset }),
+  onPlayRequest: () => play({}),
   onEnded: (state) => {
     if (state === currentState && state.settings?.skip_outro && state.has_next) play({ offset: 1 });
   },
 });
+
+const playBtn = embeddedPlayer.ui.elements.controls.querySelector('[data-plyr="play"]');
 
 async function api(path, options = {}) {
   const modifying = options.method && options.method !== "GET";
@@ -347,9 +346,6 @@ document.getElementById("clearBtn").addEventListener("click", async () => {
     renderState(await api("/api/clear", { method: "POST", body: "{}" }));
   });
 });
-prevBtn.addEventListener("click", () => play({ offset: -1 }));
-nextBtn.addEventListener("click", () => play({ offset: 1 }));
-playBtn.addEventListener("click", () => play({}));
 stopBtn.addEventListener("click", async () => {
   await performAction("stop", stopBtn, async () => {
     embeddedPlayer.suspend(false);

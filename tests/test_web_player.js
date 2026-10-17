@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const events = {}, rangeEvents = {}, instances = [], seeks = [], timers = new Map();
 let timerId = 0, plays = 0, failSeek = false, resolveSeek, ends = 0, starts = 0;
 const navigations = [];
-const document = {activeElement:null,createElement(){return {ownerDocument:this,dataset:{},events:{},setAttribute(n,v){this[n]=v;},removeAttribute(n){delete this[n];},addEventListener(n,f){this.events[n]=f;},focus(){document.activeElement=this;}};}};
+const document = {activeElement:null,body:{},createElement(){return {ownerDocument:this,dataset:{},events:{},setAttribute(n,v){this[n]=v;},removeAttribute(n){delete this[n];},addEventListener(n,f){this.events[n]=f;},focus(){document.activeElement=this;}};}};
 const video = {
   ownerDocument: document,
   currentTime: 0, seekable: {length: 0}, pauses: 0, ended: false,
@@ -163,6 +163,10 @@ const flush = async()=>{await Promise.resolve();await Promise.resolve();};
   document.activeElement=player.nextButton;player.update({...base,has_prev:true,has_next:false});
   assert.equal(player.previousButton.hidden,false);assert.equal(player.nextButton.hidden,true);
   assert.equal(document.activeElement,playButton,'boundary removal restores keyboard focus');
+  player.update({...base,has_prev:true,has_next:true});document.activeElement=player.nextButton;
+  player.nextButton.events.click();player.setActionState(true);document.activeElement=document.body;
+  player.update({...base,has_prev:true,has_next:false});player.setActionState(false);
+  assert.equal(document.activeElement,playButton,'disabled pending button losing focus still restores at list boundary');
   assert.equal(player.ui.config.listeners.play(),true,'loaded Play/Pause stays local');assert.equal(starts,0);
   player.update({...base,hls_ready:false,streaming:false,has_prev:false,has_next:false});
   assert.equal(player.ui.config.listeners.play(),false);assert.equal(starts,1,'idle Play starts server transcode');

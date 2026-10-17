@@ -51,7 +51,10 @@ class EmbeddedPlayer {
           button.innerHTML = `<svg aria-hidden="true" focusable="false" viewBox="0 0 18 18"><path d="${path}"/></svg><span class="plyr__tooltip" role="tooltip">${label}</span>`;
           button.addEventListener("click", () => {
             const available = offset < 0 ? this.state?.has_prev : this.state?.has_next;
-            if (available && !this.actionPending) this.onNavigate?.(offset);
+            if (this.state?.current && available && !this.actionPending) {
+              if (button.ownerDocument.activeElement === button) this.navigationFocus = button;
+              this.onNavigate?.(offset);
+            }
           });
           return button;
         };
@@ -145,9 +148,12 @@ class EmbeddedPlayer {
     for (const [button, available] of [[this.previousButton, this.state?.has_prev], [this.nextButton, this.state?.has_next]]) {
       if (!button) continue;
       const hidden = !this.state?.current || !available;
-      if (hidden && button.ownerDocument.activeElement === button) {
+      const document = button.ownerDocument;
+      if (hidden && !pending && (document.activeElement === button
+        || (this.navigationFocus === button && document.activeElement === document.body))) {
         this.ui.elements.controls.querySelector('[data-plyr="play"]').focus({ preventScroll: true });
       }
+      if (!pending && this.navigationFocus === button) this.navigationFocus = null;
       button.hidden = hidden;
       button.disabled = pending;
       if (pending) button.setAttribute("aria-busy", "true");
