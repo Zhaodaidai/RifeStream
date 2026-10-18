@@ -1,4 +1,9 @@
-/* Independent of HLS and video transforms. Every position is full-episode seconds. */
+/* Player/danmaku boundary (all host positions are full-episode seconds):
+ * olink -> normalized source -> one native comment pool per source.
+ * Media/settings/resize -> coalesced sync -> latest-state flush.
+ * Native DanmuJs owns tracks/collisions/motion; canvas sprites own safe pixels.
+ * Image decoding repaints sprites only, never the media clock or comment pool.
+ */
 class DanmakuOverlay {
   static defaults = { enabled: false, opacity: 100, fontSize: 24, area: 50 };
 
@@ -9,7 +14,7 @@ class DanmakuOverlay {
       if (!entry || typeof entry !== "object") return null;
       const p = typeof entry.p === "string" ? entry.p.split(",") : null;
       const time = Number(p ? p[0] : entry.time);
-      let text = p ? entry.m : entry.text;
+      const text = p ? entry.m : entry.text;
       const mode = Number(p ? p[1] : entry.mode ?? 1);
       const color = Number(p ? p[2] : entry.color ?? 16777215);
       if (!Number.isFinite(time) || time < 0 || typeof text !== "string" || !text.trim()) return null;
@@ -125,7 +130,7 @@ class DanmakuOverlay {
     this.sprites = new Map();
     this.spriteBytes = 0;
     this.dirtyImages = new Set();
-    this.metrics = { layouts: 0, layoutMs: 0, sprites: 0, draws: 0, admitted: 0, skipped: 0 };
+    this.metrics = { layouts: 0, layoutMs: 0, sprites: 0, admitted: 0, skipped: 0 };
     // danmu.js reads player.currentTime in seconds and multiplies it by 1000.
     // Keep a small media-like adapter so its native scheduler never sees a stale
     // or missing clock when the host player is paused, seeking, or HLS-backed.
@@ -134,7 +139,7 @@ class DanmakuOverlay {
     this.clock.paused = true;
     this.clock.readyState = 4;
     Object.defineProperties(this.clock, {
-      currentTime: { get: () => this.seekPosition ?? (this.player.position() + 0.000001) },
+      currentTime: { get: () => this.player.position() },
       playbackRate: { get: () => Number(this.video.playbackRate) || 1 },
       duration: { get: () => Number(this.player.state?.duration) || Infinity },
     });
@@ -167,12 +172,20 @@ class DanmakuOverlay {
     this.buildControls();
     this.observer = new ResizeObserver(() => this.rebuild());
     this.observer.observe(player.ui?.elements?.container || this.frame);
+    this.bindMediaEvents();
+    this.rebuild();
+  }
+
+  // The host player owns time and HLS. This bridge only translates media state;
+  // the unmodified engine owns track allocation, collision checks and scheduling.
+  bindMediaEvents() {
     for (const event of ["playing", "seeked", "timeupdate", "pause", "ended", "ratechange", "loadedmetadata", "seeking", "waiting", "emptied"]) {
       this.video.addEventListener(event, () => {
-        if (["waiting", "emptied"].includes(event)) this.buffering = true;
-        if (["playing", "seeked"].includes(event)) this.buffering = false;
-        if (["emptied", "seeking"].includes(event)) this.clear();
-        if (["seeked", "ratechange"].includes(event)) this.needsSeek = true;
+        if (event === "waiting" || event === "emptied") this.buffering = true;
+        if (event === "playing" || event === "seeked") this.buffering = false;
+        if (event === "emptied" || event === "seeking") this.clear();
+        if (event === "seeked") this.needsSeek = true;
+        // A rate change updates the native animation speed, not the comment pool.
         this.sync();
       });
     }
@@ -180,7 +193,6 @@ class DanmakuOverlay {
       this.needsSeek = true;
       this.sync();
     });
-    this.rebuild();
   }
 
   buildControls() {
@@ -260,32 +272,57 @@ class DanmakuOverlay {
     this.button.classList.toggle("danmaku-enabled", this.settings.enabled);
   }
 
+  cancelLoad() {
+    ++this.token;
+    this.controller?.abort();
+    this.controller = null;
+    this.loading = false;
+  }
+
+  releaseImages() {
+    for (const cached of this.images.values()) {
+      window.clearTimeout(cached.timer);
+      cached.image.onload = cached.image.onerror = null;
+      cached.image.src = "";
+    }
+    this.images.clear();
+  }
+
+  // Convert each source exactly once. Native stop/start resets attached flags;
+  // seeks and geometry changes must never clone/re-sort/re-submit the episode.
+  replaceComments(comments) {
+    if (comments === this.comments || (!comments.length && !this.comments.length)) return;
+    this.clear();
+    this.comments = comments;
+    this.layout = comments.map((item, index) => ({
+      id: `episode-${this.token}-${index}`, start: Math.max(1, item.time * 1000), duration: 6000,
+      mode: item.mode === 5 ? "top" : item.mode === 4 ? "bottom" : "scroll",
+      elLazyInit: true, disableCopyDOM: true, style: {}, source: item,
+    }));
+    this.engine.updateComments(this.layout);
+    this.metrics.admitted = this.layout.length;
+    this.metrics.skipped = 0;
+  }
+
   setItem(item) {
     const identity = item ? JSON.stringify([item.id, item.olink || ""]) : "";
     if (identity === this.identity) return;
     this.identity = identity;
-    for (const cached of this.images.values()) {
-      window.clearTimeout(cached.timer);
-      cached.image.onload = null; cached.image.onerror = null; cached.image.src = "";
-    }
-    this.images.clear();
+    this.cancelLoad();
+    this.loaded = false;
+    this.replaceComments([]);
+    this.releaseImages();
     this.releaseSprites();
     this.item = item;
-    ++this.token;
-    this.controller?.abort();
-    this.loading = false; this.loaded = false;
-    this.comments = []; this.layout = [];
-    this.engine.updateComments([]);
-    this.clear();
     this.status.textContent = item?.olink ? "已接收 olink，开启弹幕后加载" : "本集未提供 olink 弹幕地址";
     if (this.settings.enabled && item?.olink) this.load();
+    this.sync();
   }
 
   async load() {
-    ++this.token;
-    this.controller?.abort();
-    this.loading = false;
-    this.loaded = false; this.comments = []; this.layout = []; this.clear();
+    this.cancelLoad();
+    this.loaded = false;
+    this.replaceComments([]);
     if (!this.item?.olink) { this.status.textContent = "本集未提供 olink 弹幕地址"; return; }
     const token = this.token;
     const controller = this.controller = new AbortController();
@@ -302,15 +339,15 @@ class DanmakuOverlay {
       if (token === this.token) this.status.textContent = error.name === "AbortError" ? "弹幕加载超时，可关闭后重新开启弹幕重试" : `弹幕加载失败：${error.message}`;
     } finally {
       window.clearTimeout(timeout);
-      if (token === this.token) this.loading = false;
+      if (token === this.token) { this.loading = false; this.controller = null; }
     }
   }
 
   accept(comments, source) {
-    this.comments = comments;
+    this.replaceComments(comments);
     this.loaded = true;
     this.status.textContent = `${source} · ${comments.length} 条弹幕`;
-    this.rebuild(); this.sync();
+    this.rebuild();
   }
 
   // Re-layout is coalesced to one task per frame, including slider drags and resize storms.
@@ -327,32 +364,30 @@ class DanmakuOverlay {
   }
 
   rebuildNow() {
-    const start = performance.now();
+    this.needsLayout = false;
     const surface = this.player.ui?.elements?.container || this.frame;
     const rect = surface.getBoundingClientRect();
-    this.width = Math.max(1, rect.width);
-    this.height = Math.max(1, rect.height * this.settings.area / 100);
-    this.engine.stop();
-    this.engine.clear();
-    this.activeCanvases.clear();
-    this.releaseSprites();
-    // The host always covers the full player. Native area controls the engine's
-    // channel count; no cropped host, custom row allocator, sampling or token cap.
-    this.engine.setFontSize(this.settings.fontSize, this.settings.fontSize * 1.5 + 6, { reflow: false });
-    this.engine.setArea({ start: 0, end: this.settings.area / 100 });
-    this.engine.resize();
-    this.layout = this.comments.map((item, index) => ({
-      id: `episode-${this.token}-${index}`, start: Math.max(1, item.time * 1000), duration: 6000,
-      mode: item.mode === 5 ? "top" : item.mode === 4 ? "bottom" : "scroll",
-      elLazyInit: true, disableCopyDOM: true, style: {}, source: item,
-    }));
-    this.engine.updateComments(this.layout);
-    this.metrics.admitted = this.layout.length;
-    this.metrics.skipped = 0;
+    const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
+    const { fontSize, area } = this.settings;
+    const ratio = Math.min(2, window.devicePixelRatio || 1);
+    const key = [width, height, fontSize, area, ratio].join("|");
+    if (key === this.layoutKey) return;
+
+    const start = performance.now();
+    this.clear();
+    // Area/height changes only affect native tracks. Reuse text/image rasters
+    // unless their font, backing-pixel ratio or width-dependent clipping changes.
+    if (width !== this.width || fontSize !== this.layoutFont || ratio !== this.layoutRatio) this.releaseSprites();
+    this.width = width;
+    this.height = height * area / 100;
+    if (fontSize !== this.layoutFont) this.engine.setFontSize(fontSize, fontSize * 1.5 + 6, { reflow: false });
+    // Host stays full-size; one native reflow, never an adapter row allocator.
+    this.engine.setArea({ start: 0, end: area / 100 });
+    this.layoutKey = key;
+    this.layoutFont = fontSize;
+    this.layoutRatio = ratio;
     this.metrics.layouts++;
     this.metrics.layoutMs = performance.now() - start;
-    this.needsLayout = false;
-    this.needsSeek = true;
   }
 
   createBullet(entry) {
@@ -453,68 +488,92 @@ class DanmakuOverlay {
 
   clear() {
     this.stopClock();
-    this.engine.clear();
+    // stop() clears live nodes and resets the native pool's attached flags.
+    // clear() would delete that pool and require a full-episode resubmission.
+    if (this.engine.status !== "closed") this.engine.stop();
     this.activeCanvases.clear();
+    this.previewPosition = undefined;
     this.needsSeek = true;
   }
 
-  stopClock() {
-    this.clock.paused = true;
-    this.engine.pause();
+  cancelPreview() {
     window.cancelAnimationFrame(this.previewTask);
     this.previewTask = null;
   }
 
+  stopClock() {
+    this.cancelPreview();
+    this.clock.paused = true;
+    if (this.engine.status === "playing") this.engine.pause();
+  }
+
+  playbackState() {
+    return {
+      position: this.player.position(),
+      visible: this.settings.enabled && this.loaded && !this.doc.hidden &&
+        !this.player.seeking && !this.video.seeking && !this.player.reloading,
+      playing: !this.video.paused && !this.video.ended && !this.buffering,
+      rate: Number(this.video.playbackRate) || 1,
+    };
+  }
+
+  paintDirtyImages() {
+    if (!this.dirtyImages.size) return;
+    const sprites = new Set([...this.sprites.values(), ...this.activeCanvases.values()]);
+    for (const sprite of sprites) if (sprite.runs.some((run) => run.src && this.dirtyImages.has(run.src))) this.paintSprite(sprite);
+    for (const [canvas, sprite] of this.activeCanvases) {
+      if (!canvas.isConnected) { this.activeCanvases.delete(canvas); continue; }
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(sprite.canvas, 0, 0);
+    }
+    this.dirtyImages.clear();
+  }
+
   sync() {
-    const current = this.player.position();
-    if (this.lastPosition !== undefined && (current < this.lastPosition || current - this.lastPosition > 1.5)) this.needsSeek = true;
-    this.lastPosition = current;
+    const state = this.playbackState();
+    if (this.lastPosition !== undefined && (state.position < this.lastPosition || state.position - this.lastPosition > 1.5)) this.needsSeek = true;
+    this.lastPosition = state.position;
     if (this.animation) return;
-    const visible = this.settings.enabled && this.loaded && !this.doc.hidden && !this.player.seeking && !this.video.seeking && !this.player.reloading;
-    const running = !this.video.paused && !this.video.ended && !this.buffering;
-    if (!this.needsLayout && !this.needsSeek && !this.dirtyImages.size && visible && this.engineVisible &&
-      (running ? !this.clock.paused : this.clock.paused && this.previewPosition === current)) return;
+    if (!this.needsLayout && !this.dirtyImages.size) {
+      if (!state.visible && this.host.hidden && this.clock.paused) return;
+      if (state.visible && !this.host.hidden && !this.needsSeek && state.rate === this.engineRate &&
+        (state.playing ? !this.clock.paused : this.clock.paused && this.previewPosition === state.position)) return;
+    }
     this.animation = window.requestAnimationFrame(() => {
       this.animation = null;
-      if (this.needsLayout) this.rebuildNow();
-      const dirty = this.dirtyImages.size > 0;
-      if (dirty) {
-        const sprites = new Set([...this.sprites.values(), ...this.activeCanvases.values()]);
-        for (const sprite of sprites) if (sprite.runs.some((run) => run.src && this.dirtyImages.has(run.src))) this.paintSprite(sprite);
-        for (const [canvas, sprite] of this.activeCanvases) {
-          if (!canvas.isConnected) { this.activeCanvases.delete(canvas); continue; }
-          const ctx = canvas.getContext("2d"); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(sprite.canvas, 0, 0);
-        }
-        this.dirtyImages.clear();
-      }
-      const position = this.player.position();
-      if (!this.settings.enabled || !this.loaded || this.doc.hidden || this.player.seeking || this.video.seeking || this.player.reloading) {
-        this.stopClock(); this.host.hidden = true; this.engineVisible = false; return;
-      }
-      this.host.hidden = false; this.engineVisible = true;
-      if (this.needsSeek) {
-        this.stopClock(); this.engine.stop(); this.engine.clear(); this.activeCanvases.clear();
-        // Native engine consumes its own pool flags; rebuild only those flags on
-        // seek, without modifying timestamps or prefiltering the source sequence.
-        this.engine.updateComments(this.layout.map((entry) => ({ ...entry, attached_: false })));
-        this.needsSeek = false; this.previewPosition = undefined;
-      }
-      const playing = !this.video.paused && !this.video.ended && !this.buffering;
-      const rate = Number(this.video.playbackRate) || 1;
-      if (rate !== this.engineRate) {
-        for (const mode of ["scroll", "top", "bottom"]) this.engine.setPlayRate(mode, rate);
-        this.engineRate = rate;
-      }
-      if (playing || dirty || this.previewPosition !== position) {
-        this.clock.paused = false;
-        if (this.engine.status === "closed" || this.engine.status === "idle") this.engine.start();
-        else if (this.engine.status !== "playing") this.engine.play();
-        if (!playing) {
-          this.previewPosition = position;
-          this.previewTask = window.requestAnimationFrame(() => this.stopClock());
-        }
-      } else this.stopClock();
+      this.flush();
     });
   }
+
+  flush() {
+    if (this.needsLayout) this.rebuildNow();
+    this.paintDirtyImages();
+    // Read current state here, not the state captured before this queued frame.
+    const { position, visible, playing, rate } = this.playbackState();
+    this.host.hidden = !visible;
+    if (!visible) { this.stopClock(); return; }
+    if (this.needsSeek) {
+      this.clear();
+      this.needsSeek = false;
+    }
+    if (rate !== this.engineRate) {
+      for (const mode of ["scroll", "top", "bottom"]) this.engine.setPlayRate(mode, rate);
+      this.engineRate = rate;
+    }
+    if (!playing && this.previewPosition === position) { this.stopClock(); return; }
+    this.cancelPreview();
+    this.clock.paused = false;
+    if (this.engine.status === "closed" || this.engine.status === "idle") this.engine.start();
+    else if (this.engine.status !== "playing") this.engine.play();
+    if (!playing) {
+      this.previewPosition = position;
+      this.previewTask = window.requestAnimationFrame(() => {
+        this.previewTask = null;
+        if (!this.playbackState().playing) this.stopClock();
+      });
+    }
+  }
+
 }
 window.DanmakuOverlay = DanmakuOverlay;

@@ -202,3 +202,18 @@ DOCTYPE兼容：普通<!DOCTYPE i>及带SYSTEM/PUBLIC的元数据可安全丢弃
 - CSS改为*:not(.danmaku-sprite)，没有更改原生引擎、区域、密度、时钟、数据源或弹幕开关。styles.css添加?v=20261018-danmaku-motion。
 - 完成119项Python、五组Node以及DPR1/2图片、暂停、倍速、缓冲、跳转、全屏、可见性、旧响应隔离回归。
 - 累计patch首次因原vendor无末尾换行，marker前漏换行而重建失败；保留exit1和哈希证据，修正生成器后逐字节一致，vendor未修改。
+
+## 播放器衔接整理：已确认的重复逻辑
+- 当前rebuildNow每次区域/字号/resize都对整集map并updateComments；随后sync又clear、map克隆、updateComments。seek及ratechange也重建全量池。
+- 已读本地原生源码：stop/start通过Channel.reset复位原池attached_；clear会删除main.data。应保留原池，使用原生stop/start复位，不为seek调用clear/updateComments。
+- ratechange只需要原生setPlayRate，不是seek；相同geometry的ResizeObserver无需清屏；图片完成只重绘canvas，不该启动暂停的引擎。预览RAF在恢复播放前应取消，避免旧回调暂停新播放。
+
+## 衔接整理首轮验收
+- 同5万条/3次相同geometry rebuild/5次区域/4次seek/3次rate：BASELINE updateComments27，source.map10，rate后原5节点保留0；MODIFIED updateComments1，source.map1，原5节点保留5，相同geometry保留layout/节点，seek原池元素===layout元素。
+- 拆分replaceComments/rebuildNow/playbackState/flush/paintDirtyImages/cancelLoad/releaseImages；源数据不携带attached_，原生池只初始化一次，区域字号设置不改时间。
+- 首轮native-e2e与减少动画双模式真实HLS/像素可见性均通过。扩充Node真实原型fake-RAF测试覆盖50k池、geometry缓存、字体/宽度/DPR失效、暂停图片、预览恢复播放、hidden空闲、换集、异步旧响应/JSON/超时/重试清理。
+
+## 播放器衔接整理最终结果
+- 三方相同输入（50000条/3次同尺寸通知/5次区域/4次seek/3次rate）：BASELINE全量提交27、源转换10、倍速原节点0/5；MODIFIED1、1、5/5；ROLLBACK27、10、0/5。原生池和源条目三版均50000，非删弹幕换指标，不声称FPS提升。
+- 所有13条回归命令exit0：119项Python、五组Node（新增source/cache/clock/loading断言）、JS语法、native E2E DPR1/2、原生5万条四档区域、真实HLS正常/reduce像素可见性、衔接计数、diff check。正常/reduce均12/12可见，三模式齐全。
+- 本轮原始三文件快照哈希未动；隔离回滚还原同哈希及旧计数。累计DIFF_FILE.patch逐字节重建、历史默认回滚验证通过；本地原生vendor与upstream字节相同。原四角色均重开，工作区保持优化版。

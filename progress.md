@@ -223,3 +223,15 @@ WebUI继续优化完成：确认清空（媒体数/不删源文件/取消/Escape
 - 119项Python、五组Node、native-e2e DPR1/2全部exit0。还原四文件SHA等于本轮before；历史默认ROLLBACK保持可用；累计DIFF_FILE.patch重新应用字节一致。
 - 错误记录：真实数据图片导致离屏canvas tainted读取失败exit1，改用页面截图解码像素；累计patch首轮marker换行错误exit1，独立resume脚本完成未完成步骤并验证exit0。保留工具输出和VERIFICATION记录。
 - 复用并重开 /mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}。当前工作区与修改副本一致，before保持原始字节。
+
+## 2026-10-18 播放器与弹幕衔接整理（实现中）
+- 50000条同输入基线：3次同尺寸rebuild后节点和layout均换掉；整个区域/跳转/倍速序列27次updateComments、源map10次，倍速前5条活动节点全部换掉。
+- 已应用分层实现：replaceComments只转换新源一次；rebuildNow有geometry key并按字号/宽度/DPR失效精灵；clear使用原生stop不删池；playbackState/flush统一状态；图片重绘不恢复暂停，预览RAF检查当前播放状态；移除未用seekPosition/epsilon/draws字段。
+- 修改版同输入：updateComments1、源map1；3次同尺寸rebuild保留原节点；区域/4次seek都保留layout和5万条池；3次倍速保留5/5节点。继续补充单元/浏览器回归。
+
+## 2026-10-18 播放器/弹幕引擎逻辑整理完成
+- 修改web/danmaku.js：replaceComments集中单集源池转换；rebuildNow只处理变化的geometry/原生area并定向失效raster；playbackState+sync+flush集中时钟/可见/缓冲/暂停预览/倍速；图片解码仅重绘像素；setItem/cancelLoad/releaseImages负责切集取消与释放。清除未使用字段与epsilon，删除seek/倍速整集克隆/重复clear/update链路。
+- web/index.html弹幕adapter版本更新；tests/test_web_danmaku_engine.js扩充同步/异步生命周期测试，不改vendor/防碰撞/区域/时间戳/后端来源。
+- 同输入BASELINE→MODIFIED→ROLLBACK：fullPoolSubmissions27→1→27，sourceConversions10→1→10，同尺寸保留节点false→true→false，倍速保留0/5→5/5→0/5；50000源/池始终保留。
+- 119项Python、五组Node、语法、原生E2E DPR1/2、50k区域/真实HLS可见性、计数与diff共13命令exit0。正常与reduce各12/12采样可见，图片/跳转/缓冲/暂停/倍速/全屏/后台/旧响应均通过。
+- 独立rollback原始哈希一致；累计patch应用逐字节一致；历史默认ROLLBACK仍通过。四角色复用重开，当前源码等于MODIFIED_FILE，原始snapshot没变；执行未出现新错误。
