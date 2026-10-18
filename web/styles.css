@@ -248,3 +248,9 @@ button.danger-button:hover:not(:disabled) { background: var(--danger); color: va
 
 /* Let the popover extend above a short mobile video; the picture wrapper still clips zoom. */
 .video-stage.framing-open { overflow: visible; z-index: 5; }
+
+/* Desktop keeps only the mute toggle, without reserving slider space. */
+@media (min-width: 861px) {
+  .video-stage .plyr__volume { min-width: 0; width: auto; flex: none; }
+  .video-stage .plyr__volume input[data-plyr="volume"] { display: none; }
+}

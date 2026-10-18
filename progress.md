@@ -119,3 +119,8 @@ WebUI继续优化完成：确认清空（媒体数/不删源文件/取消/Escape
 - 103项Python、三组Node与JS语法通过；补丁重建所有字节一致，四角色重开，当前工作区保持修改版。
 - 四角色位于/mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；截图framing-mobile.png、framing-preview.png已查看。原记录中临时四角色实体未找到，本轮按项目var持久保存。
 - 修复测试暴露的设置按钮嵌套insertBefore错误及组件硬编码颜色；像素探针PIL缺失改浏览器PNG解码，无新增依赖。
+
+## 2026-10-18 电脑端只保留静音按钮
+- 仅在 web/styles.css 增加 min-width:861px 的音量容器收缩与 input[data-plyr="volume"] 隐藏；player.js原字节不变。
+- Chromium同probe：BASELINE1440/1920及全屏有音量条；MODIFIED无音量条；ROLLBACK恢复原显示，三者点击均可静音/取消静音，退出码0。900/390原行为不变，无pageerror。
+- 103项Python、三组Node、累计补丁重建通过，恢复styles哈希等于本轮前快照。原四角色更新并重开；ROLLBACK.sh新增 TARGET_COPY --volume-before，仅恢复本轮前styles。

@@ -122,3 +122,5 @@ WebUI打磨：清空原先立即POST且停止转码；改为原生dialog默认�
 - 当前临时文件系统未找到先前记录中的四角色实体，使用项目 var/player-framing 保存本轮四角色与原字节快照。
 
 画面调节完成：EmbeddedPlayer.initFraming 控制 video.style.transform/objectFit，不缩放控件/字幕；50–200%，完整显示/铺满裁剪，重置，Escape/外部点击关闭，全屏保留。320px面板可越过视频框向上展开，视频wrapper独立裁剪。实际像素验证蓝色侧部→200%红色中心。生产HTML+真实Plyr、合成视频流验证，无pageerror；未声称手机真机验证。
+
+电脑端音量条隐藏已完成：Plyr保留mute/volume配置以不触碰行为，仅桌面CSS隐藏音量range并收缩容器；全屏同样生效。1440/1920实际Plyr静音→恢复声音验证通过。

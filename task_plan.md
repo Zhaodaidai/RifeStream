@@ -126,3 +126,10 @@
 - [complete] 锁定 web/player.js EmbeddedPlayer；保留原字节快照于 var/player-framing/BASELINE。
 - [complete] 实现画面面板、50–200%缩放、完整/铺满、重置与全屏适配。
 - [complete] 同输入基线/修改/回滚浏览器验证，现有回归，生成并重开四角色。
+
+## 2026-10-18 电脑端悬停竖向音量
+- [in_progress] 保留volume-before原字节，在同一四角色内新增本轮快照与验证；CSS限定桌面鼠标，保留手机行为。
+- [pending] 同输入浏览器基线/修改/回滚，悬停、拖动、键盘与全屏复验，重开四角色。
+
+## 2026-10-18 电脑端音量简化
+- [complete] 隐藏桌面音量条、保留静音切换；基线/修改/回滚及103项Python、三组Node通过；复用四角色。
