@@ -725,7 +725,7 @@ class WebHandler(BaseHTTPRequestHandler):
             snapshot = PLAYLIST.snapshot()
             item = next((item for item in snapshot["items"] if item["id"] == item_id), None)
             if not item or not item.get("olink"):
-                self.send_danmaku_error("本集未提供 olink 弹幕地址，可在弹幕设置中导入 XML/JSON")
+                self.send_danmaku_error("本集未提供 olink 弹幕地址")
                 return
             try:
                 comments = load_danmaku(item["olink"])

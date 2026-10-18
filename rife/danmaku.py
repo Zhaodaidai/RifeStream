@@ -8,7 +8,7 @@ from xml.etree import ElementTree
 
 MAX_BYTES = 8 * 1024 * 1024
 MAX_COMMENTS = 50000
-DANMAKU_RESOLVER = "https://jx.1ljx.com/dan/@lirose_tv/?ac=dm&web&url="
+DANMAKU_RESOLVER = "https://dmku.byteamone.cn/dmku/class/barrage.php?url="
 
 
 def validate_source(url: str) -> str:
@@ -31,12 +31,9 @@ def normalize(time, text, mode=1, color=16777215):
         return None
     if not math.isfinite(time) or time < 0 or not isinstance(text, str) or not text.strip():
         return None
-    # Source emoji/images are HTML snippets, but our renderer is text-only.
-    # Match quoted attribute values so a '>' inside src does not leak tag fragments.
-    text = re.sub(r'''<img\b(?:[^'">]|"[^"]*"|'[^']*')*>''', "", text, flags=re.IGNORECASE).strip()
-    if not text:
-        return None
-    return {"time": time, "text": text[:300], "mode": mode if mode in (4, 5) else 1,
+    # Keep image markup intact for the frontend's safe text/image tokenizer.
+    # Attribute-rich emoji URLs need more room than plain 300-character text.
+    return {"time": time, "text": text.strip()[:4096], "mode": mode if mode in (4, 5) else 1,
             "color": max(0, min(16777215, color))}
 
 
@@ -86,7 +83,7 @@ def parse_danmaku(data: bytes) -> list[dict]:
         if len(entries) > MAX_COMMENTS:
             raise ValueError("弹幕数量超过 50000 条限制")
         for node in entries:
-            if resolver_format:
+            if resolver_format or isinstance(node, list):
                 if not isinstance(node, list) or len(node) < 5:
                     continue
                 color = node[2]
@@ -117,7 +114,7 @@ def load_danmaku(url: str) -> list[dict]:
     validate_source(url)
     # olink is a source-page URL. Encode it as one query value, including &, ? and #.
     parsed = urlsplit(url)
-    already_resolved = parsed.hostname == "jx.1ljx.com" and parsed.path.rstrip("/") == "/dan/@lirose_tv"
+    already_resolved = parsed.hostname == "dmku.byteamone.cn" and parsed.path == "/dmku/class/barrage.php"
     target = url if already_resolved else DANMAKU_RESOLVER + quote(url, safe="")
     request = Request(target, headers={"User-Agent": "RifeWebUI/1.0", "Accept": "application/json,application/xml,text/xml"})
     with build_opener(SafeRedirect()).open(request, timeout=10) as response:

@@ -134,3 +134,23 @@ DOCTYPE兼容：普通<!DOCTYPE i>及带SYSTEM/PUBLIC的元数据可安全丢弃
 解析接口实测返回danmuku（不是danmaku/comments）；数组第0项为秒数、第1项right/top/bottom、第2项#RRGGBB、第4项文本。提供的腾讯示例danum=1271，过滤空文本/空行得到1260有效条。请求必须对整个olink编码，包括&、?、#和中文。默认后端将影片页URL发送用户指定第三方弹幕解析服务，前端仍只请求本地/api/danmaku。
 
 图片弹幕暂按纯文本展示：过滤<img ...>标签而不渲染远程表情图片；保留其余文字，不改变普通小于号表达式。用户可见问题来自Canvas按文本绘制接口HTML片段，而非DOM注入执行。
+
+弹幕设置改为B站风格紧凑深色浮层，三列标签/滑条/即时数值，蓝色进度与小圆柄、顶部显示开关、导入/重载收在折叠区域。新默认opacity100，保留本机用户设置；fontSize12–36 step1、area25–100 step25。320/390/1440截图已查看，设置/键盘/刷新记忆/全屏通过。
+
+按要求删除本地导入和手动重载入口与实现，设置面板仅保留开关/不透明度/字号/区域与状态；网络加载失败可通过关闭再开启弹幕触发原有重试，不新增重载按钮。
+
+用户要求是显示真实图片表情，不是过滤。前端Canvas支持安全图文runs，后端不得删img；只提取HTTP(S)图片URL，忽略其他属性。真实腾讯图片表情已在浏览器绘制并查看截图。跨域图片绘到canvas可能使其不可读取像素，但不影响播放显示；可控同源PNG用于像素自动断言。
+
+新接口返回顶层数组而非{danmuku:[...]}；仅换URL会静默丢掉所有行，已同时补齐行数组解析。新接口腾讯示例30228条且1462条含图片，完整图片标记继续交给安全Canvas混排。
+
+## 弹幕性能热点
+- 自写Canvas当前每帧strokeText+fillText，image.onload触发全片rebuild；ResizeObserver、timeupdate与player.paint重复sync导致清屏/取消重建RAF。
+- 参考主项目weizhenye/Danmaku src/engine/canvas.js：setup创建每条离屏画布、render仅drawImage、remove释放画布。采用独立实现的有界LRU缓存，保留自有整集时钟/安全表情/设置；不整库替换以免破坏HLS起点。
+- 参考来源：https://github.com/weizhenye/Danmaku / https://raw.githubusercontent.com/weizhenye/Danmaku/master/src/engine/canvas.js（未复制源码）。
+
+## 成熟引擎落地
+- 已引入npm danmaku@2.0.10 Canvas专用包，SHA512核对npm元数据，MIT许可和NOTICE随源码；仅对自定义canvas添加CSS尺寸metadata兼容补丁（danmaku-hidpi.patch），使DPR2碰撞尺寸正确且文字不降清晰度。
+- Danmaku引擎负责调度/活动队列/碰撞/RAF/二分seek；项目用EventTarget整集时钟适配HLS state.start，暂停/缓冲/倍速/跳转/页面隐藏同步，不绑定HLS局部currentTime。
+- 只有进入显示窗口才栅格化图文精灵；192个/16MiB精灵LRU，128张/24MiB解码图片LRU，图像.onload只重画关联精灵，不整集rebuild；框架轮询/事件无变化不新增RAF，尺寸/滑条布局单帧合并。
+- 显示密度上限随区域/字号变化（每个持续时间窗口最多96条），极端密集跳过部分展示，comments原始数据保留。不能以“全量都显示”的口径宣传压力结果。
+- 最终同机器Chromium1440x900/120帧：3万条ready131.6→27.3ms，5万条101.8→24.8ms；文字描边10054→25/10228→5。callback p95未普遍下降，3万样本0.2→0.4ms，5万0.2→0.2ms；不声称所有设备帧率提升或绝不卡顿。

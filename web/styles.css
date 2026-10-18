@@ -256,12 +256,33 @@ button.danger-button:hover:not(:disabled) { background: var(--danger); color: va
 }
 
 /* Danmaku remains above the picture but below controls/subtitles, never intercepting clicks. */
-.danmaku-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+.danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; overflow: hidden; pointer-events: none; z-index: 1; }
+.danmaku-layer[hidden] { display: none; }
+.danmaku-layer .danmaku-canvas { display: block; pointer-events: none; }
 .danmaku-canvas[hidden] { display: none; }
 .video-stage.danmaku-open { overflow: visible; z-index: 5; }
 .video-stage .danmaku-toggle { flex: none; font-size: 12px; white-space: nowrap; }
 .video-stage .danmaku-enabled { color: var(--accent); }
 .danmaku-panel .danmaku-switch { align-items: center; }
 .danmaku-panel input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
-.danmaku-panel input[type="file"] { width: 100%; min-width: 0; padding: 4px 0; margin-bottom: 10px; font-size: 12px; }
 .danmaku-fallback { position: absolute; top: 10px; right: 65px; z-index: 3; }
+
+/* Compact Bilibili-inspired settings: label, slider and live value on one row. */
+.danmaku-panel { width: min(340px, calc(100% - 16px)); padding: 16px 18px; border-radius: 8px; }
+.danmaku-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.danmaku-panel-head strong { font-size: 14px; font-weight: 600; }
+.danmaku-panel-head .danmaku-switch { gap: 8px; margin: 0; color: var(--muted); font-size: 12px; }
+.danmaku-panel input[role="switch"] { appearance: none; width: 30px; height: 17px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 12px; background: var(--switch-bg); cursor: pointer; }
+.danmaku-panel input[role="switch"]::after { content: ""; display: block; width: 13px; height: 13px; margin: 2px; border-radius: 50%; background: var(--text); transition: transform .15s; }
+.danmaku-panel input[role="switch"]:checked { background: var(--accent); }
+.danmaku-panel input[role="switch"]:checked::after { transform: translateX(13px); }
+.danmaku-setting-row { display: grid; grid-template-columns: 60px minmax(0, 1fr) 44px; align-items: center; gap: 10px; min-height: 42px; }
+.danmaku-setting-row label { margin: 0; font-size: 12px; color: var(--text); }
+.danmaku-setting-row output { text-align: right; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.danmaku-panel .danmaku-setting-row input[type="range"] { appearance: none; width: 100%; height: 4px; min-height: 4px; border: 0; border-radius: 2px; background-color: var(--line); cursor: pointer; }
+.danmaku-setting-row input[type="range"]::-webkit-slider-runnable-track { height: 4px; border: 0; background: transparent; }
+.danmaku-setting-row input[type="range"]::-webkit-slider-thumb { appearance: none; width: 11px; height: 11px; margin-top: -3.5px; border: 0; border-radius: 50%; background: var(--accent); }
+.danmaku-setting-row input[type="range"]::-moz-range-track { height: 4px; background: transparent; }
+.danmaku-setting-row input[type="range"]::-moz-range-thumb { width: 11px; height: 11px; border: 0; border-radius: 50%; background: var(--accent); }
+.danmaku-panel input:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.danmaku-panel #danmakuStatus { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 11px; overflow-wrap: anywhere; }

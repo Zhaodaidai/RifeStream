@@ -142,3 +142,33 @@ WebUI继续优化完成：确认清空（媒体数/不删源文件/取消/Escape
 - 原因是第三方弹幕文本中含HTML表情标签，Canvas fillText按字面绘制，不是HTML被执行。现rife/danmaku.py normalize及web/danmaku.js normalize过滤img，识别引号内的>，混合文字保留，纯图片记录跳过；不使用innerHTML，不请求图片地址。
 - 同四条输入：BASELINE暴露img/src；MODIFIED仅剩“二刷”“正常中文 1 < 2”“好看”；ROLLBACK恢复原输出，四个文件哈希等于img-before。118项Python、四组Node、生产app+Canvas/API端到端、实时解析接口通过，补丁重建字节一致。
 - 原四角色更新且重开；ROLLBACK.sh新增--img-before。当前源码保持修复版。刷新前端并重启后端后重载本集弹幕。
+
+## 弹幕设置界面滑条完成
+- web/danmaku.js defaults.opacity=100，旧保存值保留；fontSize/area由select改range、实时input更新绘制、数值和aria-valuetext；web/styles.css面板三列、蓝色进度条、开关、折叠来源工具。
+- 同probe：BASELINE75%/字号区域下拉；MODIFIED100%/三滑条，字号27→键盘28、65%与3/4屏刷新保持；ROLLBACK75%/下拉且三文件哈希恢复。修改版工作区保留。
+- 118项Python/四组Node通过，独立设置浏览器320/390/1440、生产弹幕API/渲染/全屏/320–1920回归通过，无pageerror。累计补丁重建一致、原四角色重开，新增ROLLBACK.sh --settings-before。
+
+## 移除本地导入与重新加载本集弹幕
+- web/danmaku.js移除来源details、file input、reload按钮及处理函数/setItem文件清理；删除styles中对应样式，前后端不再提示导入。超时提示改为关闭后开启弹幕重试。
+- 同probe BASELINE存在file/reload/source各1；MODIFIED各0且自动加载/滑条通过；ROLLBACK恢复各1、四文件哈希与before一致。118项Python、四组Node和真实生产app/API/Canvas/切集/全屏回归通过，无pageerror，累计patch字节重建一致。
+- 同四角色重开，ROLLBACK.sh新增--remove-import-before；当前源码保持移除版。
+
+## 图片表情真正显示（纠正之前过滤方案）
+- rife/danmaku.py normalize保留原img及纯图片记录，传输上限4096字符避免长URL被截断。web/danmaku.js normalize不再过滤；parts只识别src/alt并校验HTTP(S)，不插入HTML，不应用style/onerror/srcset。
+- Canvas图文runs统一测宽、保留位置/颜色/字号/区域/透明度/跳转行为，图片高为字号1.2倍且宽高比受限；缓存最多256，10s超时占位，切集清理请求回调和缓存。
+- 同输入BASELINE不发图片请求且纯图丢失；MODIFIED实际PNG1次请求/两次绘制/2451红色像素、纯图和混排显示、脚本对话框0；ROLLBACK恢复无图且4文件哈希一致。118项Python/四组Node及生产app/API/Canvas/全屏/小屏/旧请求回归通过，累计补丁重建一致。
+- 真实接口中腾讯puui表情地址在Chromium成功加载和drawImage，emoji-live.png已人工查看，非占位。emoji-verified.png为可控红色PNG混排像素验证。未声称所有远程站点图片都可访问。
+- 原四角色更新重开；ROLLBACK.sh新增--emoji-before；当前保留正确图片渲染，不恢复已删除本地导入和重新加载按钮。需要重启WebUI+强制刷新，已加载旧弹幕需关闭再开启弹幕以重新取得保留标记的数据。
+
+## 切换 dmku.byteamone.cn
+- rife/danmaku.py DANMAKU_RESOLVER与already_resolved改用户指定接口，parse_danmaku对顶层数组行按[秒,方向,颜色,占位,文本]解析，原danmuku对象兼容保留。完整URL编码不变，图片标记保留。
+- 实际请求腾讯示例HTTP成功，3572004字节；load_danmaku解析30228条，其中1462条图片标记。119项Python/四组Node/浏览器回归通过。
+- BASELINE旧解析地址+新响应0条；MODIFIED新地址30228/1462；ROLLBACK相同输入恢复旧地址0条，两个文件原始哈希一致；累计补丁重建字节一致，原四角色更新重开。新增--byteam-before回滚模式。当前源码保持新接口。
+
+## 2026-10-18 成熟弹幕引擎升级完成
+- 用户授权引擎替换后，安装本地vendor Danmaku2.0.10 Canvas版，无运行时CDN依赖。npm tarball SHA512 verified；保留MIT，附自定义canvas HiDPI补丁与NOTICE。
+- web/danmaku.js不再自行逐帧遍历/布局全片，改成熟引擎调度碰撞和活动精灵，项目保留安全图片提取、olink加载/设置、整集时钟适配。图文离屏精灵/图片缓存有界；后台暂停；RAF合并/快速状态跳过；图像解码不重排整集；密度过高丢弃部分展示但不删source。
+- 同输入压力基线/修改/回滚均exit0：3万ready131.6→27.3→134.4ms；5万101.8→24.8→79.1ms；120帧stroke10054→25、10228→5；最终缓存3.08MiB，预算16MiB。源输入有3万/5万条，合成高密度场景仅准入9000，必须连同此差异解释，不把改进完全归因引擎。
+- 功能：119项Python、五组Node、JS语法；生产app真实API/视频暂停缓冲/倍速/跳转/切集/旧响应拒绝、320–1920布局/全屏、设置持久化、画面像素、静音音量回归通过；DPR1/2图片PNG像素1102/4446、真实腾讯表情渲染、脚本事件0、隐藏页停绘与缓存切集清理通过。
+- 参考读取遇到GitHub API403，raw猜测路径404，zsh循环变量path遮蔽PATH导致curl127，分别改用npm元数据+包、修正变量rel；finalizer脚本引号语法exit1修正后完整重跑。旧fillText探针不适配离屏缓存，改验证引擎running canvas+主画布像素；首次paused120秒恰好触发引擎严格小于时间边界，适配时钟加1微秒，恢复暂停预览；不把这些失败算功能通过。
+- 原四角色更新重开，累计patch重建/隔离--perf-before恢复原始哈希/旧默认rollback恢复BASELINE均通过。工作区保留成熟引擎版本，未动已有用户源码/字节码改动。PERFORMANCE.json保存完整literal结果；线上目标机GPU实际帧率未测试。

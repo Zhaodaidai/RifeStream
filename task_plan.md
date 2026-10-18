@@ -151,3 +151,26 @@
 ## 2026-10-18 弹幕图片标签文字修复
 - [complete] 后端normalize/前端normalize剔除img标签、保留附带文字、跳过纯图片弹幕，不加载图片或执行HTML。
 - [complete] 同输入BASELINE/MODIFIED/ROLLBACK与哈希恢复、118项Python/四组Node、真实Canvas浏览器回归、示例接口1260条及补丁重建通过；原四角色重开。
+
+## 2026-10-18 弹幕设置滑动条面板
+- [complete] 紧凑深色面板、标签/调节栏/数值三列、顶部开关、折叠来源工具；默认不透明度100%。
+- [complete] 字号12–36px连续滑动、区域1/4/半屏/3/4/全屏滑动，input实时更新、键盘调整、持久化。
+- [complete] BASELINE75%+下拉→MODIFIED100%+滑条→ROLLBACK原样、哈希一致；118项Python/四组Node及生产弹幕浏览器回归，原四角色重开。
+
+## 2026-10-18 移除弹幕本地导入/手动重载
+- [complete] 移除来源折叠区、文件输入、重新加载按钮及事件/CSS/导入提示，保留olink自动加载与三滑条。
+- [complete] 同输入基线/修改/回滚、118项Python、四组Node及生产浏览器回归，累计补丁重建/恢复哈希一致，原四角色重开。
+
+## 2026-10-18 真正渲染弹幕图片表情
+- [complete] 撤销前后端永久过滤：后端保留标记，前端仅安全提取HTTP(S) src/alt并Canvas图文混排，纯图片记录保留。
+- [complete] 字号同步、宽高比/轨道测量、缓存/超时失败占位/切集清理，保留现有滑条与自动加载、不恢复导入/重载。
+- [complete] 图片像素/混排/纯图/属性脚本不执行/全屏与真实腾讯表情加载成功；118项Python+四组Node及生产浏览器回归，BASELINE/MODIFIED/ROLLBACK哈希一致、同四角色更新重开。
+
+## 2026-10-18 切换byteam弹幕接口
+- [complete] DANMAKU_RESOLVER切换dmku.byteamone.cn，完整编码olink，防止新接口双重包装；支持顶层行数组。
+- [complete] 实测30228条/1462图片；119项Python、四组Node、生产弹幕浏览器回归；BASELINE旧地址解析新数组0条→MODIFIED新地址30228→ROLLBACK恢复旧行为，哈希和累计补丁一致，原四角色重开。
+
+## 2026-10-18 弹幕性能优化
+- [complete] 保存现有实现基线，用户授权改用成熟weizhenye/Danmaku 2.0.10，完成3万/5万条浏览器压力测试。
+- [complete] 引擎活动弹幕调度/二分跳转、RAF状态任务合并、有界精灵/图片缓存、图片解码只更新关联精灵、后台停绘；有界显示密度。
+- [complete] 同输入基线修改回滚量化，DPR1/2图片/跳转/设置/全屏回归、119项Python+五组Node；累计patch/默认和本轮回滚验证、四角色重开。

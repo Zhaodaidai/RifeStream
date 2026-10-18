@@ -63,7 +63,7 @@ class DanmakuTests(unittest.TestCase):
         data = [{'time':-1,'text':'a'},{'time':'nan','text':'b'}, {'time':2,'text':'x'*500}, {'text':'no time'}, None]
         result = parse_danmaku(json.dumps(data).encode())
         self.assertEqual(len(result),1)
-        self.assertEqual(len(result[0]['text']),300)
+        self.assertEqual(len(result[0]['text']),500)
 
     def test_empty_file_supported_and_bad_sources_rejected(self):
         self.assertEqual(parse_danmaku(b'<i/>'),[])
@@ -89,7 +89,7 @@ class DanmakuTests(unittest.TestCase):
         seen = []
         payload = {"danmuku": [[2,"right","#ffffff","","hello"], [3,"top","#ff0000","","top"], [4,"bottom","#000000","","bottom"], [], [6,"top","#FFFFFF","",""]]}
         class Response(io.BytesIO):
-            url = "https://jx.1ljx.com/dan/@lirose_tv/"
+            url = "https://dmku.byteamone.cn/dmku/class/barrage.php"
         class Opener:
             def open(self, request, timeout):
                 seen.append(request.full_url)
@@ -98,21 +98,19 @@ class DanmakuTests(unittest.TestCase):
         with patch('rife.danmaku.build_opener', return_value=Opener()):
             result = load_danmaku(url)
         self.assertEqual(parse_qs(urlsplit(seen[0]).query)['url'], [url])
-        self.assertTrue(seen[0].startswith('https://jx.1ljx.com/dan/@lirose_tv/?ac=dm&web&url='))
+        self.assertTrue(seen[0].startswith('https://dmku.byteamone.cn/dmku/class/barrage.php?url='))
         self.assertEqual([c['mode'] for c in result], [1,5,4])
         self.assertEqual(result[1]['color'], 16711680)
         with patch('rife.danmaku.build_opener', return_value=Opener()):
             load_danmaku(seen[0])
         self.assertEqual(seen[0],seen[1])
 
-    def test_img_markup_removed_but_surrounding_text_preserved(self):
+    def test_image_markup_preserved_for_safe_frontend_rendering(self):
         from rife.danmaku import normalize
-        self.assertEqual(normalize(1, '<img src="x>y" style="height:1rem"> 二刷')['text'], '二刷')
-        self.assertIsNone(normalize(1, '<IMG SRC="x" onerror="alert(1)">'))
-        self.assertEqual(normalize(1, '正常 1 < 2')['text'], '正常 1 < 2')
-        self.assertEqual(normalize(1, '<img src=x/><img src=y>好看')['text'], '好看')
-        data = {'danmuku':[[1,'right','#ffffff','','<img src=x> 好看']]}
-        self.assertEqual(parse_danmaku(json.dumps(data).encode())[0]['text'], '好看')
+        markup = '<img src="https://example.com/emoji.png" style="height:1.5rem"> 二刷'
+        self.assertEqual(normalize(1, markup)['text'], markup)
+        self.assertEqual(normalize(1, '<img src="https://example.com/e.png">')['text'], '<img src="https://example.com/e.png">')
+        self.assertEqual(len(normalize(1, 'x'*5000)['text']), 4096)
 
     def test_limits(self):
         with self.assertRaises(ValueError):parse_danmaku(b' '* (MAX_BYTES+1))
@@ -128,3 +126,9 @@ class DanmakuTests(unittest.TestCase):
             with self.assertRaises(ValueError):validate_source(url)
         with self.assertRaises(ValueError):
             SafeRedirect().redirect_request(None,None,302,'',{},'file:///etc/passwd')
+
+    def test_byteam_top_level_array_retains_image_emoji(self):
+        payload = [[1,"right","#ffffff","","hello"], [2,"top","#ff0000","",'<img src="https://example.com/e.png">'], [3,"bottom","#000000","","bottom"], []]
+        result = parse_danmaku(json.dumps(payload).encode())
+        self.assertEqual([v['mode'] for v in result], [1,5,4])
+        self.assertIn('<img src=',result[1]['text'])
