@@ -1,7 +1,7 @@
 /* HLS session lifecycle is separate from playlist rendering and its polling clock. */
 class EmbeddedPlayer {
-  constructor({ video, progress, timeline, clock, hint, formatTime, seek, onEnded, onNavigate, onPlayRequest }) {
-    Object.assign(this, { video, progress, timeline, clock, hint, formatTime, seek, onEnded, onNavigate, onPlayRequest });
+  constructor({ video, progress, timeline, clock, hint, formatTime, seek, onEnded, onNavigate, onPlayRequest, saveDanmakuSource }) {
+    Object.assign(this, { video, progress, timeline, clock, hint, formatTime, seek, onEnded, onNavigate, onPlayRequest, saveDanmakuSource });
     this.key = null;
     this.state = null;
     this.hls = null;

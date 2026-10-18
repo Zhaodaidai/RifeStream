@@ -239,3 +239,17 @@ DOCTYPE兼容：普通<!DOCTYPE i>及带SYSTEM/PUBLIC的元数据可安全丢弃
 - [complete] 136项Python、五组Node、浏览器第一集→第二集→无匹配可见流、原生DPR1/2均通过；累计补丁重建精确一致，四角色已重开。
 - [complete] 记录并修正SP01识别测试失败、diff生成的历史CRLF规范化错误、新增CRLF行的whitespace检查、zsh只读status包装器错误。最终全部检查exit0；未重启用户正在播放的进程，需一次性重启WebUI并刷新页面加载新逻辑。
 - 四角色：/mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；本轮回滚模式 --auto-bilibili-before，检查记录 auto-bilibili/。
+
+## 2026-10-19 弹幕设置手动指定 Bilibili 分集（进行中）
+- [pending] 为当前播放条目增加独立 danmaku_url 覆盖字段与严格分集链接验证；保存只影响弹幕，不改播放源/会话/自带olink，清空恢复原优先级。
+- [pending] 弹幕面板增加URL输入、使用链接/恢复默认，保存后加载，保留切集/异步隔离与键盘行为。
+- [pending] 同输入三方验证、真实示例ep3854813、持久化/非法URL/无串集/恢复默认测试，复用四角色并重开。
+
+## 2026-10-19 弹幕设置手动指定 Bilibili 分集（完成）
+- [complete] 新增 PlaylistItem.danmaku_url 持久化字段、Playlist.set_danmaku_source 与 POST /api/danmaku/source；严格只接受 Bilibili bangumi/play/ep 正整数链接，分享参数清理，手动优先于自带olink，再自动匹配。清空只移除该集覆盖，不改原olink/视频路径/播放会话。
+- [complete] 弹幕设置新增“手动指定本集弹幕”输入、“使用链接”“恢复默认”，Enter可提交，使用链接自动开启弹幕，重复同链接可重试，切集/旧响应隔离；保存加入宿主API的有序mutation队列，防旧轮询回写。
+- [complete] 同输入 BASELINE保存404/无持久化/自动弹幕 → MODIFIED保存200/持久化ep3854813/手动弹幕 → ROLLBACK完全恢复基线；各exit0，所有原始文件哈希一致，新测试文件移除。原工作区保持修改版，累计补丁重建精确一致。
+- [complete] 146项Python、五组Node、真实浏览器表单/重新打开/恢复自带与自动/非法域名/移动布局/生产app轮询、自动匹配回归和原生DPR1/2全部通过。
+- [complete] 真实例子ep3854813返回3600条；API标注为第189集“慕兰之战13”。未替用户把这个例子绑定到当前视频，测试保存均在临时playlist。
+- [complete] 修正同mtime挂载文件系统的刷新测试失败（保存前锁内读取最新列表并保留全局错误）；隔离来源设置的400/500错误，避免generic send_json污染播放器全局错误；浏览器纯宿主测试中的空播放器遮罩由测试CSS隐藏后通过。失败来源、字面输出与exit均保留在VERIFICATION。
+- [complete] 复用并重开四角色 /mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；本轮恢复参数 --manual-bilibili-before；补充记录 manual-bilibili/。一次性重启WebUI并强制刷新以加载后端与新UI，未主动打断用户播放。

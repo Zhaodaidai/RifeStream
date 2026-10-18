@@ -214,12 +214,28 @@ class DanmakuOverlay {
       <div class="danmaku-setting-row"><label for="danmakuOpacity">不透明度</label><input id="danmakuOpacity" type="range" min="10" max="100" step="5"><output id="danmakuOpacityValue" for="danmakuOpacity"></output></div>
       <div class="danmaku-setting-row"><label for="danmakuFontSize">字号</label><input id="danmakuFontSize" type="range" min="12" max="36" step="1"><output id="danmakuFontSizeValue" for="danmakuFontSize"></output></div>
       <div class="danmaku-setting-row"><label for="danmakuArea">显示区域</label><input id="danmakuArea" type="range" min="25" max="100" step="25"><output id="danmakuAreaValue" for="danmakuArea"></output></div>
+      <form id="danmakuLinkForm" class="danmaku-link-form">
+        <label for="danmakuLink">手动指定本集弹幕</label>
+        <p id="danmakuLinkHelp">找不到或版本不对？粘贴 B 站番剧分集链接，仅对本集生效。</p>
+        <input id="danmakuLink" type="url" inputmode="url" autocomplete="off" spellcheck="false" maxlength="2048" aria-describedby="danmakuLinkHelp" placeholder="https://www.bilibili.com/bangumi/play/ep3854813">
+        <div class="danmaku-link-actions"><button id="danmakuUseLink" type="submit">使用链接</button><button id="danmakuDefaultSource" type="button">恢复默认</button></div>
+      </form>
       <p id="danmakuStatus" role="status">本集未提供弹幕地址</p>`;
     this.frame.appendChild(panel);
     const controls = this.player.ui?.elements?.controls;
     if (controls) controls.insertBefore(button, this.player.ui.elements.controls.querySelector(".framing-toggle"));
     else { button.classList.add("danmaku-fallback"); this.frame.appendChild(button); }
     this.status = panel.querySelector("#danmakuStatus");
+    this.sourceInput = panel.querySelector("#danmakuLink");
+    this.sourceApply = panel.querySelector("#danmakuUseLink");
+    this.sourceReset = panel.querySelector("#danmakuDefaultSource");
+    panel.querySelector("#danmakuLinkForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!this.sourceInput.value.trim()) { this.status.textContent = "请先粘贴 B 站分集链接，或点击恢复默认"; return; }
+      this.applySource(this.sourceInput.value);
+    });
+    this.sourceReset.addEventListener("click", () => this.applySource(""));
+    this.updateSourceControls(true);
     const close = (focus = false) => {
       panel.hidden = true;
       this.frame.classList.remove("danmaku-open");
@@ -304,17 +320,74 @@ class DanmakuOverlay {
     this.metrics.skipped = 0;
   }
 
+  updateSourceControls(reset = false) {
+    if (!this.sourceInput) return;
+    if (reset) this.sourceInput.value = this.item?.danmaku_url || "";
+    const disabled = !this.item || this.sourceSaving;
+    this.sourceInput.disabled = disabled;
+    this.sourceApply.disabled = disabled;
+    this.sourceReset.disabled = disabled || !this.item?.danmaku_url;
+  }
+
+  async applySource(value) {
+    if (!this.item || this.sourceSaving) return;
+    const itemId = this.item.id;
+    const version = this.sourceVersion = (this.sourceVersion || 0) + 1;
+    this.sourceSaving = true;
+    this.cancelLoad();
+    this.loaded = false;
+    this.replaceComments([]);
+    this.updateSourceControls();
+    this.status.textContent = value.trim() ? "正在保存本集弹幕链接…" : "正在恢复本集默认弹幕来源…";
+    this.sync();
+    const controller = new AbortController();
+    const timeout = this.player.saveDanmakuSource ? null : window.setTimeout(() => controller.abort(), 15000);
+    try {
+      let data;
+      if (this.player.saveDanmakuSource) {
+        // The host mutation queue invalidates state polls started before this save.
+        data = await this.player.saveDanmakuSource(itemId, value.trim());
+      } else {
+        const response = await fetch("/api/danmaku/source", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ item_id: itemId, url: value.trim() }), signal: controller.signal,
+        });
+        data = await response.json();
+        if (!response.ok) throw new Error(data.error || "保存弹幕来源失败");
+      }
+      if (version !== this.sourceVersion || this.item?.id !== itemId) return;
+      if (data.danmaku_url) {
+        this.settings.enabled = true;
+        try { window.localStorage.setItem("rife.danmaku", JSON.stringify(this.settings)); } catch { /* optional */ }
+        const toggle = this.panel?.querySelector("#danmakuEnabled");
+        if (toggle) { toggle.checked = true; this.updateControls(); }
+      }
+      this.identity = null;  // Applying the same URL is an intentional retry, not a state poll.
+      this.setItem({ ...this.item, danmaku_url: data.danmaku_url || null });
+    } catch (error) {
+      if (version === this.sourceVersion && this.item?.id === itemId) {
+        this.status.textContent = error.name === "AbortError" ? "保存超时，请重试；刷新可确认是否已保存" : `弹幕来源保存失败：${error.message}`;
+      }
+    } finally {
+      window.clearTimeout(timeout);
+      if (version === this.sourceVersion) { this.sourceSaving = false; this.updateSourceControls(); }
+    }
+  }
+
   setItem(item) {
-    const identity = item ? JSON.stringify([item.id, item.olink || "", item.title || "", item.source || ""]) : "";
+    const identity = item ? JSON.stringify([item.id, item.olink || "", item.title || "", item.source || "", item.danmaku_url || ""]) : "";
     if (identity === this.identity) return;
     this.identity = identity;
+    this.sourceVersion = (this.sourceVersion || 0) + 1;
+    this.sourceSaving = false;
     this.cancelLoad();
     this.loaded = false;
     this.replaceComments([]);
     this.releaseImages();
     this.releaseSprites();
     this.item = item;
-    this.status.textContent = !item ? "当前没有播放条目" : item.olink ? "已接收自带弹幕，开启后加载" : "无自带弹幕，开启后自动从 Bilibili 匹配";
+    this.updateSourceControls(true);
+    this.status.textContent = !item ? "当前没有播放条目" : item.danmaku_url ? "已指定本集 B 站弹幕，开启后加载" : item.olink ? "已接收自带弹幕，开启后加载" : "无自带弹幕，开启后自动从 Bilibili 匹配";
     if (this.settings.enabled && item) this.load();
     this.sync();
   }
@@ -327,8 +400,8 @@ class DanmakuOverlay {
     const token = this.token;
     const controller = this.controller = new AbortController();
     this.loading = true;
-    this.status.textContent = this.item.olink ? "正在加载本集自带弹幕…" : "正在从 Bilibili 自动匹配本集弹幕…";
-    const timeout = window.setTimeout(() => controller.abort(), this.item.olink ? 25000 : 40000);
+    this.status.textContent = this.item.danmaku_url ? "正在加载手动指定的 B 站弹幕…" : this.item.olink ? "正在加载本集自带弹幕…" : "正在从 Bilibili 自动匹配本集弹幕…";
+    const timeout = window.setTimeout(() => controller.abort(), this.item.danmaku_url || this.item.olink ? 25000 : 40000);
     try {
       const response = await fetch(`/api/danmaku?id=${encodeURIComponent(this.item.id)}`, { signal: controller.signal });
       const data = await response.json();

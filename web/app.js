@@ -66,6 +66,9 @@ const embeddedPlayer = new EmbeddedPlayer({
   seek: seekSeconds,
   onNavigate: (offset) => play({ offset }),
   onPlayRequest: () => play({}),
+  saveDanmakuSource: (item_id, url) => api("/api/danmaku/source", {
+    method: "POST", body: JSON.stringify({ item_id, url }),
+  }),
   onEnded: (state) => {
     if (state === currentState && state.settings?.skip_outro && state.has_next) play({ offset: 1 });
   },

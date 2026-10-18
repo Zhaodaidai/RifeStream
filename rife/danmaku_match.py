@@ -232,8 +232,32 @@ def _cached_auto(query: MediaQuery) -> dict:
             _PENDING.pop(query).set()
 
 
+
+def canonical_bilibili_episode_url(value: str) -> str | None:
+    """Only public bangumi episode URLs may be used as manual overrides."""
+    if not isinstance(value, str) or len(value) > 2048:
+        raise ValueError("请输入 Bilibili 番剧分集链接")
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        parsed = urlsplit(value)
+        episode = re.fullmatch(r"/bangumi/play/ep([1-9][0-9]{0,19})/?", parsed.path)
+        valid = (parsed.scheme in {"http", "https"} and
+                 parsed.hostname in {"www.bilibili.com", "bilibili.com", "m.bilibili.com"} and
+                 not parsed.username and not parsed.password and parsed.port is None and episode)
+    except ValueError:
+        valid = False
+    if not valid:
+        raise ValueError("请使用 Bilibili 番剧分集链接，例如 https://www.bilibili.com/bangumi/play/ep3854813")
+    return "https://www.bilibili.com/bangumi/play/ep" + episode[1]
+
+
 def load_item_danmaku(item: dict) -> dict:
-    """Explicit sources take priority; only absent sources trigger auto search."""
+    """Manual override, then explicit source, then conservative auto search."""
+    if item.get("danmaku_url"):
+        url = canonical_bilibili_episode_url(item["danmaku_url"])
+        return {"comments": load_danmaku(url), "source": "手动指定 · Bilibili", "source_url": url}
     if item.get("olink"):
         return {"comments": load_danmaku(item["olink"]), "source": "自带弹幕", "source_url": item["olink"]}
     query = parse_media_query(item.get("title", ""), item.get("source", ""))

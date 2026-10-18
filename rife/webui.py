@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import uuid
 import time
 
-from rife.danmaku_match import load_item_danmaku
+from rife.danmaku_match import canonical_bilibili_episode_url, load_item_danmaku
 from rife.hls import clear_hls_output
 from rife.hls_server import ensure as ensure_hls_server
 from rife.paths import (
@@ -83,6 +83,7 @@ class PlaylistItem:
     title: str
     kind: str
     olink: str | None = None
+    danmaku_url: str | None = None
 
 
 @dataclass
@@ -117,6 +118,7 @@ class Playlist:
                 title=str(item.get("title") or display_title(item["source"])),
                 kind=str(item.get("kind") or source_kind(item["source"])),
                 olink=str(item["olink"]) if item.get("olink") else None,
+                danmaku_url=str(item["danmaku_url"]) if item.get("danmaku_url") else None,
             )
             for item in data.get("items", [])
             if isinstance(item, dict) and item.get("source")
@@ -257,6 +259,25 @@ class Playlist:
             settings = self.state.settings
             self.state = PlayerState(settings=settings)
             self.save()
+
+    def set_danmaku_source(self, item_id: str, url: str) -> str | None:
+        source = canonical_bilibili_episode_url(url)
+        with self._lock:
+            # Re-read even on filesystems whose mtime does not change per write.
+            last_error = self.state.last_error
+            self.load()
+            self.state.last_error = last_error
+            item = self.item(item_id)
+            if item is None:
+                raise ValueError("播放条目不存在")
+            previous = item.danmaku_url
+            item.danmaku_url = source
+            try:
+                self.save()
+            except OSError:
+                item.danmaku_url = previous
+                raise
+            return source
 
     def update_settings(self, payload: dict[str, Any]) -> SkipSettings:
         with self._lock:
@@ -747,6 +768,17 @@ class WebHandler(BaseHTTPRequestHandler):
             self.send_json({"error": str(exc)}, 400)
             return
         try:
+            if path == "/api/danmaku/source":
+                item_id = body.get("item_id")
+                if not isinstance(item_id, str) or not item_id or "url" not in body:
+                    raise ValueError("需要指定播放条目和弹幕链接；恢复默认请传空链接")
+                try:
+                    source = PLAYLIST.set_danmaku_source(item_id, body["url"])
+                except OSError as exc:
+                    self.send_json({"error": f"无法保存弹幕来源：{exc}"}, 500)
+                    return
+                self.send_json({"item_id": item_id, "danmaku_url": source})
+                return
             if path == "/api/items":
                 sources = body.get("sources")
                 if isinstance(sources, str):
@@ -857,7 +889,8 @@ class WebHandler(BaseHTTPRequestHandler):
             message = str(payload.get("error") or payload)
             if path.startswith("/api/"):
                 print(message, file=sys.stderr, flush=True)
-                PLAYLIST.set_error(message)
+                if path != "/api/danmaku/source":
+                    PLAYLIST.set_error(message)
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
