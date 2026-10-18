@@ -15,10 +15,11 @@ import subprocess
 import sys
 import threading
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 import uuid
 import time
 
+from rife.danmaku import load_danmaku
 from rife.hls import clear_hls_output
 from rife.hls_server import ensure as ensure_hls_server
 from rife.paths import (
@@ -81,6 +82,7 @@ class PlaylistItem:
     source: str
     title: str
     kind: str
+    olink: str | None = None
 
 
 @dataclass
@@ -114,6 +116,7 @@ class Playlist:
                 source=str(item["source"]),
                 title=str(item.get("title") or display_title(item["source"])),
                 kind=str(item.get("kind") or source_kind(item["source"])),
+                olink=str(item["olink"]) if item.get("olink") else None,
             )
             for item in data.get("items", [])
             if isinstance(item, dict) and item.get("source")
@@ -715,6 +718,23 @@ class WebHandler(BaseHTTPRequestHandler):
         if path == "/api/state":
             self.send_json(self.state_payload())
             return
+        if path == "/api/danmaku":
+            # Only a source already attached to a playlist item may be fetched.
+            item_id = parse_qs(parsed.query).get("id", [""])[0]
+            PLAYLIST.refresh()
+            snapshot = PLAYLIST.snapshot()
+            item = next((item for item in snapshot["items"] if item["id"] == item_id), None)
+            if not item or not item.get("olink"):
+                self.send_danmaku_error("本集未提供 olink 弹幕地址，可在弹幕设置中导入 XML/JSON")
+                return
+            try:
+                comments = load_danmaku(item["olink"])
+            except (ValueError, OSError) as exc:
+                # Loading danmaku must not poison playback's global error state.
+                self.send_danmaku_error(str(exc))
+                return
+            self.send_json({"comments": comments, "item_id": item_id})
+            return
         self.serve_static(path)
 
     @serialized_control
@@ -794,6 +814,15 @@ class WebHandler(BaseHTTPRequestHandler):
             stop_stream()
             reset_playback()
         self.send_json(self.state_payload())
+
+    def send_danmaku_error(self, message: str) -> None:
+        data = json.dumps({"error": message}, ensure_ascii=False).encode("utf-8")
+        self.send_response(400)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
 
     def serve_static(self, path: str) -> None:
         if path == "/":

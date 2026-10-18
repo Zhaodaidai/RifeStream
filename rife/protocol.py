@@ -45,6 +45,7 @@ class MpvRequest:
     http_proxy: str | None = None
     ytdl_proxy: str | None = None
     ytdl_format: str | None = None
+    olink: str | None = None
 
 
 def decode_payload(payload: str) -> str:
@@ -105,6 +106,8 @@ def parse_mpv_command(command: str) -> MpvRequest:
             request.ytdl_format = value
         elif name == "ytdl-raw-options" and value.startswith("proxy=[") and value.endswith("]"):
             request.ytdl_proxy = validate_url(value[7:-1], "yt-dlp proxy", PROXY_SCHEMES)
+        elif name == "olink":
+            request.olink = validate_url(value, "olink")
         elif name == "force-media-title":
             request.title = value
         elif name == "start":
@@ -171,6 +174,8 @@ def register_playlist_item(request: MpvRequest) -> None:
             "kind": "url",
         }
         items.append(item)
+    if request.olink is not None:
+        item["olink"] = request.olink
     data["items"] = items
     if not data.get("current_id"):
         data["current_id"] = item["id"]

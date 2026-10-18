@@ -124,3 +124,21 @@ WebUI继续优化完成：确认清空（媒体数/不删源文件/取消/Escape
 - 仅在 web/styles.css 增加 min-width:861px 的音量容器收缩与 input[data-plyr="volume"] 隐藏；player.js原字节不变。
 - Chromium同probe：BASELINE1440/1920及全屏有音量条；MODIFIED无音量条；ROLLBACK恢复原显示，三者点击均可静音/取消静音，退出码0。900/390原行为不变，无pageerror。
 - 103项Python、三组Node、累计补丁重建通过，恢复styles哈希等于本轮前快照。原四角色更新并重开；ROLLBACK.sh新增 TARGET_COPY --volume-before，仅恢复本轮前styles。
+
+## 2026-10-18 --olink弹幕与DOCTYPE修复
+- 新增MpvRequest.olink/PlaylistItem.olink，/api/danmaku按影片读取XML/JSON，大小/条数/超时约束，加载错误不污染播放状态。独立canvas、开关、透明度、字号、区域、本地XML/JSON导入及本机持久化。整集时间驱动、跳转/切集清理、旧请求隔离；桌面全屏和320–1920布局验证。
+- 用户报DOCTYPE错误后，修复parse_danmaku/DanmakuOverlay.parse对普通i声明的误拦：丢弃普通/SYSTEM/PUBLIC声明，不读取外部DTD；内部实体继续拒绝。HTML doctype明确提示是网页，未取得真实用户地址，不声称已适配对应站点。
+- BASELINE普通声明报旧DTD错误；MODIFIED前后端均解析1条，外部DTD请求0、自定义实体拒绝；ROLLBACK恢复旧错误且两个源文件哈希一致。全量116项Python、四组Node、完整生产app+API弹幕E2E、画面像素/全屏/移动布局及音量回归均通过。
+- 前次最终回归的通用.framing-reset探针撞上弹幕重载按钮，exit1保留账本；改#videoFraming .framing-reset后exit0，无生产改动。
+- 原四角色更新且重开，累计补丁字节重建一致；ROLLBACK.sh新增--danmaku-before与--doctype-before，旧默认恢复也已验证。当前工作区保留修改版。
+
+## lirose_tv 弹幕解析接口适配
+- 已按用户指定接口修改rife/danmaku.py load_danmaku，使用完整URL编码将olink作为url单参数发送；保留已完整解析链接不二次包装。
+- 真实示例JSON含code/name/danum/danmuku/from/author；不把code=23误判失败，按danmuku行[time,direction,hexcolor,unused,text,...]解析，空行/空文本跳过。
+- 用户腾讯示例真实HTTP200、151726字节、1260条有效弹幕，两次load_danmaku真实请求成功。未发送用户本地账号/cookie，未改用户播放列表。
+- 同fixture BASELINE直接请求olink并报缺comments数组；MODIFIED正确封装参数并解析1260条；ROLLBACK恢复原错误且哈希一致。117项Python、四组Node、独立overlay浏览器回归通过；累计补丁重建字节一致，同四角色更新重开。新增ROLLBACK.sh --resolver-before。
+
+## 弹幕img源码外露修复
+- 原因是第三方弹幕文本中含HTML表情标签，Canvas fillText按字面绘制，不是HTML被执行。现rife/danmaku.py normalize及web/danmaku.js normalize过滤img，识别引号内的>，混合文字保留，纯图片记录跳过；不使用innerHTML，不请求图片地址。
+- 同四条输入：BASELINE暴露img/src；MODIFIED仅剩“二刷”“正常中文 1 < 2”“好看”；ROLLBACK恢复原输出，四个文件哈希等于img-before。118项Python、四组Node、生产app+Canvas/API端到端、实时解析接口通过，补丁重建字节一致。
+- 原四角色更新且重开；ROLLBACK.sh新增--img-before。当前源码保持修复版。刷新前端并重启后端后重载本集弹幕。

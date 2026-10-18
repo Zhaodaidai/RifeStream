@@ -124,3 +124,13 @@ WebUI打磨：清空原先立即POST且停止转码；改为原生dialog默认�
 画面调节完成：EmbeddedPlayer.initFraming 控制 video.style.transform/objectFit，不缩放控件/字幕；50–200%，完整显示/铺满裁剪，重置，Escape/外部点击关闭，全屏保留。320px面板可越过视频框向上展开，视频wrapper独立裁剪。实际像素验证蓝色侧部→200%红色中心。生产HTML+真实Plyr、合成视频流验证，无pageerror；未声称手机真机验证。
 
 电脑端音量条隐藏已完成：Plyr保留mute/volume配置以不触碰行为，仅桌面CSS隐藏音量range并收缩容器；全屏同样生效。1440/1920实际Plyr静音→恢复声音验证通过。
+
+## --olink 弹幕
+- 用户传参为 --olink=window.location.href，当前parse_mpv_command忽略该字段；新增存储后按集获取弹幕。网页地址未必返回XML/JSON，明确报错并提供本地文件导入，不虚构站点抓取适配。
+- 使用现有EmbeddedPlayer.position()整集时间；canvas独立于video transform但跟随Plyr横屏容器；避免后端转码改动。
+
+DOCTYPE兼容：普通<!DOCTYPE i>及带SYSTEM/PUBLIC的元数据可安全丢弃，不访问外部DTD；拒绝带内部子集或自定义实体。<!DOCTYPE html>通常是原网页，不能凭此推导弹幕接口，现报具体错误。未提供用户实际olink，真实站点尚未验证。
+
+解析接口实测返回danmuku（不是danmaku/comments）；数组第0项为秒数、第1项right/top/bottom、第2项#RRGGBB、第4项文本。提供的腾讯示例danum=1271，过滤空文本/空行得到1260有效条。请求必须对整个olink编码，包括&、?、#和中文。默认后端将影片页URL发送用户指定第三方弹幕解析服务，前端仍只请求本地/api/danmaku。
+
+图片弹幕暂按纯文本展示：过滤<img ...>标签而不渲染远程表情图片；保留其余文字，不改变普通小于号表达式。用户可见问题来自Canvas按文本绘制接口HTML片段，而非DOM注入执行。

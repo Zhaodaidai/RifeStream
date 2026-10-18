@@ -133,3 +133,21 @@
 
 ## 2026-10-18 电脑端音量简化
 - [complete] 隐藏桌面音量条、保留静音切换；基线/修改/回滚及103项Python、三组Node通过；复用四角色。
+
+## 2026-10-18 --olink 弹幕接入
+- [complete] 保存协议olink→列表→API，安全读取XML/JSON，不把HTML网页误解析为弹幕。
+- [complete] 独立canvas弹幕层与开关/透明度/字号/区域，整集同步、暂停/缓冲/跳转/切集/全屏。
+- [complete] 同输入基线/修改/回滚、端到端/单元回归与原四角色更新。
+
+## 2026-10-18 弹幕DOCTYPE错误修复
+- [complete] 前后端允许普通i文档声明，移除SYSTEM/PUBLIC外部DTD引用且不请求，保留自定义实体拦截；HTML网页单独报错。
+- [complete] 同输入BASELINE/MODIFIED/ROLLBACK、116项Python、四组Node、弹幕/画面/音量浏览器回归；原四角色重开。
+
+## 2026-10-18 lirose_tv 解析接口
+- [complete] olink经quote(safe="")作为解析接口url参数，不直接请求原网页；识别已有解析链接避免重复包装。
+- [complete] 解析实际danmuku数组：秒数/方向/十六进制颜色/文字，跳过空记录。
+- [complete] 用户腾讯示例实测1260条；基线/修改/回滚、117项Python、四组Node、隔离浏览器回归及累计补丁重建通过，原四角色重开。
+
+## 2026-10-18 弹幕图片标签文字修复
+- [complete] 后端normalize/前端normalize剔除img标签、保留附带文字、跳过纯图片弹幕，不加载图片或执行HTML。
+- [complete] 同输入BASELINE/MODIFIED/ROLLBACK与哈希恢复、118项Python/四组Node、真实Canvas浏览器回归、示例接口1260条及补丁重建通过；原四角色重开。

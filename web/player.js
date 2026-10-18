@@ -72,6 +72,7 @@ class EmbeddedPlayer {
     // Only desktop needs fitting: the mobile layout already follows the video's ratio.
     this.frame = video.closest?.(".video-stage");
     this.initFraming();
+    this.danmaku = this.frame && window.DanmakuOverlay ? new window.DanmakuOverlay(this) : null;
     if (this.frame) {
       const queueFit = () => {
         if (this.frameTask) return;
@@ -349,6 +350,7 @@ class EmbeddedPlayer {
       this.session = session;
     }
     this.state = state;
+    this.danmaku?.setItem(state.current);
     this.setActionState(Boolean(this.actionPending));
     if (this.ui) this.ui.config.title = state.current?.title || "RIFE 视频播放器";
     const key = state.current && state.hls_ready
@@ -441,6 +443,7 @@ class EmbeddedPlayer {
     const position = this.position();
     this.timeline.value = position;
     this.paintTime(position);
+    this.danmaku?.sync();
   }
 
   async jump(seconds) {
