@@ -81,7 +81,11 @@ textarea { padding: 14px; width: 100%; min-height: 150px; max-height: 40dvh; res
 @media (min-width: 861px) and (max-width: 1150px) { .workspace { grid-template-columns: minmax(0,1fr) 290px; gap: 16px; } main { padding: 0 24px; }.top-inner { padding-inline: 24px; }.viewer { padding-inline: 18px; } }
 @media (max-width: 860px) { main { padding: 0 20px; }.top-inner { padding: 16px 20px; min-height: 72px; }.workspace { grid-template-columns: 1fr; gap: 20px; }.page-heading { padding: 28px 0 24px; }.page-heading h2 { font-size: 26px; }.playlist { height: auto; min-height: 230px; max-height: 360px; flex: none; }.playlist li.empty { min-height: 230px; }.local-label { display: none; }.viewer { padding-inline: 18px; }.playback-controls { gap: 16px; }.transport { width: 100%; }.page-footer { gap: 15px; } }
 @media (max-width: 480px) { main { padding: 0 12px; }.top-inner { padding: 14px 16px; }.brand h1 { gap: 10px; }h1 span { font-size: 10px; padding-left: 10px; }.brand { gap: 10px; }.brand-mark { width: 30px; height: 30px; }h1 { font-size: 18px; }.workspace-label { display: none; }.viewer { padding: 0 12px 14px; }.viewer-head { min-height: 48px; }.page-heading { padding-inline: 4px; }.player-empty { gap: 6px; }.empty-video-icon { width: 36px; height: 36px; border-radius: 10px; margin-bottom: 2px; }.empty-video-icon svg { width: 20px; height: 20px; }.player-empty h3 { font-size: 15px; }.player-empty p { font-size: 10px; }.empty-add { min-height: 30px; padding: 4px 10px; margin-top: 4px; }.now { font-size: 14px; }.transport { gap: 6px; }.transport .quiet { font-size: 11px; padding: 8px; }.playback-settings { width: 100%; justify-content: space-between; gap: 10px; font-size: 10px; }.page-footer { flex-direction: column; gap: 5px; padding: 20px 4px; }:is(#addDialog, #clearDialog) { padding: 20px; }.input-label { flex-wrap: wrap; }.dialog-heading { gap: 10px; }.dialog-heading h2 { font-size: 17px; }.dialog-heading p { font-size: 11px; } }
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+@media (prefers-reduced-motion: reduce) {
+  /* Danmaku is explicitly enabled media content. Disabling its engine-owned
+     transitions teleports scrolling bullets offscreen and hides fixed ones. */
+  *:not(.danmaku-sprite), *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
 button[aria-busy="true"] { cursor: progress; }
 
 /* Desktop: center the playback workspace in the viewport below the header. */
@@ -256,10 +260,10 @@ button.danger-button:hover:not(:disabled) { background: var(--danger); color: va
 }
 
 /* Danmaku remains above the picture but below controls/subtitles, never intercepting clicks. */
-.danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; overflow: hidden; pointer-events: none; z-index: 1; }
+.danmaku-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 1; }
 .danmaku-layer[hidden] { display: none; }
-.danmaku-layer .danmaku-canvas { display: block; pointer-events: none; }
-.danmaku-canvas[hidden] { display: none; }
+.danmaku-layer .danmaku-sprite { display: block; pointer-events: none; }
+
 .video-stage.danmaku-open { overflow: visible; z-index: 5; }
 .video-stage .danmaku-toggle { flex: none; font-size: 12px; white-space: nowrap; }
 .video-stage .danmaku-enabled { color: var(--accent); }

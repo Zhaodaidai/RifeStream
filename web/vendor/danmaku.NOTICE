@@ -1,7 +1,0 @@
-Danmaku 2.0.10 — weizhenye/Danmaku
-MIT License; see danmaku.LICENSE.
-Vendored dist/danmaku.canvas.min.js from npm danmaku@2.0.10.
-Source: https://github.com/weizhenye/Danmaku
-Tarball: https://registry.npmjs.org/danmaku/-/danmaku-2.0.10.tgz
-Integrity: sha512-0rqpVcKbOlWX6w5lEm0E4QfCW4EEOIWw6XMNyQrp6kjpdV3rYk0zZzkxy612APrl98XsQnqNvxlkS/fFPRDoaA==
-Local HiDPI compatibility patch: custom-rendered canvases can provide dataset.danmakuWidth/Height in CSS pixels for correct collision allocation. The raster backing stays at native DPR. See danmaku-hidpi.patch. web/danmaku.js is this project's time/safety/density adapter.

@@ -172,3 +172,54 @@ WebUI继续优化完成：确认清空（媒体数/不删源文件/取消/Escape
 - 功能：119项Python、五组Node、JS语法；生产app真实API/视频暂停缓冲/倍速/跳转/切集/旧响应拒绝、320–1920布局/全屏、设置持久化、画面像素、静音音量回归通过；DPR1/2图片PNG像素1102/4446、真实腾讯表情渲染、脚本事件0、隐藏页停绘与缓存切集清理通过。
 - 参考读取遇到GitHub API403，raw猜测路径404，zsh循环变量path遮蔽PATH导致curl127，分别改用npm元数据+包、修正变量rel；finalizer脚本引号语法exit1修正后完整重跑。旧fillText探针不适配离屏缓存，改验证引擎running canvas+主画布像素；首次paused120秒恰好触发引擎严格小于时间边界，适配时钟加1微秒，恢复暂停预览；不把这些失败算功能通过。
 - 原四角色更新重开，累计patch重建/隔离--perf-before恢复原始哈希/旧默认rollback恢复BASELINE均通过。工作区保留成熟引擎版本，未动已有用户源码/字节码改动。PERFORMANCE.json保存完整literal结果；线上目标机GPU实际帧率未测试。
+
+## 2026-10-18 四分之一区域弹幕波次修复
+- [complete] DanmakuOverlay.rebuildNow 改双令牌连续补充+原窗口硬上限，保留原时间戳、四分之一高度和图片表情。
+- [complete] 同输入5万条/100条每秒、540px高/135px区域、24秒模拟媒体时钟：BASELINE/ROLLBACK最大准入间隔5.92秒且20个整秒无新弹幕；MODIFIED0.75秒、空档0。旧36条/新33条准入（前24秒），仍有密度抽样，不声称全量显示。
+- [complete] 119项Python、五组Node、生产播放器暂停/缓冲/跳转/切集/全屏，DPR1/2图片像素与设置持久化通过；回滚哈希、累计patch逐字节重建、默认历史回滚与原四角色重开通过。
+
+## 2026-10-18 全显示区域联动修复
+- [complete] 同输入复现半屏/3/4/全屏轨道仅到168/210/252px；全屏区域被硬减52px。修复rebuildNow：实际高度按25/50/75/100%，轨道高度含6px精灵padding；最多64条均匀采样宽度估算滚动入口周转，固定弹幕按全时长占轨，保留连续令牌与96活动上限。
+- [complete] 540px播放器密集5万条、实际滑条25→50→75→100→25且同一loaded source：修改区域135/270/405/540px，轨道底部126/252/378/504px，四档均无整秒出弹空档；基线和隔离回滚恢复135/270/405/488px、底部84/168/210/252px，哈希一致。
+- [complete] 手机/桌面视口、窗口/全屏、12/24/36px字号共48组geometry检查全通过（基线/回滚33/48）；119项Python、五组Node、生产API/视频暂停缓冲跳转切集/全屏、DPR1/2图片、设置持久化均通过。累计patch逐字节重建，新增--areas-before和历史默认回滚验证，原四角色重开。抽样高密度依旧不是全量显示。
+
+## 2026-10-18 全屏弹幕实际铺屏
+- [complete] 原实现画布540px但中密度2条/秒弹幕仅y0/42；重现并修复实际位置：laneOrder(top/bottom/逐步填中间)+轮换可用轨道，使用成熟引擎willCollide原谓词判断碰撞，全阻塞时跳过而非重叠，固定顶部/底部模式保留。
+- [complete] 同3000条/2条每秒、24秒模拟媒体时钟、25→50→75→100→25：BASELINE/ROLLBACK全屏最高只到84px，MODIFIED轨道底到540px且12行遍布全屏，顶部中部底部实际像素非零；四档分别到135/270/405/540px。源时间不改、不复制弹幕。
+- [complete] 独立8秒真实墙钟播放验证：整个播放器上中下和左中右均有真实文字像素、>=10条不同轨道、laneSkipped0；spread-realtime.png人工查看确认。5万密集输入四档出弹持续，48组字号/窗口/全屏几何检查全通过；119项Python+五组Node、生产播放器跳转/切集/暂停、DPR1/2表情、设置持久化通过。
+- [complete] 保存原始哈希，--spread-before隔离恢复相同旧行为；默认历史回滚恢复BASELINE，累计patch重建一致；上游bundle依次应用HiDPI和lane patch与当前vendor字节一致。原四角色更新重开。
+
+## 2026-10-18 区域与弹幕量联动
+- [complete] 参考已下载的B站开源DanmakuFlameMaster(DanmakuContext同屏数量/最大行数/防重叠)及DPlayer(高度限制可用轨道)，不声称复刻B站网页精确比例。本项目明确按1/4、1/2、3/4、全屏联动数量。
+- [complete] rebuildNow生成稳定的全屏限流序列，再以[0,2,1,3]四相嵌套抽样，四档25/50/75/100%，原时间戳和源数据保持；同屏预算从全屏上限按区域缩放，96饱和场景分别24/48/72/96，避免短字号/大播放器各档共用96上限。
+- [complete] 同3000条/2条每秒、同一loaded source和真实滑条25→50→75→100→75→50→25：24秒内实际出弹12/24/36/48/36/24/12（基线/回滚每档48）；同播放位置24秒实际同屏3/6/9/12/9/6/3（基线/回滚每档12），保留源3000条、碰撞跳过0。
+- [complete] 5万密集输入四档均无整秒空档、48组字号/窗口/全屏区域检查通过；119项Python+五组Node、实际API/视频暂停缓冲/跳转/切集/全屏、DPR1/2表情和设置持久化回归通过。新增--density-before，隔离回滚原哈希/行为和历史默认回滚验证、累计patch重建一致，原四角色更新重开。
+
+## 2026-10-18 使用引擎原生区域，不再自定义抽样/轨道
+- [complete] 切换本地vendored danmu.js1.2.1，使用原生area{start:0,end:x}、setArea、channelSize、overlap:false、lazy bulletCreateEl；移除自定义laneLayout/laneOrder、抽样、双令牌、96上限和旧canvas/轨道补丁，源50000条全部交给引擎。
+- [complete] 同输入滑条25/50/75/100/75/50/25：原生轨道3/6/9/12/9/6/3，source/candidates/admitted均50000、skipped0、host始终覆盖播放器；基线/回滚恢复旧自定义1/1/2/2准入行为和旧vendor哈希。
+- [complete] 原生引擎图片表情DPR1/2、字号/透明度、实际area、暂停缓冲/倍速/跳转/全屏/隐藏页/切集旧响应，119项Python、五组Node、设置/画面/音量回归通过；npm tarball integrity验证，vendor字节等于上游，无本地引擎补丁；累计patch、隔离--native-before和历史默认回滚、原四角色重开通过。
+
+## 2026-10-18 原生引擎缓存及时钟适配修复
+- [in progress] 同真实播放器回归可出弹；为新DanmuJs和adapter增加版本化脚本地址，恢复EventTarget媒体时钟/readyState/duration，执行同输入基线/修改/回滚与强制新脚本浏览器验证。
+
+## 2026-10-18 原生引擎缓存及时钟适配修复
+- [complete] 用户反馈“没有弹幕”后，定位并修复两处回归：带版本查询串的脚本在探针服务器未剥离查询导致旧脚本404；DanmuJs适配器缺少媒体时钟字段导致调度器无法按播放时间取弹幕。生产页面现使用版本化danmu.js/danmaku.js地址，clock恢复EventTarget、currentTime（秒）、playbackRate、duration、readyState=4。
+- [complete] 同一输入的修改版真实Chromium E2E通过：顶部/底部/滚动三种弹幕、图片表情、暂停/缓冲/倍速/跳转/全屏/隐藏页/切集；区域25/50/75/100%对应原生轨道3/6/9/12（540px视口），50000条全部交给引擎，skipped=0。
+- [complete] Python、现有Node回归、语法检查、独立回滚浏览器E2E均通过；原始快照哈希保持，累计DIFF_FILE.patch可重建当前文件（供应商bundle无末尾换行，验证时记录并去除GNU patch人为补入的单字节换行），四个角色已重新打开。
+
+## 2026-10-18 原生引擎缓存及时钟适配修复
+- [complete] 用户反馈“没有弹幕”后，定位并修复两处回归：带版本查询串的脚本在探针服务器未剥离查询导致旧脚本404；DanmuJs适配器缺少媒体时钟字段导致调度器无法按播放时间取弹幕。生产页面现使用版本化danmu.js/danmaku.js地址，clock恢复EventTarget、currentTime（秒）、playbackRate、duration、readyState=4。
+- [complete] 同一输入的修改版真实Chromium E2E通过：顶部/底部/滚动三种弹幕、图片表情、暂停/缓冲/倍速/跳转/全屏/隐藏页/切集；区域25/50/75/100%对应原生轨道3/6/9/12（540px视口），50000条全部交给引擎，skipped=0。
+- [complete] Python、现有Node回归、语法检查、独立回滚浏览器E2E均通过；原始快照哈希保持，累计DIFF_FILE.patch可重建当前文件（供应商bundle无末尾换行，验证时记录并规范GNU patch人为生成的EOF标记），四个角色已重新打开。
+
+## 2026-10-18 一行弹幕都没显示（重新复现）
+- 当前源码快照已保存。真实视频+真实开关+API异步输入600条的基础路径可见，12次采样均有弹幕；不能把此前clock/cache修复作为本次结论。继续检查实际30228条数据、起播132秒和HLS重载路径。
+- 探索命令中的缺失文件/目录（es、e2e-probe.py、production-e2e.py、DIFF_FILE目录）均为错误假设，已改用已存在source map/native-e2e及原DIFF_FILE.patch。
+
+## 2026-10-18 本轮修复完成：弹幕CSS动画被无障碍样式禁用
+- 已应用web/styles.css媒体查询选择器最小修复、index样式地址版本和Node回归；没有重做原生引擎或密度逻辑。真实HLS/异步加载、600条同输入、正常与reduce双模式三方对照已执行。
+- BASELINE/ROLLBACK reduce模式12次采样均0可见，实际屏幕文字像素0；MODIFIED12次全部可见，三模式齐全，12409屏幕文字像素；UI减少动画保留。人工查看no-lines-MODIFIED_FILE-reduce.png确认文字确实在屏幕。
+- 119项Python、五组Node、native-e2e DPR1/2全部exit0。还原四文件SHA等于本轮before；历史默认ROLLBACK保持可用；累计DIFF_FILE.patch重新应用字节一致。
+- 错误记录：真实数据图片导致离屏canvas tainted读取失败exit1，改用页面截图解码像素；累计patch首轮marker换行错误exit1，独立resume脚本完成未完成步骤并验证exit0。保留工具输出和VERIFICATION记录。
+- 复用并重开 /mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}。当前工作区与修改副本一致，before保持原始字节。

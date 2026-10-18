@@ -1,0 +1,6 @@
+danmu.js 1.2.1 — bytedance/danmu.js
+MIT License; see danmu.LICENSE.
+Unmodified npm browser/index.js, locally vendored; no runtime CDN.
+Tarball: https://registry.npmjs.org/danmu.js/-/danmu.js-1.2.1.tgz
+Integrity: sha512-evDEImUBo94c846fC92K//Dzll8jXnZ3zKmYlQHwMzmvw6IW2IyjWL3Ew2SqEAzuqauFnDkwJEgZauu3uW/p1Q==
+Native area/start/end, setArea, overlap=false, lazy bulletCreateEl hooks and channel resizing are used. No local engine patches.

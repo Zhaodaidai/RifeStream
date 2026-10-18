@@ -154,3 +154,51 @@ DOCTYPE兼容：普通<!DOCTYPE i>及带SYSTEM/PUBLIC的元数据可安全丢弃
 - 只有进入显示窗口才栅格化图文精灵；192个/16MiB精灵LRU，128张/24MiB解码图片LRU，图像.onload只重画关联精灵，不整集rebuild；框架轮询/事件无变化不新增RAF，尺寸/滑条布局单帧合并。
 - 显示密度上限随区域/字号变化（每个持续时间窗口最多96条），极端密集跳过部分展示，comments原始数据保留。不能以“全量都显示”的口径宣传压力结果。
 - 最终同机器Chromium1440x900/120帧：3万条ready131.6→27.3ms，5万条101.8→24.8ms；文字描边10054→25/10228→5。callback p95未普遍下降，3万样本0.2→0.4ms，5万0.2→0.2ms；不声称所有设备帧率提升或绝不卡顿。
+
+## 2026-10-18 四分之一区域成批出弹
+根因：rebuildNow滚动窗口准入先耗完maximum，再等约6秒窗口释放；区域缩小时尤其明显。修复：容量2的令牌桶按(maximum-1)/duration连续补充，同时保留原硬窗口上限；不重排或延迟源时间，不改碰撞/渲染引擎。两条稀疏同刻图文可保留；密集源依旧会抽样。回归同时覆盖25/50/75/100区域、5万同刻突发、稀疏双条、时间戳不变与懒精灵。浏览器用每RAF媒体时钟前进0.1秒采样24秒，非目标机器真实FPS测量。CONTINUOUS_FLOW.json含前后回滚实测。
+
+## 2026-10-18 跨区域轨道不足与全屏高度
+- [complete] 同输入复现半屏/3/4/全屏轨道仅到168/210/252px；全屏区域被硬减52px。修复rebuildNow：实际高度按25/50/75/100%，轨道高度含6px精灵padding；最多64条均匀采样宽度估算滚动入口周转，固定弹幕按全时长占轨，保留连续令牌与96活动上限。
+- [complete] 540px播放器密集5万条、实际滑条25→50→75→100→25且同一loaded source：修改区域135/270/405/540px，轨道底部126/252/378/504px，四档均无整秒出弹空档；基线和隔离回滚恢复135/270/405/488px、底部84/168/210/252px，哈希一致。
+- [complete] 手机/桌面视口、窗口/全屏、12/24/36px字号共48组geometry检查全通过（基线/回滚33/48）；119项Python、五组Node、生产API/视频暂停缓冲跳转切集/全屏、DPR1/2图片、设置持久化均通过。累计patch逐字节重建，新增--areas-before和历史默认回滚验证，原四角色重开。抽样高密度依旧不是全量显示。
+固定三条/轨/6秒没有考虑短弹幕入口早已可复用，令牌平滑后较早复用上方轨道，导致下半区域长期空置。改用有界宽度采样估算入口周转后，密集场景四档轨道占用均约93.3%（余量不足一完整42px轨道），不为强行填满而改变源时间或另写碰撞引擎。尺寸/准入单位测试覆盖短播放器和各字号，宽度样本≤64，按源样本的固定/滚动占轨比例计算预算。
+
+## 2026-10-18 实际全屏铺满而非画布100%
+- [complete] 原实现画布540px但中密度2条/秒弹幕仅y0/42；重现并修复实际位置：laneOrder(top/bottom/逐步填中间)+轮换可用轨道，使用成熟引擎willCollide原谓词判断碰撞，全阻塞时跳过而非重叠，固定顶部/底部模式保留。
+- [complete] 同3000条/2条每秒、24秒模拟媒体时钟、25→50→75→100→25：BASELINE/ROLLBACK全屏最高只到84px，MODIFIED轨道底到540px且12行遍布全屏，顶部中部底部实际像素非零；四档分别到135/270/405/540px。源时间不改、不复制弹幕。
+- [complete] 独立8秒真实墙钟播放验证：整个播放器上中下和左中右均有真实文字像素、>=10条不同轨道、laneSkipped0；spread-realtime.png人工查看确认。5万密集输入四档出弹持续，48组字号/窗口/全屏几何检查全通过；119项Python+五组Node、生产播放器跳转/切集/暂停、DPR1/2表情、设置持久化通过。
+- [complete] 保存原始哈希，--spread-before隔离恢复相同旧行为；默认历史回滚恢复BASELINE，累计patch重建一致；上游bundle依次应用HiDPI和lane patch与当前vendor字节一致。原四角色更新重开。
+仅将逻辑轨道静态映射到全高度仍不足：中密度时上游反复复用前两条逻辑轨道，中部仍空。最终改为按上游碰撞谓词从轮换轨道找可用位置，遍及所有轨道；没有改写动画时钟和图片渲染。vendor新增可选laneLayout(channel,comment,height,willCollide)钩子以及null跳过分支；补丁与NOTICE明确标记本地改动，不声称完全原版引擎。
+
+## 2026-10-18 区域必须影响数量
+- [complete] 参考已下载的B站开源DanmakuFlameMaster(DanmakuContext同屏数量/最大行数/防重叠)及DPlayer(高度限制可用轨道)，不声称复刻B站网页精确比例。本项目明确按1/4、1/2、3/4、全屏联动数量。
+- [complete] rebuildNow生成稳定的全屏限流序列，再以[0,2,1,3]四相嵌套抽样，四档25/50/75/100%，原时间戳和源数据保持；同屏预算从全屏上限按区域缩放，96饱和场景分别24/48/72/96，避免短字号/大播放器各档共用96上限。
+- [complete] 同3000条/2条每秒、同一loaded source和真实滑条25→50→75→100→75→50→25：24秒内实际出弹12/24/36/48/36/24/12（基线/回滚每档48）；同播放位置24秒实际同屏3/6/9/12/9/6/3（基线/回滚每档12），保留源3000条、碰撞跳过0。
+- [complete] 5万密集输入四档均无整秒空档、48组字号/窗口/全屏区域检查通过；119项Python+五组Node、实际API/视频暂停缓冲/跳转/切集/全屏、DPR1/2表情和设置持久化回归通过。新增--density-before，隔离回滚原哈希/行为和历史默认回滚验证、累计patch重建一致，原四角色更新重开。
+单纯按区域计算轨道容量仅在源足够密时改变数量；普通源2条/秒所有档位都能塞下，所以原先每档48条、同屏12条。改为稳定全屏准入序列的嵌套子集，扩大区域只增加可见候选，不会换一批无关弹幕；半屏隔条选取避免成对集中。保留稀疏输入的自然间隔，不凭空补弹幕。
+
+## 2026-10-18 采用引擎自带显示区域
+用户指出自定义数量过稀。下载并校验npm danmu.js1.2.1（registry integrity SHA512），其原生配置area:{start,end,lines}在channel._initChannels按容器高度计算轨道，Main.readData逐250ms取未attached弹幕，Channel.addBullet按轨道碰撞拒绝/回池；setArea触发原生resizeSync。当前adapter只把后端normalize记录转换为原生start/duration/mode/lazy element，所有50000源条目交给引擎，不再先抽样或按面积删除。容器100%高度，area仅由引擎内部限制轨道。原生浏览器实测540px、字号24、25/50/75/100有3/6/9/12轨道，active同轨道数，图片像素和安全属性通过。旧Danmaku2.0.10 Canvas和本地HiDPI/lane补丁移除。
+## 2026-10-18 用户反馈“没有弹幕”
+- 根因一：为避免浏览器缓存而加的 `?v=...` 查询串未被本地探针服务器剥离，导致两个脚本404；生产页面已保留版本化地址，探针已正确处理查询串。
+- 根因二：原生danmu.js调度依赖媒体时钟的秒值和readyState；适配器曾只提供空对象。现补齐EventTarget、currentTime、playbackRate、duration、readyState=4，并用同输入浏览器回归确认可出弹。
+- 证据：`var/player-framing/visible-finalize.stdout` 中 MODIFIED NATIVE E2E 与 ROLLBACK NATIVE E2E 均 exit 0，三种mode均有bullet，图片像素red=1102，区域轨道为3/6/9/12。
+
+## 2026-10-18 用户反馈“没有弹幕”
+- 根因一：为避免浏览器缓存而加的版本查询串未被本地探针服务器剥离，导致两个脚本404；生产页面已保留版本化地址，探针已正确处理查询串。
+- 根因二：原生danmu.js调度依赖媒体时钟的秒值和readyState；适配器曾只提供空对象。现补齐EventTarget、currentTime、playbackRate、duration、readyState=4，并用同输入浏览器回归确认可出弹。
+- 证据：`var/player-framing/visible-finalize.stdout` 中 MODIFIED NATIVE E2E 与 ROLLBACK NATIVE E2E 均 exit 0，三种mode均有bullet，图片像素red=1102，区域轨道为3/6/9/12。
+
+## 无弹幕再次排查
+- 当前已包含EventTarget时钟和版本化脚本；不重复声称此前修复已解决本次问题。现有native-probe在accept前直接设置enabled，未覆盖API异步加载和hidden容器启动顺序。保存当前源快照var/player-framing/no-lines-before。
+
+## 确定复现：reduced-motion使原生弹幕瞬间出屏
+- web/styles.css全局prefers-reduced-motion下所有元素transition:none!important覆盖原生danmu.js内联transform/visibility动画。HLS132秒起播、600条相同输入、Chromium reduced_motion=reduce，BASELINE 12次visible全部0（DOM3到31），没有JS错误；正常模式可见。
+- 最小修复为*:not(.danmaku-sprite)，保留UI减少动画、显式弹幕开关、引擎原生区域/碰撞逻辑；styles.css脚本缓存版本更新，添加Node静态回归。
+
+## 无弹幕修复验收
+- 同600条+真实HLS132秒起播，正常模式三版均12/12采样可见；reduce模式BASELINE0/12/0白色屏幕像素，MODIFIED12/12/12409像素（scroll/top/bottom均见），ROLLBACK0/12/0像素。UI临时元素transitionDuration仍0s；未探测用户设备设置，不断言这一定是用户设备触发原因。
+- CSS改为*:not(.danmaku-sprite)，没有更改原生引擎、区域、密度、时钟、数据源或弹幕开关。styles.css添加?v=20261018-danmaku-motion。
+- 完成119项Python、五组Node以及DPR1/2图片、暂停、倍速、缓冲、跳转、全屏、可见性、旧响应隔离回归。
+- 累计patch首次因原vendor无末尾换行，marker前漏换行而重建失败；保留exit1和哈希证据，修正生成器后逐字节一致，vendor未修改。
