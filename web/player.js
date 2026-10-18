@@ -71,6 +71,7 @@ class EmbeddedPlayer {
     this.ui?.on("exitfullscreen", () => this.exitLandscapeFullscreen());
     // Only desktop needs fitting: the mobile layout already follows the video's ratio.
     this.frame = video.closest?.(".video-stage");
+    this.initFraming();
     if (this.frame) {
       const queueFit = () => {
         if (this.frameTask) return;
@@ -209,6 +210,84 @@ class EmbeddedPlayer {
       surface.style.removeProperty("--landscape-width");
       surface.style.removeProperty("--landscape-height");
     }
+  }
+
+  // Change the picture only: the timeline, controls and subtitle overlay stay unscaled.
+  initFraming() {
+    if (!this.frame) return;
+    const doc = this.video.ownerDocument;
+    const controls = this.ui?.elements?.controls;
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.className = "plyr__controls__item plyr__control framing-toggle";
+    button.textContent = "画面";
+    button.setAttribute("aria-label", "画面缩放与裁剪");
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", "videoFraming");
+    const panel = doc.createElement("div");
+    panel.id = "videoFraming";
+    panel.className = "framing-panel";
+    panel.hidden = true;
+    panel.setAttribute("role", "group");
+    panel.setAttribute("aria-label", "画面缩放与裁剪");
+    panel.innerHTML = `
+      <label for="videoFit">显示方式</label>
+      <select id="videoFit">
+        <option value="contain">完整显示（保留比例）</option>
+        <option value="cover">铺满裁剪（保留比例）</option>
+      </select>
+      <label for="videoZoom">画面缩放 <output id="videoZoomValue" for="videoZoom">100%</output></label>
+      <input id="videoZoom" type="range" min="50" max="200" step="5" value="100" aria-describedby="videoFramingHelp">
+      <p id="videoFramingHelp">缩小留边，放大后超出边缘的画面会被裁剪。</p>
+      <button type="button" class="framing-reset">重置画面</button>`;
+    this.frame.appendChild(panel);
+    if (controls) {
+      const settings = controls.querySelector('[data-plyr="settings"]')?.closest(".plyr__controls__item");
+      controls.insertBefore(button, settings?.parentElement === controls ? settings : null);
+    } else this.frame.appendChild(button);
+    if (!controls) button.classList.add("framing-fallback");
+    const zoom = panel.querySelector("#videoZoom");
+    const fit = panel.querySelector("#videoFit");
+    const output = panel.querySelector("output");
+    const apply = () => {
+      const value = Math.max(50, Math.min(200, Number(zoom.value) || 100));
+      this.video.style.transform = `scale(${value / 100})`;
+      this.video.style.objectFit = fit.value === "cover" ? "cover" : "contain";
+      output.value = `${value}%`;
+      zoom.setAttribute("aria-valuetext", `${value}%`);
+    };
+    const close = (focus = false) => {
+      panel.hidden = true;
+      this.frame.classList.remove("framing-open");
+      button.setAttribute("aria-expanded", "false");
+      if (focus) button.focus();
+    };
+    button.addEventListener("click", () => {
+      panel.hidden = !panel.hidden;
+      this.frame.classList.toggle("framing-open", !panel.hidden);
+      button.setAttribute("aria-expanded", String(!panel.hidden));
+      if (!panel.hidden) fit.focus();
+    });
+    zoom.addEventListener("input", apply);
+    fit.addEventListener("change", apply);
+    panel.querySelector(".framing-reset").addEventListener("click", () => {
+      zoom.value = "100";
+      fit.value = "contain";
+      apply();
+    });
+    // Arrow keys adjust the slider/select, not Plyr's seeking or volume shortcuts.
+    for (const element of [panel, button]) element.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key === "Escape" && !panel.hidden) {
+        event.preventDefault();
+        close(true);
+      }
+    });
+    doc.addEventListener("pointerdown", (event) => {
+      if (!panel.hidden && !panel.contains(event.target) && !button.contains(event.target)) close();
+    });
+    this.ui?.on("exitfullscreen", () => close());
+    apply();
   }
 
   fitFrame() {

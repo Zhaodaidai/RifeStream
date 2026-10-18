@@ -225,3 +225,26 @@ button.danger-button:hover:not(:disabled) { background: var(--danger); color: va
   .switch { min-height: 36px; }
   .connection-notice { align-items: stretch; flex-direction: column; gap: 10px; }
 }
+
+/* Picture framing is local to the video; controls and subtitle overlays never scale. */
+.video-stage .plyr__video-wrapper { overflow: hidden; }
+#videoPlayer { transform-origin: center; }
+.framing-panel {
+  position: absolute; z-index: 5; right: 8px; bottom: 58px;
+  width: min(280px, calc(100% - 16px)); box-sizing: border-box;
+  max-height: min(320px, calc(100dvh - 80px)); overflow: auto;
+  padding: 14px; border: 1px solid var(--line); border-radius: 10px;
+  color: var(--text); background: var(--panel); box-shadow: 0 8px 28px var(--dialog-shadow);
+  font-size: 13px; line-height: 1.5;
+}
+.framing-panel[hidden] { display: none; }
+.framing-panel label { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.framing-panel select { width: 100%; margin-bottom: 12px; color: var(--text); background: var(--panel-2); border: 1px solid var(--input-border); padding: 7px; border-radius: 5px; }
+.framing-panel input[type="range"] { width: 100%; min-height: 28px; padding: 0; margin: 0; accent-color: var(--accent); }
+.framing-panel p { margin: 6px 0 12px; color: var(--muted); font-size: 12px; }
+.framing-panel .framing-reset { width: 100%; min-height: 34px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); }
+.video-stage .framing-toggle { flex: none; font-size: 12px; white-space: nowrap; }
+.framing-fallback { position: absolute; right: 10px; top: 10px; z-index: 3; }
+
+/* Let the popover extend above a short mobile video; the picture wrapper still clips zoom. */
+.video-stage.framing-open { overflow: visible; z-index: 5; }

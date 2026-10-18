@@ -112,3 +112,10 @@
 播放器内部上一集/下一集完成：顺序上一集-播放/暂停-下一集，首末/单集/空列表按后端可用性隐藏，移除外部三按钮。Chromium实际WebUI/API/Playlist.select+H264/AAC HLS验证切集、停止后重启、本地暂停、失败恢复、键盘/焦点、真全屏与移动触摸横屏；320–1920px无溢出/进度>=35px、1080p/4K比例回归通过，101项Python/两组Node通过。初始98项后收到独立设置更新，合并基线99项（保留Anime4K），修改101，隔离回滚99；四角色原路径保留，--episode-nav-before只回滚本轮六个文件，默认完整历史回滚。
 
 WebUI继续优化完成：确认清空（媒体数/不删源文件/取消/Escape/失败重试/忙碌防重），连接状态提示与单飞重试/恢复焦点，手机列表触控和具名删除标签。浏览器真实临时Playlist/API验证，非用户列表；播放/HLS整集进度、320–1920、1080p/4K及横屏全屏回归通过。基线101项→修改103项→隔离回滚101项，两组Node各状态通过，历史70项默认回滚、补丁重建/重新应用哈希一致。四角色原路径保留，本轮回滚选项--polish-before；10000静态资源哈希匹配，前端刷新生效。
+
+## 2026-10-18 播放器画面占比调节完成
+- 仅修改web/player.js、web/styles.css，新增tests/test_web_framing.js；后端/播放列表/转码尺寸不变。
+- BASELINE无画面调节；MODIFIED支持50/100/150/200%、contain/cover、重置、全屏、320/390/768/1280/1920布局与Escape焦点恢复；ROLLBACK无调节且源文件哈希恢复一致，三次probe退出0。
+- 103项Python、三组Node与JS语法通过；补丁重建所有字节一致，四角色重开，当前工作区保持修改版。
+- 四角色位于/mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；截图framing-mobile.png、framing-preview.png已查看。原记录中临时四角色实体未找到，本轮按项目var持久保存。
+- 修复测试暴露的设置按钮嵌套insertBefore错误及组件硬编码颜色；像素探针PIL缺失改浏览器PNG解码，无新增依赖。

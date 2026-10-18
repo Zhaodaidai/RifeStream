@@ -115,3 +115,10 @@
 播放器导航：在真实Plyr控制栏播放按钮两侧插入同类按钮，has_prev/has_next决定hidden，仍调用现有/api/play offset±1；内部播放拦截仅在空闲时启动转码，已加载时保留Plyr本地暂停/恢复。请求busy覆盖三个入口，首末切换的焦点在完成后恢复。861窄桌面隐藏音量滑杆，手机压缩图标边距，保持进度条一行。独立Anime4K设置更新已保留。
 
 WebUI打磨：清空原先立即POST且停止转码；改为原生dialog默认保留列表，成功后关闭、失败内联重试，pending禁止重复提交/Escape。轮询失败独立连接提示不重置media，单航班刷新与版本屏障保留，恢复自动隐藏并避免隐藏控件残留焦点。仅复用现有主题token，移动列表操作40px触控；不改Plyr/转码业务。
+
+## 2026-10-18 播放器画面缩放
+- TARGET 为 web/player.js 的 EmbeddedPlayer，Plyr 实际全屏容器 .video-stage；只缩放 video，不缩放控制栏与字幕层。
+- 原有 fitFrame 保持源比例；缩放和 contain/cover 显示在固定 viewport 内，不修改后端、RIFE、编码尺寸。
+- 当前临时文件系统未找到先前记录中的四角色实体，使用项目 var/player-framing 保存本轮四角色与原字节快照。
+
+画面调节完成：EmbeddedPlayer.initFraming 控制 video.style.transform/objectFit，不缩放控件/字幕；50–200%，完整显示/铺满裁剪，重置，Escape/外部点击关闭，全屏保留。320px面板可越过视频框向上展开，视频wrapper独立裁剪。实际像素验证蓝色侧部→200%红色中心。生产HTML+真实Plyr、合成视频流验证，无pageerror；未声称手机真机验证。
