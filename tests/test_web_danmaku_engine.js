@@ -140,6 +140,26 @@ for (const rate of [1.5, 2, 1]) {
 assert.equal(d.calls.stops, rateStops);
 assert.equal(d.calls.updates, 1);
 
+// The independent speed control changes native motion only, not video or pool.
+const speedPool = d.comments, speedLayout = d.layout, speedUpdates = d.calls.updates;
+const speedStops = d.calls.stops;
+for (const speed of [.5, 1.5, 2, 1]) {
+  d.settings.speed = speed; d.sync(); settle();
+  assert.equal(d.engine.rate, speed);
+  assert.equal(d.video.playbackRate, 1);
+  assert.equal(d.comments, speedPool);
+  assert.equal(d.layout, speedLayout);
+  assert.equal(d.calls.updates, speedUpdates);
+  assert.equal(d.calls.stops, speedStops);
+  assert.equal(d.activeCanvases.get(live), raster);
+}
+d.settings.speed = 1.5;
+d.video.playbackRate = 2; d.video.dispatchEvent(new Event('ratechange')); settle();
+assert.equal(d.engine.rate, 3, 'video 2x and danmaku 1.5x compose without altering timestamps');
+assert.equal(d.comments[240].time, 24);
+d.video.playbackRate = 1; d.settings.speed = 1; d.sync(); settle();
+console.log('PASS: independent danmaku speed composes with video rate; no pool/layout/sprite reset');
+
 // Image completion redraws pixels, not the paused media/animation clock.
 let paints = 0, copies = 0;
 const imageRaster = { runs: [{ src: 'https://example.com/image.png' }], canvas: {} };

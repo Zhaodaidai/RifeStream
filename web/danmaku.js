@@ -5,7 +5,12 @@
  * Image decoding repaints sprites only, never the media clock or comment pool.
  */
 class DanmakuOverlay {
-  static defaults = { enabled: false, opacity: 100, fontSize: 24, area: 50 };
+  static defaults = { enabled: false, opacity: 100, fontSize: 24, area: 50, speed: 1 };
+
+  static normalizeSpeed(value) {
+    const speed = Number(value);
+    return Number.isFinite(speed) && speed > 0 ? Math.max(0.5, Math.min(2, Math.round(speed * 10) / 10)) : 1;
+  }
 
   static normalize(entries) {
     if (!Array.isArray(entries)) throw new Error("JSON 弹幕需为数组或包含 comments 数组");
@@ -152,6 +157,7 @@ class DanmakuOverlay {
         opacity: Math.max(10, Math.min(100, Number(saved.opacity) || 100)),
         fontSize: Math.max(12, Math.min(36, Math.round(Number(saved.fontSize) || 24))),
         area: Math.max(25, Math.min(100, Math.round((Number(saved.area) || 50) / 25) * 25)),
+        speed: DanmakuOverlay.normalizeSpeed(saved.speed),
       };
     } catch { /* Storage may be unavailable in private/embedded contexts. */ }
     this.host = this.doc.createElement("div");
@@ -214,6 +220,7 @@ class DanmakuOverlay {
       <div class="danmaku-setting-row"><label for="danmakuOpacity">不透明度</label><input id="danmakuOpacity" type="range" min="10" max="100" step="5"><output id="danmakuOpacityValue" for="danmakuOpacity"></output></div>
       <div class="danmaku-setting-row"><label for="danmakuFontSize">字号</label><input id="danmakuFontSize" type="range" min="12" max="36" step="1"><output id="danmakuFontSizeValue" for="danmakuFontSize"></output></div>
       <div class="danmaku-setting-row"><label for="danmakuArea">显示区域</label><input id="danmakuArea" type="range" min="25" max="100" step="25"><output id="danmakuAreaValue" for="danmakuArea"></output></div>
+      <div class="danmaku-setting-row"><label for="danmakuSpeed">弹幕速度</label><input id="danmakuSpeed" type="range" min="0.5" max="2" step="0.1" title="仅改变弹幕速度，不影响视频倍速"><output id="danmakuSpeedValue" for="danmakuSpeed"></output></div>
       <form id="danmakuLinkForm" class="danmaku-link-form">
         <label for="danmakuLink">手动指定本集弹幕</label>
         <p id="danmakuLinkHelp">找不到或版本不对？粘贴 B 站番剧分集链接，仅对本集生效。</p>
@@ -248,12 +255,12 @@ class DanmakuOverlay {
       button.setAttribute("aria-expanded", String(!panel.hidden));
       if (!panel.hidden) panel.querySelector("input").focus();
     });
-    const fields = { enabled: "#danmakuEnabled", opacity: "#danmakuOpacity", fontSize: "#danmakuFontSize", area: "#danmakuArea" };
+    const fields = { enabled: "#danmakuEnabled", opacity: "#danmakuOpacity", fontSize: "#danmakuFontSize", area: "#danmakuArea", speed: "#danmakuSpeed" };
     for (const [key, selector] of Object.entries(fields)) {
       const input = panel.querySelector(selector);
       if (key === "enabled") input.checked = this.settings[key]; else input.value = String(this.settings[key]);
       input.addEventListener(key === "enabled" ? "change" : "input", () => {
-        this.settings[key] = key === "enabled" ? input.checked : Number(input.value);
+        this.settings[key] = key === "enabled" ? input.checked : key === "speed" ? DanmakuOverlay.normalizeSpeed(input.value) : Number(input.value);
         try { window.localStorage.setItem("rife.danmaku", JSON.stringify(this.settings)); } catch { /* optional */ }
         this.updateControls();
         if (key === "area" || key === "fontSize") this.rebuild();
@@ -276,7 +283,8 @@ class DanmakuOverlay {
     this.panel.querySelector("#danmakuOpacityValue").value = `${this.settings.opacity}%`;
     this.panel.querySelector("#danmakuFontSizeValue").value = `${this.settings.fontSize}px`;
     this.panel.querySelector("#danmakuAreaValue").value = ({25: "1/4屏", 50: "半屏", 75: "3/4屏", 100: "全屏"})[this.settings.area];
-    for (const id of ["danmakuOpacity", "danmakuFontSize", "danmakuArea"]) {
+    this.panel.querySelector("#danmakuSpeedValue").value = `${DanmakuOverlay.normalizeSpeed(this.settings.speed).toFixed(1)}×`;
+    for (const id of ["danmakuOpacity", "danmakuFontSize", "danmakuArea", "danmakuSpeed"]) {
       const input = this.panel.querySelector(`#${id}`);
       const value = this.panel.querySelector(`#${id}Value`).value;
       input.setAttribute("aria-valuetext", value);
@@ -587,7 +595,7 @@ class DanmakuOverlay {
       visible: this.settings.enabled && this.loaded && !this.doc.hidden &&
         !this.player.seeking && !this.video.seeking && !this.player.reloading,
       playing: !this.video.paused && !this.video.ended && !this.buffering,
-      rate: Number(this.video.playbackRate) || 1,
+      rate: (Number(this.video.playbackRate) || 1) * DanmakuOverlay.normalizeSpeed(this.settings.speed),
     };
   }
 

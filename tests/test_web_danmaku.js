@@ -26,3 +26,10 @@ assert.equal(D.defaults.opacity,100);
 const source = fs.readFileSync('web/danmaku.js','utf8');
 for (const removed of ['danmakuFile', 'danmaku-reload', 'danmaku-source', '重新加载本集弹幕', '导入 XML']) assert.equal(source.includes(removed),false);
 console.log('Local import/reload UI, handlers and hints removed; automatic loading preserved');
+
+assert.equal(D.defaults.speed, 1);
+for (const [value, expected] of [[undefined,1],[null,1],[0,1],[-1,1],['bad',1],[Infinity,1],[0.1,0.5],[0.5,0.5],[1.24,1.2],['1.5',1.5],[2,2],[20,2]]) {
+  assert.equal(D.normalizeSpeed(value), expected, `speed normalization: ${value}`);
+}
+assert.ok(source.includes('id="danmakuSpeed"'));
+console.log('Speed defaults, old/invalid saved settings, clamp and slider markup passed');

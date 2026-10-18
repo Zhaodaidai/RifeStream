@@ -257,3 +257,16 @@
 - [complete] 真实例子ep3854813返回3600条；API标注为第189集“慕兰之战13”。未替用户把这个例子绑定到当前视频，测试保存均在临时playlist。
 - [complete] 修正同mtime挂载文件系统的刷新测试失败（保存前锁内读取最新列表并保留全局错误）；隔离来源设置的400/500错误，避免generic send_json污染播放器全局错误；浏览器纯宿主测试中的空播放器遮罩由测试CSS隐藏后通过。失败来源、字面输出与exit均保留在VERIFICATION。
 - [complete] 复用并重开四角色 /mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；本轮恢复参数 --manual-bilibili-before；补充记录 manual-bilibili/。一次性重启WebUI并强制刷新以加载后端与新UI，未主动打断用户播放。
+
+## 2026-10-19 弹幕速度调节栏（进行中）
+- [pending] 新增0.5～2.0倍、步进0.1、默认1.0的弹幕速度slider；旧设置兼容、持久化和可访问数值提示。
+- [pending] 复用原生setPlayRate，弹幕速度与视频倍速相乘，仅改变原生运动，不改视频倍速/源时间戳/布局/弹幕池。
+- [pending] 同输入三方验证、真实浏览器运动速度/暂停/倍速/刷新/恢复/已有弹幕来源回归，复用四角色。
+
+## 2026-10-19 弹幕速度调节栏（完成）
+- [complete] web/danmaku.js 新增 settings.speed/defaults.speed/normalizeSpeed、0.5～2.0倍步进0.1滑杆、1.0默认值、实时倍速输出/aria提示、localStorage持久化和旧配置兼容；index缓存版本更新。
+- [complete] playbackState.rate 使用视频倍速×弹幕速度，复用原生setPlayRate；不改视频倍速/时间戳/弹幕池/布局/活动节点，暂停时仍暂停，倍速生效后无需重载源。
+- [complete] 同输入视频1.5x、滑杆0.5/1/2：BASELINE无滑杆且原生只1.5；MODIFIED有滑杆且原生0.75/1.5/3；ROLLBACK恢复无滑杆/1.5，stdout一致、原始哈希一致；修改版保留，累计补丁精确重建通过。
+- [complete] 真实浏览器原生scroll速度约73.09/146.18/292.36像素每秒，对应0.5/1/2，活动节点/源池/layout保持；2x弹幕与1.5x视频合成3x；暂停调速不恢复播放；键盘0.8x刷新后保留；320/390宽度无横向溢出，截图已检查。
+- [complete] 146项Python、五组Node、独立速度/自动匹配/手动链接浏览器、原生DPR1/2全部exit0。探针缺失cancelAnimationFrame与Playwright对output误用input_value两项工具错误已记录并修正，不改产品绕过。
+- [complete] 四角色复用且已重开 /mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；回滚参数 --danmaku-speed-before，补充记录 danmaku-speed/。纯前端变更，刷新页面即可，无需重启后端；未打断用户播放或修改播放列表。
