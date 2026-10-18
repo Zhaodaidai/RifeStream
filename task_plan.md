@@ -221,3 +221,25 @@
 - [complete] 同输入记录重建/seek/倍速/图像更新现有行为，保留原始快照，锁定当前web/danmaku.js。
 - [complete] 把源数据、布局、媒体状态、图片重绘分开；单集只转换一次，引擎原生stop/start负责复位，不在seek/倍速重建全量池。
 - [complete] 同尺寸resize保留节点、源转换/全量提交10/27→1/1，倍速5/5节点保留；暂停图片/预览播放竞态/异步加载超时旧响应测试通过；119项Python+五组Node+DPR1/2浏览器+真实HLS可见性通过；三方还原27/10/0节点保留、哈希与累计patch/历史回滚验证通过，原四角色重开。
+
+## 2026-10-18 本地第一集绑定 Bilibili ep733316（完成）
+- 当前本地文件 source 保持不变，仅 olink 绑定指定链接；分集 API 确认为凡人风起天南1重制版，cid=1022370693。
+- 第三方解析返回0条；新增 Bilibili bangumi ep 精确分集解析及有界 deflate/gzip 解压，真实 XML 返回3600条（不保证全量历史）。
+- 同输入 fixture BASELINE 0 → MODIFIED 1 → ROLLBACK 0，exit0，回滚哈希一致；真实网络3600条。Python和Node回归与新增压缩/超限/错误分集测试通过。
+- 复用 var/player-framing 四角色，累计补丁本轮文件重建一致，ROLLBACK.sh --bilibili-before 可恢复本轮代码和playlist；localhost:10000不可达，未验证正在播放的浏览器显示。
+
+## 2026-10-18 无自带弹幕时自动匹配 Bilibili（进行中）
+- [pending] 解析本地标题/文件名中的片名、集数、季数；通过 Bilibili 综合搜索匹配官方番剧/影视分集，拒绝歧义和不相干结果。
+- [pending] 后端仅在缺少 olink 时自动寻找，缓存结果；前端无 olink 也触发加载，切集隔离和来源状态保留。
+- [pending] 同输入基线/修改/回滚、标题/集数/季数/网络异常/已有来源测试、真实第1/2集验证，复用四角色。
+- 接口探测：search/type 对部分分类返回 HTTP 412；search/all/v2 成功返回凡人修仙传官方番剧及 ep733316/733317。不尝试绕过平台拒绝。
+
+## 2026-10-18 无自带弹幕时自动匹配 Bilibili（完成）
+- [complete] 新增 rife/danmaku_match.py：清洗文件名/标题，识别中文集数/季数、SxxExx/EPxx/发布式编号；仅精确匹配官方番剧/影视标题及唯一分集，拒绝剪辑、特别篇、不同配音、跨季和多版本歧义。仅发送片名与季数，不发送本地目录或 URL token。
+- [complete] /api/danmaku 仅对已存在的播放条目工作；olink 优先，缺少时自动寻找。前端 setItem/load/enabled 不再以 olink 为前置条件，显示自动匹配来源/失败/无匹配，切集取消旧响应，关闭弹幕时不主动搜索。
+- [complete] 有界24MiB/32项缓存、同请求并发合并、成功10分钟/无匹配2分钟/网络错误1分钟缓存；不修改用户播放列表或本地视频。
+- [complete] 同请求 BASELINE 缺少olink报错 → MODIFIED 自动ep733317 → ROLLBACK 原报错，exit0且回滚哈希一致；独立恢复后工作区保持修改版。保留上一轮B站直连获取逻辑不变。
+- [complete] 真实无olink输入凡人1/2、芙莉莲2分别命中ep733316/733317/779776，各3600条；当前播放列表已由用户切到本地第2集、olink为空，临时实际HTTP路由返回200/3600条，无需绑定链接。
+- [complete] 136项Python、五组Node、浏览器第一集→第二集→无匹配可见流、原生DPR1/2均通过；累计补丁重建精确一致，四角色已重开。
+- [complete] 记录并修正SP01识别测试失败、diff生成的历史CRLF规范化错误、新增CRLF行的whitespace检查、zsh只读status包装器错误。最终全部检查exit0；未重启用户正在播放的进程，需一次性重启WebUI并刷新页面加载新逻辑。
+- 四角色：/mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；本轮回滚模式 --auto-bilibili-before，检查记录 auto-bilibili/。

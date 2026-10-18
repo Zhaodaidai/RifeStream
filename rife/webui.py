@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import uuid
 import time
 
-from rife.danmaku import load_danmaku
+from rife.danmaku_match import load_item_danmaku
 from rife.hls import clear_hls_output
 from rife.hls_server import ensure as ensure_hls_server
 from rife.paths import (
@@ -719,21 +719,21 @@ class WebHandler(BaseHTTPRequestHandler):
             self.send_json(self.state_payload())
             return
         if path == "/api/danmaku":
-            # Only a source already attached to a playlist item may be fetched.
+            # Explicit olink first; otherwise conservatively auto-match Bilibili.
             item_id = parse_qs(parsed.query).get("id", [""])[0]
             PLAYLIST.refresh()
             snapshot = PLAYLIST.snapshot()
             item = next((item for item in snapshot["items"] if item["id"] == item_id), None)
-            if not item or not item.get("olink"):
-                self.send_danmaku_error("本集未提供 olink 弹幕地址")
+            if not item:
+                self.send_danmaku_error("播放条目不存在")
                 return
             try:
-                comments = load_danmaku(item["olink"])
+                result = load_item_danmaku(item)
             except (ValueError, OSError) as exc:
                 # Loading danmaku must not poison playback's global error state.
                 self.send_danmaku_error(str(exc))
                 return
-            self.send_json({"comments": comments, "item_id": item_id})
+            self.send_json({**result, "item_id": item_id})
             return
         self.serve_static(path)
 

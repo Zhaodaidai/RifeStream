@@ -281,6 +281,31 @@ async function loadingTests() {
   assert.equal(loaded.loading, false);
   assert.equal(loaded.controller, null);
   assert.equal(timers.size, 0, 'all completed/superseded request timers released');
+  // Missing olink must auto-load and select the next episode without manual URLs.
+  loaded.settings.enabled = true;
+  loaded.setItem({ id: 'local-2', title: '凡人修仙传第2集', source: 'local-2.mp4' });
+  assert.equal(requests.length, 7);
+  assert.match(loaded.status.textContent, /自动匹配/);
+  assert.equal(requests[6].url, '/api/danmaku?id=local-2');
+  requests[6].resolve({ ok: true, json: async () => ({ comments: newSource, source: 'Bilibili 自动匹配 · 凡人修仙传 第2集' }) });
+  await tick(); settle();
+  assert.equal(loaded.loaded, true);
+  assert.match(loaded.status.textContent, /第2集.*1 条弹幕/);
+  loaded.setItem({ id: 'local-2', title: '凡人修仙传第2集', source: 'local-2.mp4' });
+  assert.equal(requests.length, 7, 'polling does not repeat auto search');
+  loaded.setItem({ id: 'local-3', title: '凡人修仙传第3集', source: 'local-3.mp4' });
+  loaded.setItem({ id: 'local-4', title: '凡人修仙传第4集', source: 'local-4.mp4' });
+  assert.equal(requests[7].signal.aborted, true);
+  requests[7].resolve({ ok: true, json: async () => ({ comments: [{ time: 1, text: 'wrong episode 3' }] }) });
+  requests[8].resolve({ ok: true, json: async () => ({ comments: [], source: 'Bilibili 自动匹配', message: '没有明确匹配' }) });
+  await tick(); settle();
+  assert.equal(loaded.comments.length, 0);
+  assert.equal(loaded.status.textContent, '没有明确匹配');
+  assert.equal(loaded.loaded, true, 'no-match must not create a polling retry loop');
+  loaded.setItem(null);
+  assert.equal(requests.length, 9, 'empty playlist never triggers search');
+  assert.equal(timers.size, 0);
+  console.log('PASS: no-olink auto search, source label, exact episode switch, stale response isolation and no-match state');
   console.log('PASS: async source replacement, late response/JSON isolation, no duplicate fetch, error/retry/timeout cleanup');
 }
 loadingTests().catch(error => { console.error(error); process.exitCode = 1; });

@@ -241,7 +241,7 @@ class DanmakuOverlay {
         try { window.localStorage.setItem("rife.danmaku", JSON.stringify(this.settings)); } catch { /* optional */ }
         this.updateControls();
         if (key === "area" || key === "fontSize") this.rebuild();
-        if (key === "enabled" && this.settings.enabled && !this.loaded && this.item?.olink && !this.loading) this.load();
+        if (key === "enabled" && this.settings.enabled && !this.loaded && this.item && !this.loading) this.load();
         this.sync();
       });
     }
@@ -305,7 +305,7 @@ class DanmakuOverlay {
   }
 
   setItem(item) {
-    const identity = item ? JSON.stringify([item.id, item.olink || ""]) : "";
+    const identity = item ? JSON.stringify([item.id, item.olink || "", item.title || "", item.source || ""]) : "";
     if (identity === this.identity) return;
     this.identity = identity;
     this.cancelLoad();
@@ -314,8 +314,8 @@ class DanmakuOverlay {
     this.releaseImages();
     this.releaseSprites();
     this.item = item;
-    this.status.textContent = item?.olink ? "已接收 olink，开启弹幕后加载" : "本集未提供 olink 弹幕地址";
-    if (this.settings.enabled && item?.olink) this.load();
+    this.status.textContent = !item ? "当前没有播放条目" : item.olink ? "已接收自带弹幕，开启后加载" : "无自带弹幕，开启后自动从 Bilibili 匹配";
+    if (this.settings.enabled && item) this.load();
     this.sync();
   }
 
@@ -323,18 +323,19 @@ class DanmakuOverlay {
     this.cancelLoad();
     this.loaded = false;
     this.replaceComments([]);
-    if (!this.item?.olink) { this.status.textContent = "本集未提供 olink 弹幕地址"; return; }
+    if (!this.item) { this.status.textContent = "当前没有播放条目"; return; }
     const token = this.token;
     const controller = this.controller = new AbortController();
     this.loading = true;
-    this.status.textContent = "正在加载本集弹幕…";
-    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    this.status.textContent = this.item.olink ? "正在加载本集自带弹幕…" : "正在从 Bilibili 自动匹配本集弹幕…";
+    const timeout = window.setTimeout(() => controller.abort(), this.item.olink ? 25000 : 40000);
     try {
       const response = await fetch(`/api/danmaku?id=${encodeURIComponent(this.item.id)}`, { signal: controller.signal });
       const data = await response.json();
       if (token !== this.token) return;
       if (!response.ok) throw new Error(data.error || "弹幕请求失败");
-      this.accept(DanmakuOverlay.normalize(data.comments), "olink");
+      this.accept(DanmakuOverlay.normalize(data.comments), data.source || (this.item.olink ? "自带弹幕" : "Bilibili 自动匹配"));
+      if (data.message) this.status.textContent = data.message;
     } catch (error) {
       if (token === this.token) this.status.textContent = error.name === "AbortError" ? "弹幕加载超时，可关闭后重新开启弹幕重试" : `弹幕加载失败：${error.message}`;
     } finally {
