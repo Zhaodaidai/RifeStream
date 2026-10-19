@@ -298,3 +298,16 @@
 - [complete] 最终BASELINE155/MODIFIED176/ROLLBACK155/DEPLOYED176均通过；追加真实断管、诊断跨chunk/内存上限/日志保真测试。176项取代中间173项作为最终验收。
 - [complete] 原1152组命令与RIFE环境仍逐字相同；时间轴补丁+本轮初版补丁+boundary-fix.patch组合精确重建；最终副本经原ROLLBACK.sh --pipeline-before恢复基线哈希和155项测试。
 - [complete] 四角色仍位于var/player-framing并已重开；完整字面结果追加VERIFICATION.txt，新增边界证据和最终复验保留pipeline-lifecycle/。
+
+## 播放会话隔离 session_id
+- [in_progress] 锁定 stream/webui/paths；新会话ID、跨进程归属锁、原子状态、旧worker清理/状态/日志隔离；保留HLS地址/API既有字段/编码配置。
+- 复用var/player-framing四角色；补充session-isolation/。已有stream.cpython-312.pyc为用户预存变动，不覆盖。
+
+### 播放会话隔离完成
+- [complete] 新增rife/sessions.py：UUID所有权、OS进程锁和原子JSON；starting/probing/running/finished/failed/stopped；状态含session_id/item_id/pid。锁外等待进程，保留HLS路径。
+- [complete] WebUI播放/切集/后端seek分配新ID，worker只附着指定ID；旧状态/日志/退出通知/清理不能影响后继；异常退出兜底；已结束PID不再被误杀；旧进程退出超时拒绝复用共享HLS。
+- [complete] 保留API原playback_id数值与路由；追加session_id，前端seek携带两种令牌，播放器与清单缓存使用UUID并兼容旧后端；相同时间戳重播也可隔离，缓冲内本地seek仍不启动新会话。
+- [complete] BASELINE176/MODIFIED207/ROLLBACK176/DEPLOYED207项Python，三方及部署5组Node均通过；相同旧会话输入由污染状态/清除后继资源/旧错误改为拒绝且保留后继字节；原哈希恢复/补丁精确重建通过。新增31项覆盖真实子进程连续播放seek、延迟清理、进程锁、原子JSON、PID复用、退出/启动/探测边界与退休超时。
+- [complete] 原1152组命令和RIFE环境逐字相同；沿用var/player-framing四角色并重开，补充session-isolation/；回滚ROLLBACK.sh TARGET_COPY --session-before。预存stream.cpython-312.pyc变动保持不动。
+- 工具/测试错误及修正：首次脚本相对路径重复、混合换行定位失败、缺失状态路径误建锁、JS抽取越界、PID探活mock不完整均已改命令/实现/测试并重跑，证据留checks与VERIFICATION。
+- 未重启WebUI或中断实际播放；需用户方便时重启WebUI并刷新页面生效。未实测本轮Windows进程锁与NVIDIA实播。

@@ -1,5 +1,6 @@
 import argparse
 from dataclasses import dataclass
+from contextlib import nullcontext
 from fractions import Fraction
 import json
 import math
@@ -13,6 +14,10 @@ import tempfile
 import time
 import sys
 from urllib.parse import urlsplit, urlunsplit
+
+from rife.sessions import SessionStore, atomic_json
+
+WORKER_SESSION_ID: str | None = None
 
 from rife.hls import (
     HLS_MUXER_FLAGS,
@@ -731,6 +736,7 @@ def parse_args() -> argparse.Namespace:
         description="VSPipe RIFE -> standalone FFmpeg NVENC -> HLS"
     )
     parser.add_argument("input", help="local file or HTTP video URL")
+    parser.add_argument("--session-id", help=argparse.SUPPRESS)
     parser.add_argument("--audio-input", help="separate local file or HTTP audio URL")
     parser.add_argument(
         "--http-header-field",
@@ -1015,18 +1021,31 @@ def cleanup_subtitles(source: StreamInput | None) -> None:
     shutil.rmtree(source.subtitle_workdir, ignore_errors=True)
 
 
+def session_store() -> SessionStore:
+    return SessionStore(STREAM_PID_FILE, STREAM_STATUS_FILE)
+
+
 def owns_stream_process() -> bool:
-    return read_pid(STREAM_PID_FILE) == os.getpid()
+    store = session_store()
+    owner = store.read()
+    if WORKER_SESSION_ID is not None:
+        return store.matches(owner, WORKER_SESSION_ID, os.getpid())
+    return owner is None and read_pid(STREAM_PID_FILE) == os.getpid()
 
 
 def release_stream_files(playlist: Path, *, failed: bool) -> None:
-    """An old worker must never clear a successor's media or ownership files."""
-    if not owns_stream_process():
-        return
-    if failed:
-        clear_hls_output(playlist)
-    STREAM_PID_FILE.unlink(missing_ok=True)
-    STREAM_STATUS_FILE.unlink(missing_ok=True)
+    store = session_store()
+    with store.locked():
+        if not owns_stream_process():
+            return
+        if failed:
+            clear_hls_output(playlist)
+        if WORKER_SESSION_ID is not None:
+            owner = store.read()
+            owner.update(state="failed" if failed else "finished")
+            atomic_json(store.path, owner)
+        STREAM_PID_FILE.unlink(missing_ok=True)
+        STREAM_STATUS_FILE.unlink(missing_ok=True)
 
 
 def stop_process(process: subprocess.Popen[bytes] | None) -> None:
@@ -1047,18 +1066,16 @@ def stop_process(process: subprocess.Popen[bytes] | None) -> None:
         process.wait(timeout=5)
 
 
-def write_stream_status(source: StreamInput, start: float) -> None:
+def write_stream_status(source: StreamInput, start: float) -> bool:
     ensure_var()
-    STREAM_STATUS_FILE.write_text(
-        json.dumps(
-            {
-                "duration": source.info.duration,
-                "start": start,
-                "started_at": time.time(),
-            }
-        ),
-        encoding="utf-8",
-    )
+    payload = {"duration": source.info.duration, "start": start, "started_at": time.time()}
+    if WORKER_SESSION_ID is not None:
+        return session_store().publish(WORKER_SESSION_ID, os.getpid(), payload)
+    with session_store().locked() as store:
+        if store.read() is not None:
+            return False
+        atomic_json(STREAM_STATUS_FILE, payload)
+    return True
 
 
 @dataclass(frozen=True)
@@ -1095,18 +1112,22 @@ class PipelineRunner:
         self.cancel_signal = signum
 
     def start(self, name: str, command: list[str], **kwargs) -> subprocess.Popen[bytes]:
-        self.active_stage = name
-        if name == "decoder":
-            kwargs["stderr"] = subprocess.PIPE
-        process = subprocess.Popen(command, cwd=ROOT, creationflags=PROCESS_FLAGS, **kwargs)
-        self.processes[name] = process
-        if name == "decoder" and process.stderr is not None:
-            self.decoder_stderr_thread = threading.Thread(
-                target=self.read_decoder_stderr, args=(process,),
-                name="rife-decoder-stderr", daemon=True,
-            )
-            self.decoder_stderr_thread.start()
-        return process
+        guard = session_store().locked() if WORKER_SESSION_ID is not None else nullcontext()
+        with guard:
+            if WORKER_SESSION_ID is not None and not owns_stream_process():
+                raise RuntimeError("Playback session superseded")
+            self.active_stage = name
+            if name == "decoder":
+                kwargs["stderr"] = subprocess.PIPE
+            process = subprocess.Popen(command, cwd=ROOT, creationflags=PROCESS_FLAGS, **kwargs)
+            self.processes[name] = process
+            if name == "decoder" and process.stderr is not None:
+                self.decoder_stderr_thread = threading.Thread(
+                    target=self.read_decoder_stderr, args=(process,),
+                    name="rife-decoder-stderr", daemon=True,
+                )
+                self.decoder_stderr_thread.start()
+            return process
 
     def read_decoder_stderr(self, process: subprocess.Popen[bytes]) -> None:
         try:
@@ -1136,6 +1157,8 @@ class PipelineRunner:
     def wait(self) -> tuple[str, int, str | None]:
         self.active_stage = "supervisor"
         while True:
+            if WORKER_SESSION_ID is not None and not owns_stream_process():
+                return "stopped", 143, None
             if self.cancel_signal is not None:
                 return "stopped", 128 + self.cancel_signal, None
             codes = {name: process.poll() for name, process in self.processes.items()}
@@ -1228,6 +1251,7 @@ class PipelineRunner:
         if result.failed_stage is not None:
             print(f"Error: pipeline failed at {result.failed_stage}", file=sys.stderr, flush=True)
         print("Pipeline result: " + json.dumps({
+            "session_id": WORKER_SESSION_ID,
             "reason": result.reason, "returncode": result.returncode,
             "failed_stage": result.failed_stage, "exit_codes": result.exit_codes,
             "stopped": result.stopped, "cleanup_errors": result.cleanup_errors,
@@ -1244,29 +1268,50 @@ def run_pipeline(
 
 
 def main() -> int:
+    global WORKER_SESSION_ID
     args = parse_args()
     missing = next(
         (path for path in (VSPIPE, FFMPEG, FFPROBE, RIFE_SCRIPT) if not path.is_file()),
         None,
     )
     if missing:
+        if args.session_id:
+            with session_store().locked() as store:
+                owner = store.read()
+                if owner and owner.get("session_id") == args.session_id:
+                    owner["state"] = "failed"
+                    atomic_json(store.path, owner)
         print(f"Required file not found: {missing}", file=sys.stderr, flush=True)
         return 2
-    replace_existing_stream()
     ensure_var()
-    STREAM_PID_FILE.write_text(str(os.getpid()), encoding="ascii")
+    WORKER_SESSION_ID = args.session_id
+    if WORKER_SESSION_ID is None:
+        try:
+            replace_existing_stream()
+            WORKER_SESSION_ID = session_store().reserve(None, args.start, args.duration)["session_id"]
+        except (OSError, RuntimeError) as exc:
+            print(f"Error: {exc}", file=sys.stderr, flush=True)
+            return 1
+    if not session_store().attach(WORKER_SESSION_ID, os.getpid()):
+        print("Error: Playback session superseded before startup", file=sys.stderr, flush=True)
+        return 1
     source = None
     try:
         source = prepare_input(args)
         timeline = build_timeline(source, args)
-        reset_hls_output(Path(args.publish_url))
+        with session_store().locked():
+            if not owns_stream_process():
+                raise RuntimeError("Playback session superseded during probe")
+            reset_hls_output(Path(args.publish_url))
         ensure_hls_server()
     except (RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr, flush=True)
         cleanup_subtitles(source)
         release_stream_files(Path(args.publish_url), failed=True)
         return 1
-    write_stream_status(source, float(timeline.start))
+    if not write_stream_status(source, float(timeline.start)):
+        cleanup_subtitles(source)
+        return 1
 
     width, height = video_size(source.info, args.max_height)
     fps = float(timeline.source_rate)

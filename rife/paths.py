@@ -4,6 +4,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 from urllib.parse import urlsplit
 
 
@@ -155,15 +156,36 @@ def stop_pid_tree(pid: int) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def wait_for_stream_exit(pid: int, timeout: float = 5.0) -> None:
+    """Do not reuse shared HLS output while a retired worker can still write it."""
+    deadline = time.monotonic() + timeout
+    while pid_is_running(pid):
+        if os.name != "nt":
+            try:
+                # A zombie has exited; its parent, not this observer, owns reaping.
+                if Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[-1].startswith("Z "):
+                    return
+            except OSError:
+                pass
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Previous stream has not stopped; refusing to reuse HLS output")
+        time.sleep(0.05)
+
+
 def replace_existing_stream() -> None:
-    if not STREAM_PID_FILE.is_file():
-        return
-    pid = read_pid(STREAM_PID_FILE)
-    if pid is None:
+    from rife.sessions import SessionStore, atomic_json
+    store = SessionStore(STREAM_PID_FILE, STREAM_STATUS_FILE)
+    with store.locked():
+        pid = read_pid(STREAM_PID_FILE)
+        owner = store.read()
+        if owner:
+            pid = owner.get("pid") if owner.get("state") in {"probing", "running"} else None
+            owner["state"] = "stopped"
+            atomic_json(store.path, owner)
         STREAM_PID_FILE.unlink(missing_ok=True)
         STREAM_STATUS_FILE.unlink(missing_ok=True)
-        return
-    if pid != os.getpid():
+    # Signal outside the lock so the retiring worker can finalize safely.
+    if pid is not None and pid != os.getpid():
         if os.name == "nt":
             stop_pid_tree(pid)
         else:
@@ -171,5 +193,5 @@ def replace_existing_stream() -> None:
                 os.kill(pid, 15)
             except ProcessLookupError:
                 pass
-    STREAM_PID_FILE.unlink(missing_ok=True)
-    STREAM_STATUS_FILE.unlink(missing_ok=True)
+    if pid is not None and pid != os.getpid():
+        wait_for_stream_exit(pid)

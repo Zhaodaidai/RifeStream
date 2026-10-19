@@ -54,5 +54,13 @@ const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
   assert.equal(rejectedAction,false);
   assert.equal(await recovery.action('play',button,async()=>{}),true);
   assert.equal(reconciles,1);assert.equal(button.disabled,false);
+  // The actual seek function carries the UUID as well as the legacy clock token.
+  let seekBody;
+  const scoped={api:async(path,options)=>{seekBody=JSON.parse(options.body);return {};},renderState(){},showError(){},refresh:async()=>{}};
+  vm.createContext(scoped);
+  vm.runInContext(`let jumpInFlight=false,currentState={playback_id:100,session_id:'current-uuid'};${take('async function seekSeconds(', '\ndocument.getElementById')};this.jump=seekSeconds;`,scoped);
+  await scoped.jump(42);
+  assert.deepEqual(seekBody,{seconds:42,playback_id:100,session_id:'current-uuid'});
+  console.log('PASS: seek carries session UUID while preserving the legacy playback_id field');
   console.log('PASS: ordered mutations; single-flight polls; stale response ignored; queued-stop render barrier; timeout/queue recovery; connection failure/retry and stale-status isolation');
 })().catch(e=>{console.error(e);process.exitCode=1;});

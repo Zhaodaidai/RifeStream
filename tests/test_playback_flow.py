@@ -49,7 +49,7 @@ class PlaybackFlowTests(unittest.TestCase):
         # Actual OS process, deliberately never publishes stream.pid.
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
-            with patch.object(webui, 'STREAM_PROCESS', None), patch.object(webui, 'STREAM_PID_FILE', p/'none.pid'), patch.object(webui, 'HLS_PLAYLIST', p/'index.m3u8'), patch.object(webui, 'WEBUI_LOG_FILE', p/'web.log'), patch.object(webui, 'replace_existing_stream'), patch.object(webui, 'stream_command', return_value=[sys.executable, '-u', '-c', 'import time;time.sleep(60)']):
+            with patch.object(webui, 'STREAM_PROCESS', None), patch.object(webui, 'STREAM_PID_FILE', p/'none.pid'), patch.object(webui, 'STREAM_STATUS_FILE', p/'status.json'), patch.object(webui, 'HLS_PLAYLIST', p/'index.m3u8'), patch.object(webui, 'WEBUI_LOG_FILE', p/'web.log'), patch.object(webui, 'replace_existing_stream'), patch.object(webui, 'stream_command', return_value=[sys.executable, '-u', '-c', 'import time;time.sleep(60)']):
                 try:
                     webui.spawn_stream('fixture', 'fixture')
                     child = webui.STREAM_PROCESS

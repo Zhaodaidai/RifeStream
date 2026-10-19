@@ -342,7 +342,7 @@ class EmbeddedPlayer {
   }
 
   update(state) {
-    const session = state.current ? JSON.stringify([state.current.id, state.playback_id, state.start]) : null;
+    const session = state.current ? JSON.stringify([state.current.id, state.session_id || state.playback_id, state.start]) : null;
     if (session !== this.session) {
       if (state.current?.id !== this.state?.current?.id) this.wantsPlayback = true;
       this.resumeAt = 0;
@@ -354,7 +354,7 @@ class EmbeddedPlayer {
     this.setActionState(Boolean(this.actionPending));
     if (this.ui) this.ui.config.title = state.current?.title || "RIFE 视频播放器";
     const key = state.current && state.hls_ready
-      ? JSON.stringify([state.current.id, state.playback_id, state.start, state.hls_url]) : null;
+      ? JSON.stringify([state.current.id, state.session_id || state.playback_id, state.start, state.hls_url]) : null;
     if (key !== this.key) {
       this.key = key;
       this.destroy();
@@ -374,7 +374,7 @@ class EmbeddedPlayer {
     const url = new URL(this.state.hls_url, window.location.href);
     // Use the browser's host, not a server-selected LAN adapter (localhost/VPN).
     url.hostname = window.location.hostname;
-    url.searchParams.set("session", this.state.playback_id || 0);
+    url.searchParams.set("session", this.state.session_id || this.state.playback_id || 0);
     this.hint.textContent = "正在加载转码视频…";
     if (window.Hls && window.Hls.isSupported()) {
       const hls = this.hls = new window.Hls({

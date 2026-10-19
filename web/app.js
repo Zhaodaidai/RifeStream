@@ -348,7 +348,7 @@ async function seekSeconds(seconds) {
   try {
     renderState(await api("/api/seek", {
       method: "POST",
-      body: JSON.stringify({ seconds, playback_id: currentState?.playback_id }),
+      body: JSON.stringify({ seconds, playback_id: currentState?.playback_id, session_id: currentState?.session_id }),
     }));
   } catch (error) {
     showError(error.message);

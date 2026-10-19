@@ -176,6 +176,18 @@ const flush = async()=>{await Promise.resolve();await Promise.resolve();};
   player.update({...base,current:null,hls_ready:false,has_prev:false,has_next:false});
   assert.equal(player.previousButton.hidden,true);assert.equal(player.nextButton.hidden,true);assert.equal(playButton.disabled,true);
   assert.equal(player.ui.config.listeners.play(),false);assert.equal(starts,1);
+  // A UUID changes media identity even when all old clock-based fields collide.
+  const identified={...base,session_id:'session-a'};
+  player.update(identified);const sessionA=player.hls;
+  assert.equal(new URL(sessionA.url).searchParams.get('session'),'session-a');
+  player.update({...identified,position:400});assert.equal(player.hls,sessionA,'same UUID poll does not reload');
+  player.update({...identified,session_id:'session-b'});
+  assert.equal(sessionA.destroyed,true,'new UUID invalidates old media at equal playback_id/start');
+  assert.notEqual(player.hls,sessionA);
+  assert.equal(new URL(player.hls.url).searchParams.get('session'),'session-b');
+  const sessionB=player.hls;sessionA.events.error(null,{fatal:true});
+  assert.equal(player.hls,sessionB,'old UUID callbacks cannot mutate successor');
+  console.log('PASS: UUID media keys and cache identity distinguish equal clocks; old callbacks isolated');
   console.log('PASS: previous/play/next order, first/middle/last/single/empty visibility, offsets, pending isolation, focus recovery, idle start/local pause');
   console.log('PASS: mobile landscape lock/rejection/missing API, portrait fallback, physical rotation, exit/late-lock cleanup, desktop isolation');
   console.log('PASS: desktop1080p/4K/source ratio/short viewport fitting and mobile CSS restoration');

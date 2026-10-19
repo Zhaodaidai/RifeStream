@@ -19,6 +19,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 import uuid
 import time
 
+from rife.sessions import SessionStore, atomic_json
+
 from rife.danmaku_match import canonical_bilibili_episode_url, load_item_danmaku
 from rife.hls import clear_hls_output
 from rife.hls_server import ensure as ensure_hls_server
@@ -40,11 +42,13 @@ from rife.paths import (
     read_pid,
     replace_existing_stream,
     stop_pid_tree,
+    wait_for_stream_exit,
 )
 
 
 @dataclass
 class Playback:
+    session_id: str | None = None
     item_id: str | None = None
     start: float = 0.0
     spawned_at: float | None = None
@@ -386,20 +390,50 @@ def normalize_playlist_source(source: str) -> str:
 
 
 def stream_running() -> bool:
+    owner = session_store().read()
+    if PLAYBACK.session_id is not None:
+        if not owner or owner.get("session_id") != PLAYBACK.session_id:
+            return False
+        if owner.get("state") in {"stopped", "failed", "finished"}:
+            return False
     if STREAM_PROCESS is not None and STREAM_PROCESS.poll() is None:
-        return True  # Includes probing/startup before the child publishes its PID.
+        return True
     pid = read_pid(STREAM_PID_FILE)
     return pid is not None and pid_is_running(pid)
+
+
+def session_store() -> SessionStore:
+    return SessionStore(STREAM_PID_FILE, STREAM_STATUS_FILE)
 
 
 def read_stream_status() -> dict[str, Any] | None:
     if not STREAM_STATUS_FILE.is_file():
         return None
-    try:
-        data = json.loads(STREAM_STATUS_FILE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    return data if isinstance(data, dict) else None
+    store = session_store()
+    with store.locked():
+        from rife.sessions import read_json
+        status = read_json(STREAM_STATUS_FILE)
+        if status is None:
+            return None
+        expected = PLAYBACK.session_id
+        owner = store.read()
+        if owner and owner.get("state") in {"stopped", "failed", "finished"}:
+            return None
+        if status.get("session_id") and owner is None:
+            return None
+        if owner and status.get("pid") != owner.get("pid"):
+            return None
+        if expected is not None:
+            if status.get("session_id") != expected or not owner or owner.get("session_id") != expected:
+                return None
+        elif owner is not None:
+            if status.get("session_id") != owner.get("session_id"):
+                return None
+        if expected is None and status.get("session_id"):
+            current = PLAYLIST.current()
+            if current is not None and status.get("item_id") not in (None, current.id):
+                return None
+        return status
 
 
 def finite_seconds(value: object) -> float | None:
@@ -507,6 +541,7 @@ def remember_playback(item_id: str, start: float) -> None:
 
 
 def reset_playback() -> None:
+    PLAYBACK.session_id = None
     PLAYBACK.item_id = None
     PLAYBACK.start = 0.0
     PLAYBACK.spawned_at = None
@@ -550,14 +585,20 @@ def playback_snapshot(
     duration = PLAYBACK.duration
     if status is _STATUS_UNSET:
         status = read_stream_status()
+    if status and PLAYBACK.session_id is not None:
+        if status.get("session_id") != PLAYBACK.session_id:
+            status = None
     if status:
         status_started = finite_seconds(status.get("started_at"))
         if (
-            spawned_at is not None
+            PLAYBACK.session_id is None
+            and spawned_at is not None
             and status_started is not None
             and status_started + 0.05 < spawned_at
         ):
             status = None
+    if status and PLAYBACK.session_id is None and status.get("session_id"):
+        PLAYBACK.session_id = status["session_id"]
     if status:
         status_duration = finite_seconds(status.get("duration"))
         if duration is None and status_duration is not None:
@@ -569,14 +610,24 @@ def playback_snapshot(
                 start = max(0.0, status_start)
             spawned_at = finite_seconds(status.get("started_at"))
     position = estimate_position(start, spawned_at, now, duration, streaming)
+    owner = session_store().read()
+    current_session = True
+    if PLAYBACK.session_id is not None:
+        current_session = bool(owner and owner.get("session_id") == PLAYBACK.session_id)
+    if owner and owner.get("state") in {"stopped", "failed"}:
+        current_session = False
+    current_item = PLAYLIST.current() if owner else None
+    if owner and current_item and owner.get("item_id") not in (None, current_item.id):
+        current_session = False
     return {
         "duration": duration,
         "position": position,
         "start": start,
         # A fixed HLS URL is reused across episodes and server-side seeks.
         "playback_id": spawned_at,
-        "hls_ready": hls_ready(spawned_at, has_current),
-        "seekable": has_current and duration is not None and duration > 0,
+        "session_id": PLAYBACK.session_id or (status.get("session_id") if status else None),
+        "hls_ready": current_session and hls_ready(spawned_at, has_current),
+        "seekable": current_session and has_current and duration is not None and duration > 0,
     }
 
 
@@ -603,7 +654,30 @@ def stream_command(
     return command
 
 
-def relay_stream_output(pipe: Any, header: str, process: Any = None) -> None:
+def finalize_stream_output(process: Any, session_id: str | None) -> None:
+    if session_id is None or process is None or not callable(getattr(process, "wait", None)):
+        return
+    try:
+        code = process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        return  # Closing stdout alone is not a process-exit notification.
+    with CONTROL_LOCK:
+        if process is not STREAM_PROCESS or session_id != PLAYBACK.session_id:
+            return
+        with session_store().locked() as store:
+            owner = store.read()
+            if not store.matches(owner, session_id) or owner.get("pid") not in (None, process.pid):
+                return
+            owner["state"] = "finished" if code == 0 else "failed"
+            atomic_json(store.path, owner)
+            STREAM_PID_FILE.unlink(missing_ok=True)
+            STREAM_STATUS_FILE.unlink(missing_ok=True)
+            if code != 0 and not PLAYLIST.state.last_error:
+                PLAYLIST.set_error(f"Error: stream worker exited with code {code}")
+
+
+def relay_stream_output(pipe: Any, header: str, process: Any = None, session_id: str | None = None) -> None:
+    session_id = session_id or getattr(process, "rife_session_id", None)
     WEBUI_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with WEBUI_LOG_FILE.open("a", encoding="utf-8", errors="replace") as log:
         log.write(header)
@@ -619,17 +693,27 @@ def relay_stream_output(pipe: Any, header: str, process: Any = None) -> None:
                     break
                 if not line.endswith("\n"):
                     line += "\n"
-                log.write(line)
+                tagged = f"[session={session_id}] {line}" if session_id else line
+                log.write(tagged)
                 log.flush()
-                sys.stderr.write(line)
+                sys.stderr.write(tagged)
                 sys.stderr.flush()
                 stripped = line.strip()
                 if stripped.startswith(PLAYBACK_ERROR_PREFIXES):
                     with CONTROL_LOCK:
-                        if process is None or process is STREAM_PROCESS:
-                            PLAYLIST.set_error(stripped)
+                        if (process is None or process is STREAM_PROCESS) and (
+                            session_id is None or session_id == PLAYBACK.session_id
+                        ):
+                            if session_id is None:
+                                PLAYLIST.set_error(stripped)
+                            else:
+                                with session_store().locked() as store:
+                                    owner = store.read()
+                                    if owner and owner.get("session_id") == session_id and owner.get("state") != "stopped":
+                                        PLAYLIST.set_error(stripped)
         finally:
             pipe.close()
+            finalize_stream_output(process, session_id)
 
 
 def spawn_stream(
@@ -639,31 +723,45 @@ def spawn_stream(
     duration: float = 0.0,
     *,
     anime4k: bool = False,
+    item_id: str | None = None,
 ) -> None:
     global STREAM_PROCESS
     stop_stream()  # Stop even a child still probing, before it has written stream.pid.
     command = stream_command(source, title, start, duration, anime4k=anime4k)
+    owner = session_store().reserve(item_id, start, duration)
+    session_id = owner["session_id"]
+    PLAYBACK.session_id = session_id
+    command.extend(["--session-id", session_id])
     extra: dict[str, Any] = {}
     if os.name != "nt":
         extra["start_new_session"] = True
-    process = subprocess.Popen(
-        command,
-        cwd=ROOT,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        creationflags=DETACHED_FLAGS,
-        close_fds=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1,
-        **extra,
-    )
+    try:
+        process = subprocess.Popen(
+            command,
+            cwd=ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            creationflags=DETACHED_FLAGS,
+            close_fds=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+            **extra,
+        )
+    except OSError:
+        with session_store().locked() as store:
+            current = store.read()
+            if current and current.get("session_id") == session_id:
+                current["state"] = "failed"
+                atomic_json(store.path, current)
+        raise
+    process.rife_session_id = session_id
     STREAM_PROCESS = process
     threading.Thread(
         target=relay_stream_output,
-        args=(process.stdout, f"\nPlay: {source} start={start}\n", process),
+        args=(process.stdout, f"\nPlay: {source} start={start} session={session_id}\n", process, session_id),
         daemon=True,
         name="rife-stream-log",
     ).start()
@@ -672,6 +770,20 @@ def spawn_stream(
 @serialized_control
 def stop_stream() -> None:
     global STREAM_PROCESS
+    store = session_store()
+    expected = PLAYBACK.session_id
+    with store.locked():
+        owner = store.read()
+        eligible = expected is None or (owner is not None and owner.get("session_id") == expected)
+        legacy_pid = read_pid(STREAM_PID_FILE) if eligible and owner is None else None
+        if eligible and owner and owner.get("state") in {"probing", "running"}:
+            legacy_pid = owner.get("pid")
+        if eligible:
+            if owner:
+                owner["state"] = "stopped"
+                atomic_json(store.path, owner)
+            STREAM_PID_FILE.unlink(missing_ok=True)
+            STREAM_STATUS_FILE.unlink(missing_ok=True)
     process = STREAM_PROCESS
     STREAM_PROCESS = None
     if process is not None and process.poll() is None:
@@ -694,8 +806,18 @@ def stop_stream() -> None:
                     pass
             process.wait(timeout=5)
     PLAYBACK.spawned_at = None
-    replace_existing_stream()
-    clear_hls_output(HLS_PLAYLIST)
+    if legacy_pid is not None and (process is None or legacy_pid != process.pid):
+        stop_pid_tree(legacy_pid)
+        wait_for_stream_exit(legacy_pid)
+    with store.locked():
+        current = store.read()
+        same = (current is None and owner is None) or (
+            current is not None and owner is not None
+            and current.get("session_id") == owner.get("session_id")
+            and current.get("state") == "stopped"
+        )
+        if eligible and same:
+            clear_hls_output(HLS_PLAYLIST)
 
 
 def read_json(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
@@ -802,6 +924,10 @@ class WebHandler(BaseHTTPRequestHandler):
                 seconds = finite_seconds(body.get("seconds"))
                 if seconds is None:
                     raise ValueError("Seek position is required")
+                if "session_id" in body:
+                    active_session = playback_snapshot(stream_running(), PLAYLIST.current() is not None)["session_id"]
+                    if body["session_id"] != active_session:
+                        raise ValueError("Playback session changed; refresh before seeking")
                 if "playback_id" in body:
                     active = playback_snapshot(stream_running(), PLAYLIST.current() is not None)["playback_id"]
                     if body["playback_id"] != active:
@@ -912,6 +1038,7 @@ def start_item(item_id: str | None, offset: int = 0, start: float = 0.0) -> Play
         start,
         encode_duration(start, duration, settings),
         anime4k=settings.anime4k,
+        item_id=item.id,
     )
     remember_playback(item.id, start)
     return item
@@ -931,6 +1058,7 @@ def seek_to(seconds: float) -> PlaylistItem:
         seconds,
         encode_duration(seconds, duration, settings),
         anime4k=settings.anime4k,
+        item_id=item.id,
     )
     remember_playback(item.id, seconds)
     return item
