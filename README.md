@@ -145,3 +145,40 @@ JS、CSS 和 SVG 图标均放在 `web/vendor/`，运行时不依赖第三方 CDN
 - 状态 GET 不再按转码墙钟自动切走内容；启用 skip_outro 时按编码截尾，并由播放器实际 ended 衔接下一集。普通播放不擅自新增自动连播。
 
 回归命令：`python -m unittest discover -s tests`、`node tests/test_web_player.js`、`node tests/test_web_requests.js`。无需新增依赖；GPU/TensorRT 完整转码仍需在目标运行环境验证。
+
+### 并发独立调节与性能对比
+
+旧 `--gpu-threads` 保持兼容：不传新参数时，RIFE `gpu_t` 与 VSPipe 请求数仍使用它，VS 工作线程仍为 `max(2, gpu_threads)`。
+
+- `--vs-requests N`：仅覆盖 VSPipe 并发帧请求数，不改 RIFE `gpu_t`。
+- `--vs-threads N`：覆盖 VS 工作线程数；不改 VSPipe 请求数或 RIFE `gpu_t`。
+- `--raw-prefetch N`：独立覆盖 raw 帧预取窗口。只传 `--vs-threads` 时，预取窗口固定为旧 `--gpu-threads` 对应的默认值；不传任何新参数时，完全沿用旧映射。
+- `--perf-report NEW.json`：默认关闭。打开后，增加 FFmpeg progress 文件与原始帧计时，最终生成独立 JSON；拒绝覆盖已有报告。报告路径不可与输入/播放清单共用。
+
+```bat
+runtime\python.exe run.py stream "D:\video.mkv" --start 60 --duration 30 --vs-requests 4 --perf-report var\sample-perf.json
+```
+
+报告包含实际生效的并发参数、编码端输出帧计数/整体 FPS、首次完整 HLS 分片可用时间、原始帧读取/借用等待/复制耗时、缓存命中/未命中、帧缓存峰值与缓冲区峰值。时间起点是解码进程启动前，**不包含输入探测**；包含模型初始化、上游等待与清理。首次 HLS 时间以约 250ms 的轮询观测，并非浏览器首画面时间。多回调的累计等待/复制时间可以大于墙钟时间。原始帧读耗时包含等待上游，编码器进度也包含被上游饿住的影响，**均不是独立 GPU 推理或编码耗时**。借用/交付次数包含重复请求。原始缓冲预算不是总 RSS/显存；当前不测 GPU 显存。非正常退出可能只留下非最终快照，缺失指标用 null/`missing_measurements` 明示，不补造数据。报告写入失败警告不会把成功播放改成失败。
+
+固定素材对比工具（先停止播放，每次用新的输出目录）：
+
+```bat
+rem 只生成可核查计划，不启动转码
+runtime\python.exe tools\benchmark_pipeline.py "D:\video.mkv" --start 60 --duration 30 --runs 3 --label base --output-dir var\bench-base --dry-run
+rem 实际基线：去掉 --dry-run，并使用另一个新的输出目录
+runtime\python.exe tools\benchmark_pipeline.py "D:\video.mkv" --start 60 --duration 30 --runs 3 --label base --output-dir var\bench-base-real
+rem 只改变 VSPipe 请求数，其余条件不变
+runtime\python.exe tools\benchmark_pipeline.py "D:\video.mkv" --start 60 --duration 30 --runs 3 --label req4 --vs-requests 4 --output-dir var\bench-req4
+```
+
+工具记录输入 SHA256、固定片段与配置、每次命令/退出码/原生 stdout/stderr、独立 HLS 与 JSON、后续重复运行中位数。两组 `comparison_group` 相同才满足工具记录的素材/画质/片段条件（仍需人工保持驱动、机器负载等外部环境一致）。首轮标为 `first-in-batch`，后续为 `repeat`，**不自动宣称冷/热启动**：工具不会删除 TensorRT 引擎或驱动缓存，计算素材哈希还可能预热文件缓存。若需真正冷启动，应在可控环境手动准备后单独运行，不与重复运行混合统计。检测到活动/待启动会话时拒绝执行；测试期间不要从其他客户端发起播放。
+
+只对比 VapourSynth 工作线程时，先用基线记录当时生效的预取值（例：`--gpu-threads 3` 的旧默认是 12 帧），两组都显式传 `--raw-prefetch 12`：
+
+```bat
+runtime\python.exe tools\benchmark_pipeline.py "D:\video.mkv" --start 60 --duration 30 --runs 3 --label vs3-prefetch12 --vs-threads 3 --raw-prefetch 12 --output-dir var\bench-vs3
+runtime\python.exe tools\benchmark_pipeline.py "D:\video.mkv" --start 60 --duration 30 --runs 3 --label vs5-prefetch12 --vs-threads 5 --raw-prefetch 12 --output-dir var\bench-vs5
+```
+
+`comparison_group` 汇总输入哈希、片段、分辨率、倍率、画质、音频/字幕等固定项，不包含正在比较的并发数；相同组可作为“只改并发参数”的校验。仍需操作者确保驱动版本、温度/功耗与无后台负载等外部因素一致。工具对每个独立worker使用原有 session ownership 事务预留，不会调用替换/停止其他播放进程；正在启动/探测/播放时拒绝开跑。 `--raw-prefetch`、`--vs-requests` 和 `--vs-threads` 均为正整数覆盖项，缺省映射保持原状。

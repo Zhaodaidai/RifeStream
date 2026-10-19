@@ -1,12 +1,16 @@
-from collections import OrderedDict
+import atexit
 import ctypes
 import os
 import sys
-import threading
+from pathlib import Path
 
 import vapoursynth as vs
 from vapoursynth import core
 import k7sfunc as k7f
+
+# Portable Python uses an isolated ._pth; resolve from this script, not cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from rife.frame_pipe import FramePipeError, InterruptiblePipeReader, RawFramePipe
 
 
 def env_value(name: str, default: int | float) -> int | float:
@@ -22,7 +26,9 @@ gpu = env_value("RIFE_GPU", 0)
 gpu_threads = env_value("RIFE_GPU_THREADS", 3)
 scene_mode = env_value("RIFE_SCENE_MODE", 1)
 workspace = env_value("RIFE_WORKSPACE_MIB", 0)
-vs_threads = max(2, gpu_threads)
+vs_threads = env_value("RIFE_VS_THREADS", max(2, gpu_threads))
+if vs_threads <= 0:
+    raise vs.Error("RIFE_VS_THREADS must be positive")
 
 core.num_threads = vs_threads
 
@@ -38,93 +44,33 @@ if pipe_width % 2 or pipe_height % 2:
 
 source_fps = pipe_fps_num / pipe_fps_den
 source = sys.stdin.buffer.raw
+perf_raw_path = os.environ.get("RIFE_PERF_RAW", "").strip()
 frame_size = pipe_width * pipe_height * 3 // 2
-cache_lock = threading.Condition()
-frame_cache: OrderedDict[int, memoryview] = OrderedDict()
-buffer_pool: list[memoryview] = []
-next_frame = 0
-last_requested = 0
-cache_ahead = max(8, vs_threads * 4)
+cache_ahead = env_value("RIFE_PIPE_CACHE_AHEAD", max(8, vs_threads * 4))
+if cache_ahead <= 0:
+    raise vs.Error("RIFE_PIPE_CACHE_AHEAD must be positive")
 cache_keep = 4
-pipe_error: BaseException | None = None
-prefetch_stop = threading.Event()
 plane_dims = (
     (pipe_width, pipe_height),
     (pipe_width // 2, pipe_height // 2),
     (pipe_width // 2, pipe_height // 2),
 )
-
-
-def alloc_buffer() -> memoryview:
-    return buffer_pool.pop() if buffer_pool else memoryview(bytearray(frame_size))
-
-
-def read_exact(view: memoryview) -> bool:
-    offset = 0
-    while offset < frame_size:
-        n = source.readinto(view[offset:])
-        if not n:
-            return False
-        offset += n
-    return True
-
-
-def store_frame(index: int, data: memoryview) -> None:
-    frame_cache[index] = data
-    while len(frame_cache) > cache_ahead + cache_keep:
-        oldest = next(iter(frame_cache))
-        if oldest >= last_requested - 1:
-            break
-        buffer_pool.append(frame_cache.popitem(last=False)[1])
-
-
-def read_next_locked() -> None:
-    global next_frame, pipe_error
-    if pipe_error is not None:
-        raise pipe_error
-    data = alloc_buffer()
-    if not read_exact(data):
-        buffer_pool.append(data)
-        pipe_error = vs.Error(f"Raw video pipe ended at frame {next_frame}")
-        raise pipe_error
-    store_frame(next_frame, data)
-    next_frame += 1
-    cache_lock.notify_all()
-
-
-def get_raw_frame(n: int) -> memoryview:
-    global last_requested
-    with cache_lock:
-        last_requested = max(last_requested, n)
-        cache_lock.notify_all()
-        cached = frame_cache.get(n)
-        if cached is not None:
-            frame_cache.move_to_end(n)
-            return cached
-        if n < next_frame:
-            raise vs.Error(f"Raw pipe frame {n} is no longer cached")
-        while next_frame <= n:
-            read_next_locked()
-        return frame_cache[n]
-
-
-def prefetch_frames() -> None:
-    try:
-        while not prefetch_stop.is_set():
-            with cache_lock:
-                if pipe_error is not None:
-                    return
-                while (
-                    not prefetch_stop.is_set()
-                    and pipe_error is None
-                    and next_frame > last_requested + cache_ahead
-                ):
-                    cache_lock.wait(timeout=0.05)
-                if prefetch_stop.is_set() or pipe_error is not None:
-                    return
-                read_next_locked()
-    except BaseException:
-        return
+try:
+    frame_pipe = RawFramePipe(
+        InterruptiblePipeReader(source), frame_size, frame_count=pipe_frames,
+        cache_ahead=cache_ahead, cache_keep=cache_keep,
+        max_frames=cache_ahead + cache_keep,
+        max_bytes=env_value("RIFE_PIPE_CACHE_MIB", 256) * 1024 * 1024,
+        profile=bool(perf_raw_path),
+    )
+except (OSError, ValueError) as exc:
+    raise vs.Error(f"Raw video pipe initialization failed: {exc}") from exc
+atexit.register(frame_pipe.close)
+if perf_raw_path:
+    from rife.performance import FrameProfiler
+    frame_profiler = FrameProfiler(frame_pipe, perf_raw_path, os.environ.get("RIFE_PERF_RUN_ID", ""))
+    frame_pipe.observer = frame_profiler.emit
+    atexit.register(frame_profiler.finish)
 
 
 def copy_plane(
@@ -179,12 +125,16 @@ template = core.std.SetFrameProps(
 
 def read_pipe_frame(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
     output = f.copy()
-    fill_yuv420(output, get_raw_frame(n))
+    try:
+        with frame_pipe.borrow(n) as data:
+            frame_pipe.copy_into(fill_yuv420, output, data)
+    except FramePipeError as exc:
+        raise vs.Error(str(exc)) from exc
     return output
 
 
 clip = core.std.ModifyFrame(template, template, read_pipe_frame)
-threading.Thread(target=prefetch_frames, name="rife-pipe-prefetch", daemon=True).start()
+frame_pipe.start()
 
 engine_dir = os.environ.get("RIFE_ENGINE_DIR", "").strip()
 if engine_dir:

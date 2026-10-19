@@ -311,3 +311,28 @@
 - [complete] 原1152组命令和RIFE环境逐字相同；沿用var/player-framing四角色并重开，补充session-isolation/；回滚ROLLBACK.sh TARGET_COPY --session-before。预存stream.cpython-312.pyc变动保持不动。
 - 工具/测试错误及修正：首次脚本相对路径重复、混合换行定位失败、缺失状态路径误建锁、JS抽取越界、PID探活mock不完整均已改命令/实现/测试并重跑，证据留checks与VERIFICATION。
 - 未重启WebUI或中断实际播放；需用户方便时重启WebUI并刷新页面生效。未实测本轮Windows进程锁与NVIDIA实播。
+
+## RawFramePipe 本轮（2026-10-19）
+- [complete] 保存原字节/基线，独立单读线程+借用保护+帧数与字节预算，接入VSPipe，覆盖乱序、短读、异常、取消；原参数不变。
+- [complete] 原生patch、完整回归、同输入三方验证、回滚哈希、部署、重开四角色。
+- 已确认原脚本持锁readinto、裸memoryview出锁、预取异常吞掉；当前git工作树干净。
+
+- 错误及修正：隔离快照未带run.py，基线协议CLI测试失败（207项中1失败，exit1，完整输出checks.txt）；补入原字节run.py，重跑相同全套命令；未改协议产品代码。
+
+- 评审修正：Windows PeekNamedPipe+定时等待可能给高吞吐小块写入增加延迟，因此最终取消热路径Peek轮询，采用原raw.readinto + CancelIoEx，并在close有界join期间重试，覆盖cancel与read启动竞态；错误1168视为本轮无挂起IO，其他OS错误不吞。Microsoft官方同步IO取消说明已核对；实际Windows仍未执行。POSIX真实OS管道取消通过。
+
+- 工具路径错误与修正：部署测试均过后commit.py读取matrix用了错误目录（FileNotFoundError exit1，commit.stderr保留）；改用ROOT.parent，续做未完矩阵对比/证据/重开，不重跑部署或重复追加patch。另原始文件全量复核修正过滤为相对路径，实际逐文件重开比较。
+
+### RawFramePipe 完成（2026-10-19）
+- [complete] 仅修改vs/rife_stream.vpy、新增rife/frame_pipe.py和tests/test_frame_pipe.py。单读线程、IO不占状态锁、borrow贯穿三平面复制、pending与pin保护、缓存/借用/读入/池共享帧数+字节双限，默认256MiB；可RIFE_PIPE_CACHE_MIB覆盖。不等于总RSS/GPU预算。
+- [complete] EOF/半帧/读取异常/启动失败/取消显式区分，后台失败唤醒全部等待者，已淘汰旧帧明确报错；frame_count到达停止额外读取。POSIX readiness与Windows rawread+CancelIoEx取消，close有界join且重试竞态；通用不可取消源超时返回false，不虚报线程结束。
+- [complete] 相同12帧4byte输入借用0后读8：原版0变6，新版保持0；BASELINE207/MODIFIED248/ROLLBACK207/DEPLOYED248 Python，全部5组Node通过；补丁精确重建、回滚原字节及哈希一致，新文件移除。41新增测试+最终10x41压力回归，1152组旧命令/RIFE环境摘要保持93d81a5a95d6dbc4fa11ae469cb55bbb8addeac0d93f7bcf2bc63c4f4407e92e。
+- [complete] 沿用var/player-framing四角色并重开；补充raw-frame-pipe/。独立副本回滚命令ROLLBACK.sh TARGET_COPY --raw-pipe-before。最终重新应用已验证修改到工作区，未改其他源码或字节码。
+- 未运行Windows真机/VSPipe/NVIDIA，Windows政策仅mock；真实OS pipe及完整vpy mock插件图已测。未声称提高多少FPS或降低延迟；未知时长尾帧策略未改，未重启或中断真实播放。新worker下次加载脚本生效。
+
+- 最终审计：原env_value/copy_plane/fill_yuv420 AST相同，engine_dir起至Anime4K/RIFE/set_output脚本尾部逐字相同；3个源码/测试路径与改后副本/patch重建/四角色一致。协议CLI子进程生成的原本干净paths.cpython-313.pyc已从HEAD复原，未动其他字节码。所有阶段完成。
+
+## 并发解耦与性能统计（2026-10-19）
+- [in_progress] 保留当前RawFramePipe改动为本轮基线；新增--vs-requests/--vs-threads覆盖，默认关闭的--perf-report；采集帧等待/读取/复制/缓存预算、整体FPS与首次完整HLS可用时间，输出不混淆推理耗时。
+- [pending] 固定片段基准入口与说明；默认命令/1152矩阵不变；三方测试+原生patch+回滚+部署+重开原四角色。
+- 状态：本轮前已有三个文档/vpy改动和frame_pipe.py/test_frame_pipe.py新文件，全部保留，不以HEAD替代本轮基线。

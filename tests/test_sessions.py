@@ -52,6 +52,19 @@ class SessionTests(unittest.TestCase):
             sessions = [self.store.reserve('same', 0, 0)['session_id'] for _ in range(30)]
         self.assertEqual(len(set(sessions)), 30)
 
+    def test_reserve_if_idle_rejects_starting_probing_and_running_owners(self):
+        for state in ('starting','probing','running'):
+            with self.subTest(state=state):
+                owner=self.store.reserve('item',0,1)
+                with self.store.locked():
+                    current=self.store.read();current['state']=state
+                    atomic_json(self.store.path,current)
+                with self.assertRaisesRegex(RuntimeError,'active playback'):
+                    self.store.reserve_if_idle(None,0,1)
+                self.store.invalidate(owner['session_id'])
+        owner=self.store.reserve_if_idle(None,0,1)
+        self.assertEqual(self.store.read()['session_id'],owner['session_id'])
+
     def test_replaced_pending_worker_cannot_attach_or_publish(self):
         old = self.store.reserve('old', 0, 0)['session_id']
         new = self.store.reserve('new', 0, 0)['session_id']

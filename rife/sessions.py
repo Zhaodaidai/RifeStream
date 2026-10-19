@@ -86,6 +86,19 @@ class SessionStore:
             self.status_file.unlink(missing_ok=True)
             return owner
 
+    def reserve_if_idle(self, item_id: str | None, start: float, duration: float) -> dict:
+        """Reserve an isolated producer only when no active or pending owner exists."""
+        with self.locked():
+            current = self.read()
+            if current and current.get("state") in {"starting", "probing", "running"}:
+                raise RuntimeError("An active playback session exists")
+            owner = dict(session_id=uuid.uuid4().hex, item_id=item_id, start=start,
+                         duration=duration, pid=None, state="starting", created_at=time.time())
+            atomic_json(self.path, owner)
+            self.pid_file.unlink(missing_ok=True)
+            self.status_file.unlink(missing_ok=True)
+            return owner
+
     def attach(self, session_id: str, pid: int) -> bool:
         with self.locked():
             owner = self.read()
@@ -105,6 +118,19 @@ class SessionStore:
             atomic_json(self.status_file, status)
             owner.update(state="running")
             atomic_json(self.path, owner)
+            return True
+
+    def abandon_if_active(self, expected: str) -> bool:
+        """Retire only a matching unfinished owner; preserve terminal tombstones."""
+        with self.locked():
+            owner = self.read()
+            if not owner or owner.get("session_id") != expected:
+                return False
+            if owner.get("state") in {"starting", "probing", "running"}:
+                owner["state"] = "stopped"
+                atomic_json(self.path, owner)
+                self.pid_file.unlink(missing_ok=True)
+                self.status_file.unlink(missing_ok=True)
             return True
 
     def invalidate(self, expected: str | None = None) -> tuple[bool, dict | None]:

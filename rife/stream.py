@@ -16,6 +16,7 @@ import sys
 from urllib.parse import urlsplit, urlunsplit
 
 from rife.sessions import SessionStore, atomic_json
+from rife.performance import Concurrency, PerformanceRun, positive_int
 
 WORKER_SESSION_ID: str | None = None
 
@@ -754,6 +755,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-height", type=int, default=1080)
     parser.add_argument("--gpu", type=int, choices=(0, 1, 2), default=0)
     parser.add_argument("--gpu-threads", type=int, choices=(1, 2, 3, 4), default=3)
+    parser.add_argument("--vs-requests", type=positive_int, default=None,
+                        help="VSPipe concurrent frame requests; default: --gpu-threads")
+    parser.add_argument("--vs-threads", type=positive_int, default=None,
+                        help="VapourSynth workers; default: max(2, --gpu-threads)")
+    parser.add_argument("--raw-prefetch", type=positive_int, default=None,
+                        help="raw frame prefetch limit, independent of --vs-threads")
+    parser.add_argument("--perf-report", metavar="REPORT.json", default=None,
+                        help="opt-in performance report; refuses to overwrite existing files")
     parser.add_argument("--scene-mode", type=int, choices=(0, 1, 2), default=1)
     parser.add_argument("--workspace-mib", type=int, default=0)
     parser.add_argument("--source-fps", type=float, default=0.0)
@@ -800,7 +809,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Optional anime enhancement: upscale 2x then return to pipeline size before RIFE",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.perf_report:
+        report = Path(args.perf_report).expanduser().resolve()
+        if report.suffix.lower() != ".json" or report.exists():
+            parser.error("--perf-report needs a new .json file (existing reports are preserved)")
+        args.perf_report = str(report)
+    return args
 
 
 def prepare_input(args: argparse.Namespace) -> StreamInput:
@@ -854,6 +869,17 @@ def build_environment(
     width, height = video_size(source.info, args.max_height)
     timeline = timeline or build_timeline(source, args)
     env = os.environ.copy()
+    env.pop("RIFE_PERF_RAW", None)
+    env.pop("RIFE_PERF_RUN_ID", None)
+    env.pop("RIFE_VS_THREADS", None)
+    env.pop("RIFE_PIPE_CACHE_AHEAD", None)
+    concurrency = Concurrency.resolve(args)
+    if getattr(args, "vs_threads", None) is not None:
+        env["RIFE_VS_THREADS"] = str(concurrency.vs_threads)
+    if getattr(args, "vs_threads", None) is not None or getattr(args, "raw_prefetch", None) is not None:
+        old_prefetch = max(8, max(2, concurrency.gpu_threads) * 4)
+        env["RIFE_PIPE_CACHE_AHEAD"] = str(
+            old_prefetch if getattr(args, "raw_prefetch", None) is None else args.raw_prefetch)
     env.update(
         {
             "RIFE_FACTOR": str(timeline.factor),
@@ -879,7 +905,7 @@ def build_vspipe_command(_source: StreamInput, args: argparse.Namespace) -> list
         "--container",
         "y4m",
         "--requests",
-        str(args.gpu_threads),
+        str(Concurrency.resolve(args).vs_requests),
         str(RIFE_SCRIPT),
         "-",
     ]
@@ -1107,6 +1133,7 @@ class PipelineRunner:
         self.decoder_stderr_thread: threading.Thread | None = None
         self.decoder_broken_pipe = False
         self.decoder_pipe_end = False
+        self.performance: PerformanceRun | None = None
 
     def request_stop(self, signum: int, _frame) -> None:
         self.cancel_signal = signum
@@ -1161,6 +1188,8 @@ class PipelineRunner:
                 return "stopped", 143, None
             if self.cancel_signal is not None:
                 return "stopped", 128 + self.cancel_signal, None
+            if self.performance is not None:
+                self.performance.observe()
             codes = {name: process.poll() for name, process in self.processes.items()}
             if codes["decoder"] not in (None, 0) and codes["vspipe"] == 0:
                 self.drain_decoder_stderr()
@@ -1212,27 +1241,54 @@ class PipelineRunner:
         if handle_sigterm:
             previous_sigterm = signal.signal(signal.SIGTERM, self.request_stop)
         try:
+            decoder_command = build_decoder_command(source, args, timeline=timeline)
+            encoder_command = build_encoder_command(source, args, timeline=timeline)
+            environment = build_environment(source, args, timeline=timeline)
+            if getattr(args, "perf_report", None):
+                self.active_stage = "performance"
+                width, height = video_size(source.info, args.max_height)
+                report_path = Path(args.perf_report).expanduser().resolve()
+                if report_path == Path(args.publish_url).expanduser().resolve():
+                    raise ValueError("--perf-report must not overwrite the HLS playlist")
+                self.performance = PerformanceRun(
+                    report_path, session_id=WORKER_SESSION_ID,
+                    concurrency=Concurrency.resolve(args),
+                    configuration=dict(width=width, height=height,
+                        raw_prefetch_frames=int(environment.get("RIFE_PIPE_CACHE_AHEAD",
+                            max(8, Concurrency.resolve(args).vs_threads * 4))),
+                        source_rate=str(timeline.source_rate), output_rate=str(timeline.output_rate),
+                        factor=timeline.factor, start=timeline.start,
+                        requested_duration=timeline.requested_duration, pipe_frames=timeline.pipe_frames,
+                        gpu=args.gpu, quality=args.quality, anime4k=anime4k_enabled(source, args),
+                        scene_mode=args.scene_mode, workspace_mib=args.workspace_mib,
+                        no_audio=args.no_audio, audio_codec=args.audio_codec,
+                        subtitles=bool(source.subtitle), gop=encoder_gop(timeline.source_rate, timeline.factor, args.gop)),
+                )
+                self.performance.playlist = Path(args.publish_url)
+                decoder_command = self.performance.command("decoder", decoder_command)
+                encoder_command = self.performance.command("encoder", encoder_command)
+                environment = self.performance.environment(environment)
             decoder = self.start(
-                "decoder", build_decoder_command(source, args, timeline=timeline),
+                "decoder", decoder_command,
                 stdout=subprocess.PIPE, bufsize=8 * 1024 * 1024,
             )
             self.active_stage = "vspipe"
             vspipe = self.start(
                 "vspipe", build_vspipe_command(source, args),
-                env=build_environment(source, args, timeline=timeline),
+                env=environment,
                 stdin=decoder.stdout, stdout=subprocess.PIPE, bufsize=8 * 1024 * 1024,
             )
             decoder.stdout.close()
             self.active_stage = "encoder"
             self.start(
-                "encoder", build_encoder_command(source, args, timeline=timeline),
+                "encoder", encoder_command,
                 stdin=vspipe.stdout,
             )
             vspipe.stdout.close()
             reason, returncode, failed_stage = self.wait()
         except KeyboardInterrupt:
             reason, returncode = "interrupted", 130
-        except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as exc:
             failed_stage = self.active_stage
             print(f"Error: pipeline {failed_stage}: {exc}", file=sys.stderr, flush=True)
         finally:
@@ -1257,6 +1313,12 @@ class PipelineRunner:
             "stopped": result.stopped, "cleanup_errors": result.cleanup_errors,
             "decoder_pipe_end": result.decoder_pipe_end,
         }), file=sys.stderr, flush=True)
+        if self.performance is not None:
+            try:
+                self.performance.finish(result)
+                print(f"Performance: {self.performance.report}", file=sys.stderr, flush=True)
+            except (OSError, ValueError, RuntimeError) as exc:
+                print(f"Warning: performance report: {exc}", file=sys.stderr, flush=True)
         return result
 
 
