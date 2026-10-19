@@ -270,3 +270,31 @@
 - [complete] 真实浏览器原生scroll速度约73.09/146.18/292.36像素每秒，对应0.5/1/2，活动节点/源池/layout保持；2x弹幕与1.5x视频合成3x；暂停调速不恢复播放；键盘0.8x刷新后保留；320/390宽度无横向溢出，截图已检查。
 - [complete] 146项Python、五组Node、独立速度/自动匹配/手动链接浏览器、原生DPR1/2全部exit0。探针缺失cancelAnimationFrame与Playwright对output误用input_value两项工具错误已记录并修正，不改产品绕过。
 - [complete] 四角色复用且已重开 /mnt/game/rife/var/player-framing/{MODIFIED_FILE,DIFF_FILE.patch,VERIFICATION.txt,ROLLBACK.sh}；回滚参数 --danmaku-speed-before，补充记录 danmaku-speed/。纯前端变更，刷新页面即可，无需重启后端；未打断用户播放或修改播放列表。
+
+## 2026-10-19 补帧时间轴重构
+- [in_progress] 集中 FPS/start/duration/帧数/GOP/音频字幕偏移；保留末帧余量与未知时长策略。
+- 基线 python3 -m unittest discover -s tests -q：146项通过；复用 var/player-framing 四角色，补充记录 timeline/。
+
+### 补帧时间轴重构完成
+- [complete] 新增冻结 Timeline/build_timeline；main 解析一次并传给 run_pipeline、decoder、RIFE env、encoder，统一音频/字幕/GOP/帧数的时基。
+- [complete] 保留原浮点帧预算/减一帧/未知时长20亿帧/网络和本地seek位置；新增拒绝负值和非有限时间。
+- [complete] BASELINE146/MODIFIED155/ROLLBACK146/DEPLOYED155项通过；1152组相同输入命令及RIFE环境逐字相同，摘要93d81a5a95d6dbc4fa11ae469cb55bbb8addeac0d93f7bcf2bc63c4f4407e92e；原字节哈希恢复及patch重建通过。
+- [complete] 延续 var/player-framing 四角色；补充 timeline/refactor.patch/checks.txt/probe.py；回滚 ROLLBACK.sh TARGET_COPY --timeline-before。
+- 工具错误：隔离副本首次缺web/run.py导致失败，补齐后通过；从项目根运行新增测试误导入旧模块，切换正确cwd后通过。未做Windows NVIDIA实播/吞吐测试，无性能提升声明。
+
+## 2026-10-19 三进程生命周期重构
+- [in_progress] 锁定 rife/stream.py::run_pipeline / stop_process；统一监测、退出记录、逆序清理、超时kill。保留时间轴、WebUI接口、HLS路径和编码配置。
+- 基线155项Python测试通过；复用var/player-framing四角色，新增pipeline-lifecycle补充记录。
+
+### 三进程生命周期重构完成
+- [complete] PipelineRunner统一启动、每50ms监测三个直接子进程、逆序回收、关闭父进程管道；PipelineResult记录退出原因/各阶段退出码/主动停止/清理错误；run_pipeline保持int接口。
+- [complete] 观察到的非零退出不再被encoder0掩盖；主动停止产生的负退出码单独记录；自然VSPipe预算结束和encoder提前成功均覆盖。Ctrl-C返回130；POSIX SIGTERM返回143并恢复handler；Windows维持现有WebUI taskkill路径，未实测Windows停止。
+- [complete] BASELINE155/MODIFIED173/ROLLBACK155/DEPLOYED173项通过；相同输入decoder7+vspipe0+encoder0由误报0改为7，回滚恢复0及原始哈希。真实子进程启动/故障/中断/强杀/资源回收测试通过；清理失败不覆盖既有阶段故障。
+- [complete] 上轮1152组命令/环境保持逐字相同；单轮补丁与时间轴+本轮补丁组合均逐字节重建。复用var/player-framing四角色并重开；补充pipeline-lifecycle/，回滚模式 --pipeline-before。
+- 工具错误：首次在隔离cwd使用重复相对前缀写测试导致no such file，shell继续执行原155项；改为正确相对路径并set -e，新增测试实际运行通过。未变更WebUI/HLS路径、模型、画质、编码参数，未重启服务或中断实际播放；未做Windows NVIDIA实播。
+
+### 三进程重构最终边界修正与验收
+- [complete] 初版173项通过后，连续写入producer复现正常VSPipe EOF引发decoder Broken pipe被误报1；补充有界16KiB解码诊断tee，仅在明确Broken pipe且VSPipe成功结束时标记decoder_pipe_end，不吞没真实decoder1/7失败。
+- [complete] 最终BASELINE155/MODIFIED176/ROLLBACK155/DEPLOYED176均通过；追加真实断管、诊断跨chunk/内存上限/日志保真测试。176项取代中间173项作为最终验收。
+- [complete] 原1152组命令与RIFE环境仍逐字相同；时间轴补丁+本轮初版补丁+boundary-fix.patch组合精确重建；最终副本经原ROLLBACK.sh --pipeline-before恢复基线哈希和155项测试。
+- [complete] 四角色仍位于var/player-framing并已重开；完整字面结果追加VERIFICATION.txt，新增边界证据和最终复验保留pipeline-lifecycle/。

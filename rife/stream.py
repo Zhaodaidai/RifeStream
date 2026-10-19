@@ -6,6 +6,8 @@ import math
 import os
 from pathlib import Path
 import shutil
+import signal
+import threading
 import subprocess
 import tempfile
 import time
@@ -84,6 +86,59 @@ class MediaInfo:
 
 
 @dataclass(frozen=True)
+class Timeline:
+    """One CFR timebase shared by decoding, RIFE, audio, subtitles and HLS.
+
+    A duration of zero means no explicit FFmpeg limit, not an empty clip.
+    The raw pipe retains its historical one-frame safety margin. Unknown
+    lengths retain the large BlankClip ceiling; EOF policy is unchanged.
+    """
+
+    source_rate: Fraction
+    factor: int
+    start: float
+    requested_duration: float
+    duration: float | None
+
+    @classmethod
+    def resolve(cls, source_rate: Fraction, factor: int, start: float,
+                duration: float, media_duration: float | None) -> "Timeline":
+        rate = Fraction(source_rate)
+        start_value = float(start)
+        requested = float(duration)
+        values = [start_value, requested]
+        if media_duration is not None:
+            values.append(media_duration)
+        if not all(math.isfinite(value) and value >= 0 for value in values):
+            raise ValueError("Timeline times must be finite and non-negative")
+        if rate <= 0 or factor <= 0 or start_value < 0 or requested < 0:
+            raise ValueError("Timeline requires positive FPS/factor and non-negative start/duration")
+        effective = requested if requested > 0 else (
+            max(0.0, media_duration - start_value)
+            if media_duration is not None else None
+        )
+        return cls(rate, factor, start_value, requested, effective)
+
+    @property
+    def output_rate(self) -> Fraction:
+        return self.source_rate * self.factor
+
+    @property
+    def pipe_frames(self) -> int:
+        if self.duration is None:
+            return 2_000_000_000
+        return max(1, math.floor(self.duration * float(self.source_rate)) - 1)
+
+    @property
+    def start_text(self) -> str:
+        return format(float(self.start), ".12g")
+
+    @property
+    def duration_text(self) -> str:
+        return format(float(self.requested_duration), ".12g")
+
+
+@dataclass(frozen=True)
 class SubtitleTrack:
     index: int
     codec: str
@@ -118,6 +173,13 @@ class StreamInput:
     @property
     def is_network(self) -> bool:
         return is_http_source(self.video)
+
+
+def build_timeline(source: StreamInput, args: argparse.Namespace) -> Timeline:
+    return Timeline.resolve(
+        source.rate, getattr(args, "factor", 2), args.start, args.duration,
+        source.info.duration,
+    )
 
 
 def normalize_source(source: str, name: str) -> str:
@@ -780,22 +842,15 @@ def anime4k_enabled(source: StreamInput, args: argparse.Namespace) -> bool:
     return bool(args.anime4k)
 
 
-def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str, str]:
+def build_environment(
+    source: StreamInput, args: argparse.Namespace, *, timeline: Timeline | None = None
+) -> dict[str, str]:
     width, height = video_size(source.info, args.max_height)
-    duration = args.duration or (
-        max(0.0, source.info.duration - args.start)
-        if source.info.duration is not None
-        else None
-    )
-    frames = (
-        max(1, math.floor(duration * float(source.rate)) - 1)
-        if duration is not None
-        else 2_000_000_000
-    )
+    timeline = timeline or build_timeline(source, args)
     env = os.environ.copy()
     env.update(
         {
-            "RIFE_FACTOR": str(args.factor),
+            "RIFE_FACTOR": str(timeline.factor),
             "RIFE_ANIME4K": "1" if anime4k_enabled(source, args) else "0",
             "RIFE_ENGINE_DIR": str(ENGINE_DIR),
             "RIFE_GPU": str(args.gpu),
@@ -804,9 +859,9 @@ def build_environment(source: StreamInput, args: argparse.Namespace) -> dict[str
             "RIFE_WORKSPACE_MIB": str(args.workspace_mib),
             "RIFE_PIPE_WIDTH": str(width),
             "RIFE_PIPE_HEIGHT": str(height),
-            "RIFE_PIPE_FRAMES": str(frames),
-            "RIFE_PIPE_FPS_NUM": str(source.rate.numerator),
-            "RIFE_PIPE_FPS_DEN": str(source.rate.denominator),
+            "RIFE_PIPE_FRAMES": str(timeline.pipe_frames),
+            "RIFE_PIPE_FPS_NUM": str(timeline.source_rate.numerator),
+            "RIFE_PIPE_FPS_DEN": str(timeline.source_rate.denominator),
         }
     )
     return env
@@ -824,7 +879,10 @@ def build_vspipe_command(_source: StreamInput, args: argparse.Namespace) -> list
     ]
 
 
-def build_decoder_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
+def build_decoder_command(
+    source: StreamInput, args: argparse.Namespace, *, timeline: Timeline | None = None
+) -> list[str]:
+    timeline = timeline or build_timeline(source, args)
     command = [
         *FFMPEG_BASE,
         "-hwaccel",
@@ -837,18 +895,18 @@ def build_decoder_command(source: StreamInput, args: argparse.Namespace) -> list
         "8",
         *ffmpeg_input_options(source.video, source.headers, args.http_proxy),
     ]
-    if source.is_network and args.start > 0:
-        command.extend(["-ss", format(args.start, ".12g")])
+    if source.is_network and timeline.start > 0:
+        command.extend(["-ss", timeline.start_text])
     command.extend(["-i", source.video])
-    if not source.is_network and args.start > 0:
-        command.extend(["-ss", format(args.start, ".12g")])
-    if args.duration > 0:
-        command.extend(["-t", format(args.duration, ".12g")])
+    if not source.is_network and timeline.start > 0:
+        command.extend(["-ss", timeline.start_text])
+    if timeline.requested_duration > 0:
+        command.extend(["-t", timeline.duration_text])
     command.extend(
         option_args(
             ("-map", "0:v:0"), ("-an",), ("-sn",), ("-dn",),
             ("-map_metadata", "-1"),
-            ("-vf", decoder_scale_filter(source.info, args.max_height, source.rate)),
+            ("-vf", decoder_scale_filter(source.info, args.max_height, timeline.source_rate)),
             ("-fps_mode", "cfr"), ("-pix_fmt", "yuv420p"),
             ("-f", "rawvideo"), ("pipe:1",),
         )
@@ -856,8 +914,11 @@ def build_decoder_command(source: StreamInput, args: argparse.Namespace) -> list
     return command
 
 
-def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list[str]:
-    gop = encoder_gop(source.rate, args.factor, args.gop)
+def build_encoder_command(
+    source: StreamInput, args: argparse.Namespace, *, timeline: Timeline | None = None
+) -> list[str]:
+    timeline = timeline or build_timeline(source, args)
+    gop = encoder_gop(timeline.source_rate, timeline.factor, args.gop)
     command = [
         *FFMPEG_BASE,
         *option_args(
@@ -868,8 +929,8 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
     if not args.no_audio:
         audio_source = source.audio or source.video
         command.extend(["-thread_queue_size", "2048", "-readrate", "0"])
-        if args.start > 0:
-            command.extend(["-ss", format(args.start, ".12g")])
+        if timeline.start > 0:
+            command.extend(["-ss", timeline.start_text])
         command.extend(ffmpeg_input_options(audio_source, source.headers, args.http_proxy))
         command.extend(["-i", audio_source])
     command.extend(["-map", "0:v:0"])
@@ -883,7 +944,7 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
                 subtitle_filter(
                     source.subtitle,
                     source.subtitle_index,
-                    args.start,
+                    float(timeline.start),
                     (source.info.width, source.info.height),
                     source.subtitle_fontsdir,
                 ),
@@ -922,8 +983,8 @@ def build_encoder_command(source: StreamInput, args: argparse.Namespace) -> list
             "aresample=async=1:first_pts=0",
         ]
     )
-    if args.duration > 0:
-        command.extend(["-t", format(args.duration, ".12g")])
+    if timeline.requested_duration > 0:
+        command.extend(["-t", timeline.duration_text])
     playlist = Path(args.publish_url)
     command.extend(
         [
@@ -969,14 +1030,21 @@ def release_stream_files(playlist: Path, *, failed: bool) -> None:
 
 
 def stop_process(process: subprocess.Popen[bytes] | None) -> None:
-    if process is None or process.poll() is not None:
+    if process is None:
         return
-    process.terminate()
+    if process.poll() is None:
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            pass  # The child can exit between poll() and terminate().
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
+        try:
+            process.kill()
+        except ProcessLookupError:
+            pass
+        process.wait(timeout=5)
 
 
 def write_stream_status(source: StreamInput, start: float) -> None:
@@ -993,50 +1061,186 @@ def write_stream_status(source: StreamInput, start: float) -> None:
     )
 
 
-def run_pipeline(source: StreamInput, args: argparse.Namespace) -> int:
-    decoder: subprocess.Popen[bytes] | None = None
-    vspipe: subprocess.Popen[bytes] | None = None
-    encoder: subprocess.Popen[bytes] | None = None
-    try:
-        decoder = subprocess.Popen(
-            build_decoder_command(source, args),
-            cwd=ROOT,
-            stdout=subprocess.PIPE,
-            bufsize=8 * 1024 * 1024,
-            creationflags=PROCESS_FLAGS,
-        )
-        vspipe = subprocess.Popen(
-            build_vspipe_command(source, args),
-            cwd=ROOT,
-            env=build_environment(source, args),
-            stdin=decoder.stdout,
-            stdout=subprocess.PIPE,
-            bufsize=8 * 1024 * 1024,
-            creationflags=PROCESS_FLAGS,
-        )
-        if decoder.stdout:
+@dataclass(frozen=True)
+class PipelineResult:
+    reason: str
+    returncode: int
+    failed_stage: str | None
+    exit_codes: dict[str, int | None]
+    stopped: tuple[str, ...]
+    cleanup_errors: tuple[str, ...]
+    decoder_pipe_end: bool
+
+
+class PipelineRunner:
+    """Own only this worker's three direct children and parent pipe handles.
+
+    Failure means the first polling snapshot with a nonzero child exit. If
+    several fail together, upstream order is deterministic, not proof of cause.
+    Children stopped by us are recorded separately from observed failures.
+    """
+
+    def __init__(self) -> None:
+        self.processes: dict[str, subprocess.Popen[bytes]] = {}
+        self.stopped: list[str] = []
+        self.cleanup_errors: list[str] = []
+        self.active_stage = "decoder"
+        self.cancel_signal: int | None = None
+        self.decoder_stderr = bytearray()
+        self.decoder_stderr_thread: threading.Thread | None = None
+        self.decoder_broken_pipe = False
+        self.decoder_pipe_end = False
+
+    def request_stop(self, signum: int, _frame) -> None:
+        self.cancel_signal = signum
+
+    def start(self, name: str, command: list[str], **kwargs) -> subprocess.Popen[bytes]:
+        self.active_stage = name
+        if name == "decoder":
+            kwargs["stderr"] = subprocess.PIPE
+        process = subprocess.Popen(command, cwd=ROOT, creationflags=PROCESS_FLAGS, **kwargs)
+        self.processes[name] = process
+        if name == "decoder" and process.stderr is not None:
+            self.decoder_stderr_thread = threading.Thread(
+                target=self.read_decoder_stderr, args=(process,),
+                name="rife-decoder-stderr", daemon=True,
+            )
+            self.decoder_stderr_thread.start()
+        return process
+
+    def read_decoder_stderr(self, process: subprocess.Popen[bytes]) -> None:
+        try:
+            while True:
+                chunk = process.stderr.read1(4096)
+                if not chunk:
+                    return
+                self.decoder_stderr.extend(chunk)
+                del self.decoder_stderr[:-16384]
+                if b"broken pipe" in self.decoder_stderr.lower():
+                    self.decoder_broken_pipe = True
+                sys.stderr.write(chunk.decode("utf-8", errors="replace"))
+                sys.stderr.flush()
+        except (OSError, ValueError) as exc:
+            self.cleanup_errors.append(f"decoder stderr: {exc}")
+
+    def drain_decoder_stderr(self) -> None:
+        if self.decoder_stderr_thread is not None:
+            self.decoder_stderr_thread.join(timeout=1)
+
+    def stop(self, name: str) -> None:
+        process = self.processes[name]
+        if process.poll() is None and name not in self.stopped:
+            self.stopped.append(name)
+        stop_process(process)
+
+    def wait(self) -> tuple[str, int, str | None]:
+        self.active_stage = "supervisor"
+        while True:
+            if self.cancel_signal is not None:
+                return "stopped", 128 + self.cancel_signal, None
+            codes = {name: process.poll() for name, process in self.processes.items()}
+            if codes["decoder"] not in (None, 0) and codes["vspipe"] == 0:
+                self.drain_decoder_stderr()
+                # The planned frame budget can end before decode does. Only a
+                # confirmed broken-pipe diagnostic plus successful VSPipe EOF
+                # makes the decoder's nonzero exit an expected downstream close.
+                self.decoder_pipe_end = self.decoder_broken_pipe
+            for name, code in codes.items():
+                expected_pipe_end = name == "decoder" and self.decoder_pipe_end
+                if code not in (None, 0) and name not in self.stopped and not expected_pipe_end:
+                    return "failed", code if code > 0 else 1, name
+            if codes["encoder"] == 0:
+                # -shortest/-t may intentionally finish while upstream is alive.
+                return "finished", 0, None
+            if codes["vspipe"] == 0 and codes["decoder"] is None:
+                # RIFE has consumed its planned budget; extra decode is not an error.
+                self.stop("decoder")
+            time.sleep(0.05)
+
+    def cleanup(self) -> None:
+        # Continue cleanup even if one child/pipe is already gone or refuses to stop.
+        for name, process in reversed(list(self.processes.items())):
+            try:
+                self.stop(name)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                self.cleanup_errors.append(f"{name}: {exc}")
+            if process.stdout is not None:
+                try:
+                    process.stdout.close()
+                except OSError as exc:
+                    self.cleanup_errors.append(f"{name} stdout: {exc}")
+
+        self.drain_decoder_stderr()
+        decoder = self.processes.get("decoder")
+        if decoder is not None and decoder.stderr is not None:
+            if self.decoder_stderr_thread is not None and self.decoder_stderr_thread.is_alive():
+                self.cleanup_errors.append("decoder stderr reader did not reach EOF")
+            else:
+                try:
+                    decoder.stderr.close()
+                except (OSError, ValueError) as exc:
+                    self.cleanup_errors.append(f"decoder stderr close: {exc}")
+
+    def run(self, source: StreamInput, args: argparse.Namespace,
+            timeline: Timeline) -> PipelineResult:
+        reason, returncode, failed_stage = "failed", 1, None
+        handle_sigterm = os.name != "nt" and threading.current_thread() is threading.main_thread()
+        previous_sigterm = None
+        if handle_sigterm:
+            previous_sigterm = signal.signal(signal.SIGTERM, self.request_stop)
+        try:
+            decoder = self.start(
+                "decoder", build_decoder_command(source, args, timeline=timeline),
+                stdout=subprocess.PIPE, bufsize=8 * 1024 * 1024,
+            )
+            self.active_stage = "vspipe"
+            vspipe = self.start(
+                "vspipe", build_vspipe_command(source, args),
+                env=build_environment(source, args, timeline=timeline),
+                stdin=decoder.stdout, stdout=subprocess.PIPE, bufsize=8 * 1024 * 1024,
+            )
             decoder.stdout.close()
-        encoder = subprocess.Popen(
-            build_encoder_command(source, args),
-            cwd=ROOT,
-            stdin=vspipe.stdout,
-            creationflags=PROCESS_FLAGS,
+            self.active_stage = "encoder"
+            self.start(
+                "encoder", build_encoder_command(source, args, timeline=timeline),
+                stdin=vspipe.stdout,
+            )
+            vspipe.stdout.close()
+            reason, returncode, failed_stage = self.wait()
+        except KeyboardInterrupt:
+            reason, returncode = "interrupted", 130
+        except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            failed_stage = self.active_stage
+            print(f"Error: pipeline {failed_stage}: {exc}", file=sys.stderr, flush=True)
+        finally:
+            try:
+                self.cleanup()
+            finally:
+                if handle_sigterm:
+                    signal.signal(signal.SIGTERM, previous_sigterm)
+        if self.cleanup_errors and returncode == 0:
+            reason, returncode, failed_stage = "cleanup_failed", 1, "cleanup"
+        result = PipelineResult(
+            reason, returncode, failed_stage,
+            {name: process.returncode for name, process in self.processes.items()},
+            tuple(self.stopped), tuple(self.cleanup_errors), self.decoder_pipe_end,
         )
-        vspipe.stdout.close()
-        encoder_exit = encoder.wait()
-        vspipe_exit = vspipe.poll()
-        stop_process(vspipe)
-        stop_process(decoder)
-        return encoder_exit or vspipe_exit or 0
-    except KeyboardInterrupt:
-        for process in (encoder, vspipe, decoder):
-            stop_process(process)
-        return 130
-    except (OSError, RuntimeError) as exc:
-        print(f"Error: {exc}", file=sys.stderr, flush=True)
-        for process in (encoder, vspipe, decoder):
-            stop_process(process)
-        return 1
+        if result.failed_stage is not None:
+            print(f"Error: pipeline failed at {result.failed_stage}", file=sys.stderr, flush=True)
+        print("Pipeline result: " + json.dumps({
+            "reason": result.reason, "returncode": result.returncode,
+            "failed_stage": result.failed_stage, "exit_codes": result.exit_codes,
+            "stopped": result.stopped, "cleanup_errors": result.cleanup_errors,
+            "decoder_pipe_end": result.decoder_pipe_end,
+        }), file=sys.stderr, flush=True)
+        return result
+
+
+def run_pipeline(
+    source: StreamInput, args: argparse.Namespace, *, timeline: Timeline | None = None
+) -> int:
+    timeline = timeline or build_timeline(source, args)
+    return PipelineRunner().run(source, args, timeline).returncode
 
 
 def main() -> int:
@@ -1054,6 +1258,7 @@ def main() -> int:
     source = None
     try:
         source = prepare_input(args)
+        timeline = build_timeline(source, args)
         reset_hls_output(Path(args.publish_url))
         ensure_hls_server()
     except (RuntimeError, ValueError) as exc:
@@ -1061,10 +1266,10 @@ def main() -> int:
         cleanup_subtitles(source)
         release_stream_files(Path(args.publish_url), failed=True)
         return 1
-    write_stream_status(source, args.start)
+    write_stream_status(source, float(timeline.start))
 
     width, height = video_size(source.info, args.max_height)
-    fps = float(source.rate)
+    fps = float(timeline.source_rate)
     pipeline = "FFmpeg NVDEC"
     if anime4k_enabled(source, args):
         pipeline += " -> Anime4K 2x->down"
@@ -1078,9 +1283,9 @@ def main() -> int:
     if anime4k_enabled(source, args):
         print(f"Anime4K    : {width}x{height} -> {width * 2}x{height * 2} -> {width}x{height}")
     print(f"Output     : {args.publish_url}")
-    print(f"Frame rate : {fps:.6g} x {args.factor} = {fps * args.factor:.3f} fps")
-    gop = encoder_gop(source.rate, args.factor, args.gop)
-    print(f"HLS GOP    : {gop} frames (~{gop / (fps * args.factor):.3f}s IDR)")
+    print(f"Frame rate : {fps:.6g} x {timeline.factor} = {float(timeline.output_rate):.3f} fps")
+    gop = encoder_gop(timeline.source_rate, timeline.factor, args.gop)
+    print(f"HLS GOP    : {gop} frames (~{gop / float(timeline.output_rate):.3f}s IDR)")
     if args.no_audio:
         print("Audio      : none")
     else:
@@ -1094,7 +1299,7 @@ def main() -> int:
     print("Stop       : Ctrl+C", flush=True)
     exit_code = 1
     try:
-        exit_code = run_pipeline(source, args)
+        exit_code = run_pipeline(source, args, timeline=timeline)
         return exit_code
     finally:
         cleanup_subtitles(source)
